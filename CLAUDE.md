@@ -1,4 +1,4 @@
-# Improving Claude and Cursor
+# Improve AI Infra
 
 A project for tracking, testing, and implementing improvements to Claude Code and Cursor workflows — prompts, rules, automations, and tooling enhancements.
 
@@ -11,11 +11,11 @@ A project for tracking, testing, and implementing improvements to Claude Code an
 
 ## Local Path
 
-`C:\Users\Erez\AI Projects\Improving Claude and Cursor\`
+`C:\Users\Erez\AI Projects\Improve AI Infra\`
 
 ## GitHub
 
-https://github.com/erez-baron-muuula/improving-claude-and-cursor
+https://github.com/erez-baron-muuula/improve-ai-infra
 
 ## Instructions
 
