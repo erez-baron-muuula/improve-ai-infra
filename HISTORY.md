@@ -1,5 +1,23 @@
 # Project History
 
+## 2026-06-04 — Rule accuracy & obedience: GEN-171 created, currency sweep, GEN-170 resolved
+
+Started from GEN-93 (AI Infra Efficiency) but pivoted when Erez named his real concern: **accuracy and rule-obedience as the infra grows**, not efficiency. Read all five GEN-93 research Stories in full and recommended the synthesis architecture (three checkers — rules/memory, session-log, off-the-shelf code; config+memory merge into one; defer the unified dashboard), but the session's center of gravity moved to accuracy/obedience, which spans GEN-93 (config health) **and** GEN-53/58 (the QA framework). Created a dedicated home for it.
+
+- **Key reframe.** "Accuracy" splits into two levers with different fixes: (1) *content currency* — rules/memory don't rot (a checker can catch contradictions/dupes/stale facts); (2) *obedience* — rules actually followed. A hook can only enforce *machine-checkable* rules; reasoning-quality rules (the trickle-down ones) can't be hooked → they need Layer 5 (independent reviewer) or "show-your-work" forcing functions. The rules that trickle down most are the hardest to hard-wire.
+- **Triage method agreed** for "which rules to hard-wire": (1) costly for Erez to verify, (2) cascading/trickle-down, (3) machine-checkable (decides hook vs reviewer), plus Erez's currency lens (4) is it still needed — including **model-driven obsolescence** (a stronger model may not need a guardrail; but retire only once the failure *stops appearing*, never on assumption).
+- **GEN-58 (Layer 5 independent reviewer) trigger has fired 6×** — well past its deferral condition. Ripe to build as a *skill*; build tracked under GEN-171.
+- **Created GEN-171** — Story "Rule currency & enforcement — keep the rule set accurate and obeyed as it grows" (High, under the *Improving AI Infra* epic). Holds the two-lens method and planned children (currency sweep, enforcement triage, hooks, Layer 5, model-upgrade re-sweep).
+- **GEN-170 — challenge the `.cursorrules` sync rule — created and resolved Done.** Decision: *scope down*. Cursor still in use, but Erez accepts a manual copy-paste when switching; the constant auto-sync obligation is removed. Re-parented under GEN-171.
+- **GEN-172 / GEN-173 created** under GEN-171: tighten existing rules for conciseness; make conciseness a standard for future rules (conciseness is a third rule-health axis, distinct from currency/enforcement).
+- **Global `CLAUDE.md` edits (all via the locked tool, verified, synced):** added the ticket-drafting rule (draft full ticket — title/body/properties — for approval before creating; always surface ticket ID/name/URL); scoped down the `.cursorrules` mirror rule (no auto-sync); collapsed the "apply learnings" rule (dropped its sync step); **retired** the stale "Python is not installed" rule (verified Python 3.13 is installed; `gh` still absent, so that sibling rule stays); **reworded** the GEN-58 reasoning-failure rule (deferral trigger met; build tracked under GEN-171).
+- **Currency sweep complete (actionable items):** 2 fixes (Python retire, GEN-58 reword). Remainder = a model-upgrade **watch-list** (the reasoning guards — can't retire without evidence) and **overlap clusters** (belong to GEN-172 / GEN-95, not the currency lens).
+- **Process corrections from Erez (applied):** don't write ticket content without approval (authorization to file ≠ authorization to write it); always surface ticket ID/name/URL; ask only *guiding* (non-technical) questions, then draft the proposal myself; "one at a time" means don't surface the next item *at all* until it's its turn (no "queued" previews).
+- **Concurrent-session note:** another Claude session edited the global `CLAUDE.md` mid-session (added two ticket rules — re-read title/desc before Done; name tickets by goal not solution). The locked tool merged cleanly; nothing lost. Confirms the lock design works under concurrency.
+- **Auto-approval review:** `deferred-calls.jsonl` still at 492, unchanged since ~2026-06-03; no safe-set additions warranted.
+
+**Open follow-ups:** GEN-171 next steps — enforcement triage (Lens 2) and building Layer 5 (GEN-58) as a skill; GEN-172/173 (conciseness, retroactive + future); **investigate why `deferred-calls.jsonl` stopped capturing new calls** (frozen at 492 despite sessions generating approval prompts — the wrap-up auto-approval review runs on stale data until fixed).
+
 ## 2026-06-04 — Chat-communication overhaul (GEN-147 / 149 / 154) + global rules
 
 Worked the "better chat communication" topic end-to-end. Three global `CLAUDE.md` rules added/changed; several Team-Tasks tickets created and closed.
