@@ -1,5 +1,33 @@
 # Project History
 
+## 2026-06-04 — Chat-communication overhaul (GEN-147 / 149 / 154) + global rules
+
+Worked the "better chat communication" topic end-to-end. Three global `CLAUDE.md` rules added/changed; several Team-Tasks tickets created and closed.
+
+- **GEN-147 (show thought process only on tap) — Review.** Verified Claude Code has no per-message tap-to-expand for thinking; thinking is hidden by default, toggled globally with `Ctrl+O` (generation toggled with `Alt+T`). Mid-session clarified Erez is on the Claude Code **desktop app** (not terminal) and that what he didn't want to see was actually **narration**, not thinking. Resolved the narration half by changing the global narration rule from action-level to **stage-level** (skip per-step play-by-play; keep all failure/retry safety clauses).
+- **GEN-149 (action block) — Review.** Broadened the original "open-topics summary at bottom" idea into a full response-structure rule: two layers per action turn — skippable narration, then a divider (`---`) and a clearly-marked **"📌 For you"** block at the **bottom** (Erez's choice) with only result / decisions / questions / manual follow-ups. No "what's next" line. Added to global `CLAUDE.md` (line 72).
+- **GEN-154 (suppress non-actionable + park open topics) — Review.** Folded in GEN-151 (the over-narration incident — the unneeded "pushed to Apps Script, not GitHub yet" note) as its motivating example; GEN-151 closed (Wont Do, superseded). Adopted a **three-bucket** model: (1) action items → the block, (2) internal bookkeeping → don't mention, (3) open topics → file as a sub-item of the current ticket + a one-line "Parked:" note. Chose **Option 3** (visible per-item parking) for now; revisit Option 2 (silent + wrap recap) once proven. Added to global `CLAUDE.md` (line 74).
+- **Global rule from a mistake.** Added: never infer the user's client surface (terminal vs desktop vs web) from the environment's Shell/Platform readout — ask when it matters. Captured after I wrongly assumed "terminal."
+- **GEN-58 (QA Layer 5) — canonical example #6 logged.** Recorded a chain of false-resolution claims I made under Erez's pushback ("reinforced" / "the prompt forced it"). Sixth accumulated example — the recurrence the deferral was waiting for. Build decision left to Erez.
+- **Evaluation checkpoint placed globally.** Because the comms rules are global, the "ask Erez whether it feels better" reminder was added to **global auto-memory** (`feedback_behavior.md`), not just this project's HISTORY, so it surfaces in any session. Tracking ticket **GEN-159** (unassigned; fire after a few sessions of real use).
+- **Tickets created:** GEN-154 (rule), GEN-158 (parked: consolidate the three response-formatting rules once settled), GEN-159 (eval checkpoint), GEN-162 (parked: stale memory — `feedback_behavior.md` still carries the removed 90%/95% context-alert rule).
+- **Auto-approval review:** `deferred-calls.jsonl` unchanged at 492 entries; top recurring calls all state-mutating or the now-banned `AskUserQuestion`. No safe-set additions warranted.
+
+**Open follow-ups:** GEN-147 / 149 / 154 in Review (Erez judges over a few sessions, via GEN-159); GEN-158 (consolidate rules, after settling); GEN-162 (fix stale memory mirror); GEN-154 Option 3 → 2 revisit.
+
+## 2026-06-04 — Project-storage consistency review; GEN-160 filed; stray Drive folder removed
+
+Triggered by Erez noticing the Google Drive `AI Projects` folder looked like it was "missing" projects. Audited where every project actually lives and how each is backed up.
+
+- **Root finding — projects are split across two drives, and stored inconsistently.** Invoice Automation and Improve AI Infra live on **C:** and back up to **GitHub**; Memory Pirates Documentation lives on **Google Drive**, backed up only by Drive sync (no real version history). The original backup design (the "Cross-computer access: project via GitHub, Claude config via Drive" ticket) deliberately chose GitHub-for-code / Drive-for-config — so "all projects in Google Drive" was never the goal; "all code projects in GitHub" is. Two of three already comply.
+- **Clarified what the Drive "Memory Pirates" folder is:** not the game — a documentation-workflow project whose outputs live in Confluence and whose game code lives in the private `Muuula/MemoryPirates` GitHub repo. The Drive folder holds only its three governance files (`CLAUDE.md`, `.cursorrules`, `HISTORY.md`) with no git repo — the lone inconsistency.
+- **Clarified `_Tooling`:** named 2026-05-26 as an underscore-prefixed container for non-project config (sorts to top, away from real projects); must stay on Drive for cross-machine config sync (it also has a git history layer for recovery).
+- **Agreed fix — GEN-160 (To Do, under GEN-86):** Option A + small Drive tidy — give Memory Pirates Documentation its own GitHub repo and move it to C:, update the global `CLAUDE.md` projects table, delete the empty Drive folder, and move the loose `ngrok_recovery_codes.txt` into a `_Shared Files` subfolder. Deliberately **not** renaming the Drive `AI Projects` parent (its path is hardcoded everywhere), and **leaving** the API tokens sheet in place (its path is hardcoded in 5 rule files). Erez will run it as the last task of the day, as the only active session.
+- **Cleanup done this session:** deleted the stray empty `Improving Claude and Cursor` Drive folder — a pre-rename leftover from when this project was renamed to "Improve AI Infra" on 2026-06-03; that rename never removed the old, empty Drive folder.
+
+- **Filed GEN-161 (under the Invoice automation epic GEN-21, assigned to Erez):** `Code.js` and `appsscript.json` in `C:\Users\Erez\AI Projects\InvoiceAutomation` have uncommitted local edits not backed up to GitHub (committed history *is* pushed — local matches `origin/main` at `6771407`); `main` also has no upstream tracking set. Erez will address it in a separate session.
+- **New global `CLAUDE.md` rule added** (via the locked tool): before proposing or performing any file/folder move or rename, first search for hardcoded references to its current path — a referenced path means the move also requires updating every reference, so it is never "free." Prompted by a mid-session slip where a file move was floated as trivial before checking the `API tokens` sheet's 5 hardcoded references.
+
 ## 2026-06-03 — GEN-93 research arc complete (config/memory/token/code/flow)
 
 Completed the full research arc for the **GEN-93 "AI Infra Efficiency"** sub-epic. All five research Stories are now Done: GEN-95 (config health), GEN-101 (memory health), GEN-97 (token economy), GEN-94 (code health), GEN-96 (conversation flow).
