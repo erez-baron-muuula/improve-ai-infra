@@ -12,6 +12,7 @@ Worked the "better chat communication" topic end-to-end. Three global `CLAUDE.md
 - **Evaluation checkpoint placed globally.** Because the comms rules are global, the "ask Erez whether it feels better" reminder was added to **global auto-memory** (`feedback_behavior.md`), not just this project's HISTORY, so it surfaces in any session. Tracking ticket **GEN-159** (unassigned; fire after a few sessions of real use).
 - **Tickets created:** GEN-154 (rule), GEN-158 (parked: consolidate the three response-formatting rules once settled), GEN-159 (eval checkpoint), GEN-162 (parked: stale memory — `feedback_behavior.md` still carries the removed 90%/95% context-alert rule).
 - **Auto-approval review:** `deferred-calls.jsonl` unchanged at 492 entries; top recurring calls all state-mutating or the now-banned `AskUserQuestion`. No safe-set additions warranted.
+- **Wrap-up rule extended.** Clarified that "push only when asked" was a Bash-tool default, not an Erez rule. At Erez's request, added a commit-and-push step to the wrap-up `HISTORY.md` rule (global `CLAUDE.md` line 88): if the project is a git repo, commit and push the HISTORY update to the current branch on wrap-up; skip the push for non-git projects.
 
 **Open follow-ups:** GEN-147 / 149 / 154 in Review (Erez judges over a few sessions, via GEN-159); GEN-158 (consolidate rules, after settling); GEN-162 (fix stale memory mirror); GEN-154 Option 3 → 2 revisit.
 
