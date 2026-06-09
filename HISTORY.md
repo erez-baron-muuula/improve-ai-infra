@@ -1,5 +1,13 @@
 # Project History
 
+## 2026-06-09 — Dropped Cursor entirely; added global document-linking rule
+
+Cross-project sweep removing Cursor support, plus one global rule addition.
+
+1. **Cursor support removed across all projects** — supersedes GEN-170's 2026-06-04 "keep Cursor / on-demand `.cursorrules`" decision (GEN-170 annotated as superseded). Removed all three `.cursorrules` files (`git rm`: Memory Pirates Documentation, Invoice Automation, Improve AI Infra); retired the global rule permitting a `.cursorrules` mirror and trimmed the vestigial Cursor/`.cursorrules` mentions in the global `CLAUDE.md`; removed the `PLATFORM AGNOSTIC` sections + apply-learnings `.cursorrules` clauses from Memory Pirates Documentation and Invoice Automation `CLAUDE.md`; rewrote this project's `CLAUDE.md` and `README.md` to Claude Code only; removed the `.cursor/` line from Invoice's `.gitignore` and the Cursor mention in its HISTORY intro. Verified zero Cursor references remain in any `CLAUDE.md`/`README` and no `.cursorrules` files remain. Left alone deliberately: HISTORY entries (historical record) and the `cursor` pagination variable in the `notion-subitem-backfill` scripts.
+2. **Global document-linking rule added** (via the locked tool): "When you point the user to a document, page, or file that has a URL, include the link — never just its name." The Memory Pirates Documentation FORMATTING rule was trimmed accordingly (dropped the now-redundant general statement; generalized "Notion tickets" → "tickets").
+3. **Tool-limitation learning (parked):** `update-global-rule.ps1` rejects an empty `-NewText` (mandatory param), so it can't be used to *delete* text. Deletions must go through `update-config.ps1` directly (`-File CLAUDE.md -Op text-replace -NewText ''` — its `NewText` is optional). Worth capturing as a global learning next session.
+
 ## 2026-06-09 — Tackled all open "add/change a rule" suggestions (GEN-141 / 127 / 150 / 98)
 
 Worked the focused **(A)** set of open rule-suggestion tickets end-to-end: four concrete proposals, each drafted, scrutinized, and applied to the global `CLAUDE.md` via the locked tool (5 rule additions total), one at a time with per-edit approval. Erez scoped out the larger **(B)** structural rule-health work for a separate effort.

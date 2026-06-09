@@ -1,12 +1,12 @@
 # Improve AI Infra
 
-A project for tracking, testing, and implementing improvements to Claude Code and Cursor workflows — prompts, rules, automations, and tooling enhancements.
+A project for tracking, testing, and implementing improvements to Claude Code workflows — prompts, rules, automations, and tooling enhancements.
 
 ## Project Structure
 
-- `rules/` — Proposed or tested additions to global/project CLAUDE.md and .cursorrules
+- `rules/` — Proposed or tested additions to global/project CLAUDE.md
 - `prompts/` — Reusable prompt templates
-- `scripts/` — Automation scripts for Claude/Cursor tooling
+- `scripts/` — Automation scripts for Claude Code tooling
 - `notes/` — Research notes, experiment logs, and findings
 
 ## Local Path
