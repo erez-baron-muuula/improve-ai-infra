@@ -1,5 +1,21 @@
 # Project History
 
+## 2026-06-09 — Tackled all open "add/change a rule" suggestions (GEN-141 / 127 / 150 / 98)
+
+Worked the focused **(A)** set of open rule-suggestion tickets end-to-end: four concrete proposals, each drafted, scrutinized, and applied to the global `CLAUDE.md` via the locked tool (5 rule additions total), one at a time with per-edit approval. Erez scoped out the larger **(B)** structural rule-health work for a separate effort.
+
+- **GEN-141 (Done):** added a rendered-output verification rule — try to retrieve a rendered/structured form programmatically (e.g. Jira `renderedFields`) before claiming something renders correctly; screenshot only as fallback. Retitled to match the programmatic-first framing.
+- **GEN-127 (Done):** the global file referenced *Layer 3/4/5* with no definition. Added an inline QA-layer legend (chosen over a GEN-53 pointer to avoid embedding a rotting ticket number); added a drift-prevention back-pointer note on GEN-53. Also resolves InvoiceAutomation's "Layer 4 of the global rule" — no second edit needed.
+- **GEN-150 (Done):** added the "clears the bar" guardrail (before proposing a rule, confirm it changes behavior, recurs, isn't already covered, is timeless). Weighed and rejected skipping it on a weaker-model-obsolescence argument (non-decisive — the bar is good discipline regardless of model). Mid-flow I mislabelled my own lean as a recommendation and flip-flopped; Erez caught it, contradiction surfaced and reconciled.
+- **GEN-98 (Done):** reframed several times under Erez's pushback into a proactive context-management rule (suggest `/compact` / new session when context hurts, nag-bounded), **plus an adjacent rule**: after a compacted session, write the `HISTORY.md` entry from the on-disk transcript (which `/compact` leaves intact) so detail isn't lost. Verified via Claude Code docs that `/compact` preserves the transcript and that a `PreCompact` hook exists. Wrap-up was deliberately dropped as a "suggested action."
+
+- **Outside-the-box fix (GEN-98):** the `/compact`-vs-wrap-up "trilemma" (keep the thread / avoid lossy compaction / avoid a double HISTORY entry) dissolved once I separated *capture detail* from *write HISTORY now* — the transcript persists on disk through compaction, so the wrap-up can source from it.
+- **Process catches (Erez, live) — both GEN-58-class:** (1) I'd been showing full rewrites of proposed rule text instead of the required strikethrough/bold **redline** across ~6 GEN-98 rounds — filed GEN-207 to investigate why self-review missed it. (2) GEN-98 needed five correction rounds (backwards trigger → wrong wrap-up inclusion → `/compact`-damages-wrap-up → over-stripped new-session capture → internal contradiction); on the third I re-derived from scratch rather than continuing to patch.
+- **Tickets opened (parked):** GEN-207 (redline-convention investigation), GEN-208 (`PreCompact`-hook checkpoint — reliability enabler for the transcript-sourcing rule), GEN-209 (reliably locate the current session's transcript at wrap-up; GEN-208↔209 cross-linked, may merge). Notes filed: `/compact` overlap → GEN-126; conciseness definition (from Erez: not word count, but every word needed) → GEN-173; legend back-pointer → GEN-53.
+- **Auto-approval review:** `deferred-calls.jsonl` still frozen at 492 entries (last 2026-06-02) — confirms it stopped capturing (hypothesis: `defaultMode: auto` bypasses the logging hook). No safe-set additions warranted (stale data).
+
+**Open follow-ups:** GEN-207 / 208 / 209 (parked); the **(B)** rule-health pass (consolidation GEN-126, conciseness GEN-172/173) should also review the 5 rules added this session; the frozen `deferred-calls.jsonl` capture (auto-mode hypothesis).
+
 ## 2026-06-09 — Notion template-heading bug (GEN-145) + automated sub-item-table repair (GEN-118)
 
 Two "Improving Notion" (GEN-28) tickets worked end-to-end. One new global `CLAUDE.md` rule; GEN-145 and GEN-118 closed Done; two GEN-58 instances logged.
