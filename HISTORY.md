@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-11 — GEN-223 designed & locked (automated independent reviewer to run the three review questions); GEN-189 token confirmed dead; GEN-227 filed; 4 GEN-58 instances
 - 2026-06-10 — Multi-session safety & HISTORY.md scalability: filed GEN-218/219; HISTORY read + TOC-maintenance rules; backfilled all three project TOCs
 - 2026-06-10 — Fixed the `update-config.ps1` BOM bugs (GEN-214 + GEN-216); GEN-58 instance logged
 - 2026-06-09 — Dropped Cursor entirely; added global document-linking rule
@@ -14,6 +15,20 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-11 — GEN-223 designed & locked (automated independent reviewer); GEN-189 token confirmed dead
+
+Asked to work the highest-priority AI Infra tickets. The session became an end-to-end **design** of GEN-223 — automating the three review questions Erez repeats by hand — carried out, fittingly, by running those very questions on the design itself across many rounds. Build deferred to the next session.
+
+1. **Priority triage + a miss → GEN-58 #1.** Ranked the open tickets from `HISTORY.md` follow-ups + targeted Notion fetches (this Notion MCP has no bulk query-data-sources tool) and asserted GEN-189 was "the only High ticket." Wrong — **GEN-223** (created after the last history entry) was also High. Erez caught it; logged as an exhaustiveness-claim GEN-58 instance.
+2. **GEN-189 (leaked PAT) — token verified DEAD, cleanup still open.** Checked the embedded `ghp_…` against GitHub: **401 → already revoked**. De-escalates from live-credential exposure to hygiene. The cleanup was **not** done: 9 dead-token `curl` entries remain in `settings.local.json` (lines 48/52/56–60/66/68), plus the git-history purge and the recurrence guard. Remains **To Do, High, assigned Erez**.
+3. **GEN-223 designed & locked.** Architecture: an **agent-type `Stop` hook** spawns a **fresh independent reviewer** that decides whether a turn may end — structurally preventing self-rubber-stamping. Verified (via claude-code-guide) the current hook set: no pre-send chat rewrite (`MessageDisplay` is display-only), but agent-type `Stop` hooks *can* run a reviewer and force continuation, and `PreToolUse` can gate a file/tool artifact before it's final. Scope = the three questions **+ a Phase-1.5 claim-check trigger** (capability/status/exhaustiveness, load-bearing; a *grounding-not-truth* check, which is cheap and sidesteps the same-model blind spot). Logging = catches-only rows to a Notion scorecard + heartbeat/version stamp + decay tripwires (seeded fire-drill). Residuals accepted (shared blind spot, token cost, one-time deployment risk, experimental-hook maturity with the **prompt-type version as fallback**). Build deferred: **Phase 1** (hook+protocol+verdicts+cap/escalate/fail-open), **Phase 1.5** (claim-trigger), **Phase 2** (logging/tripwires) — each scratch-tested first.
+4. **Design collapsed by its own pre-mortems.** It started as an over-engineered multi-system design (artifact gates, shadow mode, cloud-table + local buffer + flush, machine-namespacing) and was repeatedly cut down — to a two-piece (hook + protocol), then to the destination (build the independent reviewer *into* the hook from day one). Key reframe (from Erez's "minimum effort / think outside the box"): **automate Erez's proven loop, don't build a better reviewer.** The three questions were also expanded/fixed and run through their own Q1 rule-check until converged (the "reference live rules, don't paraphrase" fix removed a real drift risk).
+5. **Tickets touched.** **GEN-223** renamed → *"Auto-run my three review questions (rule-check / pre-mortem / holistic) on every proposal"*, set **In Progress**, full locked design recorded on it. **GEN-227** created (parked: promote *"prefer the smallest design that meets every goal"* to a global rule — only if it's ever needed outside review-time; trigger is observation/GEN-58-based, not scorecard-based, since an unreviewed turn leaves no review row). A **"## Active triggers"** back-pointer to GEN-227 added at the top of the GEN-58 page (where instances are logged).
+6. **GEN-58 instances logged (4, all 2026-06-11):** #1 exhaustiveness claim (missed GEN-223); #2 declared a platform limit absolute ("can't pre-review") — Erez surfaced the artifact-gate workaround; #3 the "objective redundancy metric" only holds in active mode — a requested pre-mortem caught it; #4 the over-engineering arc, collapsed by "minimum effort / outside the box."
+7. **Auto-approval review.** Sampled the recent tail of `deferred-calls.jsonl` (813 entries; full history not re-read). Recent deferrals are all state-mutating (correctly gated) or already allow-listed; `getJiraIssue` recurs but is already on the allow-list yet still logged — re-confirming the **GEN-222** defect. No safe-set additions warranted.
+
+**Open follow-ups:** **GEN-223 build** (Phases 1/1.5/2) — next session, fresh context; **GEN-189** cleanup (token confirmed dead; remove the 9 entries + purge history + add recurrence guard) — Erez; **GEN-227** parked (conditional); **GEN-222** reconfirmed (auto-approval logs/re-proposes already-allowed tools). Pre-existing untouched: GEN-218/219, GEN-176 Track A/B.
 
 ## 2026-06-10 — Multi-session safety & HISTORY.md scalability
 
