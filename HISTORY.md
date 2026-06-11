@@ -1,5 +1,33 @@
 # Project History
 
+## Table of contents
+- 2026-06-10 — Multi-session safety & HISTORY.md scalability: filed GEN-218/219; HISTORY read + TOC-maintenance rules; backfilled all three project TOCs
+- 2026-06-10 — Fixed the `update-config.ps1` BOM bugs (GEN-214 + GEN-216); GEN-58 instance logged
+- 2026-06-09 — Dropped Cursor entirely; added global document-linking rule
+- 2026-06-09 — Tackled all open "add/change a rule" suggestions (GEN-141 / 127 / 150 / 98)
+- 2026-06-09 — Notion template-heading bug (GEN-145) + automated sub-item-table repair (GEN-118)
+- 2026-06-07 — Independent-reviewer design (GEN-176), auto-mode discovery, token-leak finding (GEN-189)
+- 2026-06-04 — Rule accuracy & obedience: GEN-171 created, currency sweep, GEN-170 resolved
+- 2026-06-04 — Chat-communication overhaul (GEN-147 / 149 / 154) + global rules
+- 2026-06-04 — Project-storage consistency review; GEN-160 filed; stray Drive folder removed
+- 2026-06-03 — GEN-93 research arc complete (config/memory/token/code/flow)
+- 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
+- 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
+- 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-10 — Multi-session safety & HISTORY.md scalability
+
+Began as a conceptual question — can two sessions run on the same project, and what breaks — and became the safety + scalability work below. Evaluated the existing concurrency protection, filed two tickets, shipped two global rules with a table-of-contents mechanism, and backfilled it across all projects. A live concurrent-session collision occurred mid-session and became evidence on the ticket.
+
+1. **Concurrency analysis → GEN-218 + GEN-219 filed** (under GEN-86, To Do, unassigned). Worktrees isolate code, but single-instance state (project `HISTORY.md`, project `CLAUDE.md`, the memory index) can only be serialized or merged, not isolated. Re-examined the GEN-103 config lock and corrected my own premise: it is a sound OS-level mutex (crash-safe, briefly held), not fragile. Real gaps: project files have no lock at all (**GEN-218**); the lock's retry window (~1.5 s) is short versus a slow Drive sync (**GEN-219**). The memory-index bypass was already a deliberate GEN-103 decision (git as the safety net) — not re-filed.
+2. **Global read rule (applied).** Bounded `HISTORY.md` reading: if a table of contents is present at the top, read it plus the most recent entries and pull older ones on demand by search; if not, read the whole file (safe fallback). Never delete/archive to shrink. Motivated by Invoice's `HISTORY.md` reaching ~20K tokens per full read.
+3. **Global wrap-up rule (applied).** Maintain a `## Table of contents` (one-line-per-entry, newest first) above the entries — prepend a line per new entry, or build the full list if absent. The `## Table of contents` marker is what makes the read rule's detection reliable across differing per-project formats.
+4. **TOC backfill (all three projects).** Added a `## Table of contents` to Improve AI Infra, Invoice Automation, and Memory Pirates `HISTORY.md`, plus "(per the global read rule)" references in the two project `CLAUDE.md` files and Invoice's `HISTORY.md` intro. Invoice's older entries are not strictly date-ordered, so its TOC mirrors file order. Invoice + Memory Pirates changes committed and pushed.
+5. **Live GEN-218 incident.** Mid-session a concurrent "Documentation project 10.6" session prepended an entry to Memory Pirates `HISTORY.md` (the file shifted under an in-progress read) while an Invoice session ran — confirmed via `list_sessions`. Backfill of those two files was paused until they wrapped, then completed. Global-config edits in the same window were safe (the GEN-103 lock serialized them). Logged as a note on GEN-218.
+6. **Process catch → GEN-58 #4.** Declared the read rule "converged" across several wording reviews but never simulated its behavior against live state — with no TOC existing anywhere, the bounded read would have run in the unsafe no-discovery mode argued against earlier in the same thread. Caught by Erez's "are you sure"; fixed with the no-TOC fallback.
+
+**Open follow-ups:** **GEN-218** (project-file concurrency protection) and **GEN-219** (widen the config-lock retry window) — both To Do, unassigned for a future session.
+
 ## 2026-06-10 — Fixed the `update-config.ps1` BOM bugs (GEN-214 + GEN-216); GEN-58 instance logged
 
 Tackled the two config-tooling BOM bugs end-to-end. Both fixes were repeatedly pre-mortemed at Erez's request before approval, and verified through the **real** `update-config.ps1` script (not hand-rolled repros). Two tickets closed Done; one new ticket filed and closed; one GEN-58 instance logged.
