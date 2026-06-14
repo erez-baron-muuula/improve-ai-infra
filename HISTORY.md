@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-14 — GEN-223 pivoted to manual-trigger: Phase 1 built+verified, Phase 2 designed+converged (5 independent-review rounds), then deprioritized for an on-demand review command; GEN-58 #4; build spec written
 - 2026-06-11 — GEN-223 designed & locked (automated independent reviewer to run the three review questions); GEN-189 token confirmed dead; GEN-227 filed; 4 GEN-58 instances
 - 2026-06-10 — Multi-session safety & HISTORY.md scalability: filed GEN-218/219; HISTORY read + TOC-maintenance rules; backfilled all three project TOCs
 - 2026-06-10 — Fixed the `update-config.ps1` BOM bugs (GEN-214 + GEN-216); GEN-58 instance logged
@@ -15,6 +16,21 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-14 — GEN-223 pivoted to manual-trigger (Phase 1 built+verified, Phase 2 designed+converged, then deprioritized)
+
+Began as "Build GEN-223 Phase 1" and became build + design + pivot: Phase 1 of the automatic reviewer was built and verified, Phase 2 was designed and converged through five independent-review rounds, then — at Erez's suggestion — the whole automatic approach was deprioritized in favour of a manually-triggered review command. The auto-gate is preserved, not discarded.
+
+1. **Verified platform mechanics first; corrected the locked design.** Agent-type `Stop` hooks are real, but return `{"ok":true}` / `{"ok":false,"reason":…}` — NOT the `decision:block` the locked design assumed. Other verified facts: the `sonnet` alias is silently dropped by `-p` settings validation (full id `claude-sonnet-4-6` required, which silently rots on version bumps); reviewer **effort** is not settable via hooks (only **model**); a fully-dead hook can't self-report (only a gate-independent path catches it).
+2. **Phase 1 built & verified in scratch** (`gen223-reviewer-scratch/`). A single-model agent-`Stop`-hook reviewer (`reviewer-prompt.txt` + `.claude/settings.json`), exercised end-to-end via headless `claude --settings` + stream-json hook events: confirmed firing, PASS (fast bail), REVISE with round-markers, ESCALATE after the 2-round cap, and the "skip review" off-switch. Never touched live/global config.
+3. **Phase 2 designed & converged** (`PHASE2-DESIGN.md`, 5 rounds). Ran the review-to-convergence loop *on the design itself* with a 3-lens independent panel (pre-mortem / holistic / feasibility). Findings narrowed each round: a confident **cost-premise error** (two-tier assumed to cut cost without arithmetic, while Phase 1 already fast-bails) → self-defeating calibration → dead-component self-detection → operational details. Landed at: cheap presence-detector gate + sharp deep reviewer, **gated on a cost measurement that can say "don't build it,"** session-start reliability surfacing (no cloud machinery), honest residuals named.
+4. **The pivot → manual-trigger.** Erez proposed triggering review manually instead of an automatic gate. It dissolves the entire hard apparatus (per-reply cost/latency, gate calibration, reliability machinery, experimental-hook dependency) and automates his *original literal* pain (re-running the three questions by hand), at the cost of only catching what he thinks to flag (same self-defeating property as the off-switch). He chose it: **automating the labor is enough.**
+5. **Documented & preserved.** `DECISION.md` (decision + accepted trade-off + revisit-trigger + pointers); `BUILD-manual-review.md` (cold-start build spec for the chosen command — reuse the protocol, drop the hook plumbing, the convergence discipline learned this session, open build-time decisions); DEFERRED banners on `PHASE2-DESIGN.md` + `README.md`.
+6. **Tickets.** GEN-223 retitled → *"Run my three review questions (rule-check / pre-mortem / holistic) to convergence on demand"*, Decision section added (manual-trigger active; auto-gate deferred with pointers), status stays **In Progress** (command not built). **GEN-58 #4** logged: the confident cost-premise miss, caught by independent review (dogfooding the mechanism), with a fix-on-fix signal across revs.
+7. **Committed** all artifacts to `main` (`0a31069`) under `gen223-reviewer-scratch/`; pushed at wrap-up.
+8. **Auto-approval review.** Recent `deferred-calls.jsonl` deferrals are all state-mutating/arbitrary (Bash / Edit / PowerShell / notion-update-page / Agent / Write — correctly gated) or already allow-listed; `getJiraIssue` recurs but is already allow-listed yet still logged — reconfirms **GEN-222**. No safe-set additions.
+
+**Open follow-ups:** **GEN-223 build** — the manual-trigger "review to convergence" command, next session, per `BUILD-manual-review.md`; **auto-gate revival** only if the manual coverage gap bites (per `DECISION.md` revisit-trigger); **GEN-222** reconfirmed. Pre-existing untouched: GEN-189 cleanup (Erez), GEN-218/219, GEN-227 (parked), GEN-176 Track A/B.
 
 ## 2026-06-11 — GEN-223 designed & locked (automated independent reviewer); GEN-189 token confirmed dead
 
