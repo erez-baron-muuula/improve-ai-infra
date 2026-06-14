@@ -1,6 +1,7 @@
 # Build spec — manual "review to convergence" command (ACTIVE GEN-223 plan)
 
-**Status: spec ready, NOT built.** This is the **active** plan. The automatic-gate
+**Status: build-time decisions CONVERGED 2026-06-14 (see "Resolved build-time decisions"
+below); NOT yet built.** This is the **active** plan. The automatic-gate
 alternative in this same folder (`PHASE2-DESIGN.md`, `README.md`, `.claude/settings.json`,
 `reviewer-prompt.txt`) is **deferred** — see `DECISION.md` for why. Read `DECISION.md`
 first, then this.
@@ -56,6 +57,11 @@ The checks (run only those that apply):
   and they caught *complementary* issues. For small work, a single reviewer pass.
 - Give each reviewer the artifact under review, and **on re-review** the prior round's
   findings to verify resolution.
+- **Brief each reviewer with the original user request/goal verbatim, and designate at
+  least one lens to challenge the premises you're treating as settled** (not just the
+  proposal). A false premise in the brief propagates to every reviewer and can silently
+  undermine the whole review — the panel is only as good as the framing it's handed. (GEN-58
+  instance 2026-06-14 #7; promoted to a global `CLAUDE.md` rule.)
 
 ## The convergence loop + stop-rule (CRITICAL — learned this session)
 
@@ -76,11 +82,18 @@ wishlist**) → repeat.
   was for the cheap hook; a manual *deep* review legitimately needs more — use judgment
   with a sane upper bound, ~5 rounds, then escalate.)
 
-## Depth scaling
+## Depth scaling — RESOLVED (Decision 5, 2026-06-14): one depth
 
-- Small / routine: single quick reviewer pass (or none).
-- Big design / rules / architecture: full multi-lens panel iterated to convergence.
-- How depth is chosen (explicit from Erez vs inferred from the task) — open decision.
+- **One depth only.** Any user-initiated invocation runs the full independent panel
+  iterated to convergence. There is **no** "quick"/single-pass tier and **no** autonomous
+  trigger (that's the deferred auto-gate). Want less review → don't invoke.
+- `/check` refines only the proposed answer in the conversation; it never edits the user's
+  source files in place. So the user can read round-1 findings and stop, with work untouched.
+- "Critique-only" (flag once, don't iterate/modify) is a *different axis*, consciously
+  deferred — reachable manually (invoke, read first round, stop); clean future add-on
+  (`/check --once`) if wanted.
+- (This supersedes the earlier "scales down to a single pass for trivial work" framing —
+  the approved Decision 2 amendment.)
 
 ## Wiring
 
@@ -88,15 +101,51 @@ wishlist**) → repeat.
   skill). **Not** a Stop hook, **not** a `settings.json` change, **no** cloud infra. Runs
   in the main session; spawns reviewer sub-agents via the Agent tool.
 
-## Open build-time decisions (settle at build)
+## Resolved build-time decisions (converged 2026-06-14)
 
-1. Trigger surface + phrasing (command name; the two modes above).
-2. Single reviewer vs panel default, and lens count, per depth.
-3. Include the claim-grounding check (D) or not.
-4. Convergence cap / escalation rule (suggestion above).
-5. How depth is chosen (explicit vs inferred).
-6. Reviewer model — cost is now on-demand, so quality-first (Opus) is affordable; this
-   session used the default sub-agent model.
+All six were run through the tool's own review-to-convergence process (a 3-lens independent
+panel — pre-mortem / holistic / soundness — iterated to convergence, dogfooding the design).
+Several reversed the first-pass recommendation; notes below record the corrected outcome.
+
+1. **Trigger surface — a SKILL named `/check`.** The skill's *description* (trigger
+   phrasing) is the engine; `/check` is the explicit alias. Retroactive ("review that last
+   answer") is reliable; proactive ("…and review it to convergence" inside a request) is
+   **best-effort** (description match, can be silently missed) with `/check` as the reliable
+   fallback. (Originally proposed `/converge`; renamed to `/check`.)
+
+2. **Panel, sized to the work — an adaptive independent panel** of fresh sub-agents:
+   pre-mortem + holistic + soundness always; **rule-check only when a rule/`CLAUDE.md` edit
+   is the artifact**. Not a single reviewer; not a fixed set. Scope = designs / rules /
+   courses of action (code stays with `/code-review`). Unresolved lens disagreement →
+   escalate to Erez; the orchestrator may not silently overrule a material finding.
+
+3. **Grounding — folded into the soundness lens as a "show your work" (provenance) check.**
+   Flags load-bearing claims with no visible verification as "verify before relying"
+   (advisory, **non-blocking**); only "this is false" blocks. Rule: cheaply checkable →
+   check it; else if load-bearing + unresolvable-from-here + no provenance → flag. v1 judges
+   provenance from the reviewed text (heuristic); the orchestrator-fed "which claims had a
+   supporting tool call" hybrid is the true-delivery path, deferred.
+
+4. **Convergence / stop rule.** Converged = every live lens reports zero open material
+   findings (advisory flags don't block). Each round: review → revise → re-review, with
+   reviewers tagging findings *resolved / recurrence / new-from-revision*; the orchestrator
+   only counts tags (can't close a finding a reviewer still holds). Re-review is on-scope
+   only (a flaw in the revision, or recommendation-changing — no fresh wishlist). Escalate
+   to Erez when: same finding survives two fix attempts, OR lenses irreconcilably conflict,
+   OR the **3-round cap** is hit; escalated findings are surfaced still-open.
+
+5. **Depth — one depth** (see "Depth scaling" above). Always full when invoked; no quick
+   tier; no autonomous trigger; critique-only consciously deferred.
+
+6. **Reviewer model — flat default: Sonnet** for the reasoning lenses (cheapest model above
+   the reasoning floor; Haiku excluded for reasoning lenses). The session model is **not**
+   an input — independence comes from fresh context (model-independent), not tier-switching;
+   no alternation across rounds. Manual escalation to the top model ("check this hard") is
+   the dependable lever; auto-bump on non-convergence at the cap. Honest residuals:
+   tier-decorrelation is unmeasured (not relied on); a flat Sonnet panel can unanimously
+   miss the hardest reasoning-bound errors (mitigated by manual escalation). (Originally
+   proposed Opus-everywhere, then "opposite-tier-per-session" / alternation; both reversed
+   to flat Sonnet by the panel.)
 
 ## Reference implementation
 

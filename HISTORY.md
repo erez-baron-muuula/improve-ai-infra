@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-14 (session 2) — GEN-223: six build-time decisions converged by dogfooding `/check`; new global reviewer-briefing rule; GEN-58 #7
 - 2026-06-14 — GEN-223 pivoted to manual-trigger: Phase 1 built+verified, Phase 2 designed+converged (5 independent-review rounds), then deprioritized for an on-demand review command; GEN-58 #4; build spec written
 - 2026-06-11 — GEN-223 designed & locked (automated independent reviewer to run the three review questions); GEN-189 token confirmed dead; GEN-227 filed; 4 GEN-58 instances
 - 2026-06-10 — Multi-session safety & HISTORY.md scalability: filed GEN-218/219; HISTORY read + TOC-maintenance rules; backfilled all three project TOCs
@@ -16,6 +17,24 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-14 (session 2) — GEN-223: six build-time decisions converged by dogfooding `/check`; new global reviewer-briefing rule
+
+Picked up GEN-223 at "spec ready, not built" and settled all six open build-time decisions for the manual "review to convergence" command — each one run through the tool's *own* process (a 3-lens independent reviewer panel — pre-mortem / holistic / soundness, plus a rule-check lens for rule questions — iterated to convergence per the locked stop rule). Dogfooding the design repeatedly reversed my own first-pass recommendations, which is the point.
+
+1. **The six converged decisions** (now recorded in `BUILD-manual-review.md`): (1) **trigger** — a skill named `/check`, description-driven with `/check` as the explicit alias; retroactive ("review that last answer") reliable, proactive ("…and review to convergence" in a request) best-effort. (2) **panel** — an adaptive independent panel: pre-mortem + holistic + soundness always, rule-check only when a rule/`CLAUDE.md` edit is the artifact; scope = designs/rules/courses of action (code stays with `/code-review`); unresolved lens disagreement escalates, orchestrator can't silently overrule a material finding. (3) **grounding** — folded into the soundness lens as a non-blocking "show your work" provenance check (flag "verify before relying", only "this is false" blocks). (4) **stop rule** — converged = every live lens has zero open material findings; reviewers tag findings resolved/recurrence/new-from-revision and the orchestrator only counts (can't close a finding a reviewer holds); re-review is on-scope only (no fresh wishlist); escalate on same-finding-twice / irreconcilable-conflict / 3-round cap, surfacing open findings still-open. (5) **depth** — one depth (always full when invoked; no quick tier; no autonomous trigger; "critique-only" consciously deferred); `/check` refines the proposed answer in chat, never edits source files in place. (6) **model** — flat **Sonnet** reviewers (independence comes from *fresh context*, not tier-switching), manual Opus escalation ("check this hard") + auto-bump on non-convergence.
+
+2. **Panel reversed me repeatedly.** Decision 6 came in as "Opus-everywhere", then my "opposite-tier-per-session / alternate the model" idea — both reversed to **flat Sonnet** (the decorrelation lever is unmeasured; "opposite tier" had no real choice and would force pricey Opus on Sonnet sessions). Decision 5's "quick" tier was shown to collapse into "full" and dropped. Decision 1's "proactive is clean" was corrected to best-effort.
+
+3. **GEN-58 #7 logged — poisoning the reviewer's own premise.** I fed the panel a non-existent "fires on its own" autonomous trigger as *settled context* (it's the auto-gate Erez deferred); the panel reasoned on top of it and one reviewer even withdrew its objection — Erez caught it ("do we have this option now?"). First logged case where the error was in the panel's *brief*, so the panel was structurally unable to catch it.
+
+4. **Recorded + amended.** Wrote the six decisions into `BUILD-manual-review.md` (resolved-decisions section + one-depth "Depth scaling"); applied the approved **Decision 2 amendment** (struck the old "scales down to a single pass for trivial work" line).
+
+5. **New global rule (option d), arrived at by `/check` reversing my own "no rule" call.** Going over the session's learnings, the recurring confident-wrong recommendations were all already-covered application failures (no new rule). The one genuinely new learning — the poisoned-premise one — I initially judged should stay build-spec-local; running `/check` on that judgment (2 rounds, 4 lenses, with the new premise-challenge guard applied) flipped it: rule-check itself conceded the failure is *upstream* of existing output-verification rules. Added to global `CLAUDE.md` (line 174) via the locked-config tool, **synced to Drive** (exit 0): *"When you delegate review or analysis to a sub-agent (or run a multi-lens reviewer panel), brief it with the original request/goal verbatim and have at least one reviewer challenge the premises you're treating as settled — a false premise in the brief can silently undermine the entire review."* Same guard added to the build spec's reviewer-protocol section; GEN-58 #7 kept as the incident record.
+
+6. **Auto-approval review.** This session's deferrals are all arbitrary/state-mutating (Agent ×55, PowerShell/Edit/Bash/Write, notion-update-page) — none are safe-set candidates; read-only reads (notion-fetch/search, ToolSearch) are already auto-approved (absent from the log). `getJiraIssue` still logs despite being allow-listed → reconfirms **GEN-222**. No safe-set additions.
+
+**Open follow-ups:** **GEN-223 build** — the `/check` skill, next session, per `BUILD-manual-review.md` (now holds all six converged decisions); **GEN-222** reconfirmed. GEN-223 stays **In Progress** (skill not built). Pre-existing untouched: GEN-189 cleanup (Erez), GEN-218/219, GEN-227 (parked), GEN-176 Track A/B.
 
 ## 2026-06-14 — GEN-223 pivoted to manual-trigger (Phase 1 built+verified, Phase 2 designed+converged, then deprioritized)
 
