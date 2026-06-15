@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-15 (session 3) — Backlog-triage continuation + designed the `/check` content-lens extension (GEN-234 → Done; GEN-245 build + GEN-246 reasoning-gap fresh-look filed); GEN-230 redline-flatten rule applied (Memory Pirates docs); GEN-58 instance (3 design slips caught by the panel)
 - 2026-06-15 (session 2) — Resumed GEN-237 (Wheels analytics): fixed `sync.ps1` exit-code leak (false exit-4; safe-set was already in place); global analytics rule; test-1019 data pivoted to Eloise (AN-1407) + pinned request; filed GEN-240/241/242; GEN-58 instance (unauthorized outbound Slack post)
 - 2026-06-15 — Built `/check` (GEN-223 → Done): the review-to-convergence skill; dogfooded it repeatedly; prompt-cost fix via read-only `check-reviewer` (GEN-232 Done); credential-leak in `deferred-calls.jsonl` filed (GEN-233); `sync.ps1` folder-backup upgrade + wrap-up config-sync rule
 - 2026-06-14 (session 2) — GEN-223: six build-time decisions converged by dogfooding `/check`; new global reviewer-briefing rule; GEN-58 #7
@@ -19,6 +20,26 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-15 (session 3) — Backlog triage continued + `/check` content-lens extension designed (GEN-234 → Done)
+
+Continued the "Improving AI Infra" Notion backlog triage. Closed the remaining rule-queue items, then GEN-228 ("I keep re-typing the same Jira/Slack review prompt") opened into a full architecture design — extending `/check` to review dev content — carried out by dogfooding `/check` on the design itself. Two design versions failed review before convergence; the panel and Erez caught three confident-but-wrong recommendations (logged on GEN-58).
+
+1. **Rule queue closed.** GEN-235 (dev-content audience-access rule) → global `CLAUDE.md`, **Done**; GEN-153/162/134/125 **Done**; GEN-51/52 (Cursor) **Blocked** + parked; GEN-149 → To Do (self-containment note); GEN-238 filed. **GEN-230** (flatten redlines once all reviewers approve) — `/check`-converged (flatten exempt from sandbox staging, in-chat confirm instead), applied to the **Memory Pirates Documentation** project `CLAUDE.md` FORMATTING cluster, **Done**.
+
+2. **GEN-228 reframed.** The recurring prompt wasn't best solved by a rule. Settled on manual trigger + Claude offers it, and that the right home is the existing review mechanism (not new per-case skills) — which surfaced GEN-234.
+
+3. **GEN-234 (investigation) → Done.** Approach chosen: **extend `/check` with new lenses** (over folding into rule-check, a lint, a separate skill, or a hook). Final design: one skill; **6-lens library** (Pre-mortem, Holistic, Soundness + Rule-check, House-style + Reader) selected by artifact type, default-up + coverage report; the conformance lenses (Rule-check, House-style) read documented standards **live from a designated source** (project `CLAUDE.md` COMMUNICATION/FORMATTING/JIRA-DELTAS + global "Project Rules" + glossary); **one depth** (no scaling); trigger = manual invocation + a non-binding offer, **no hook**.
+
+4. **Three reversals forced by independent review (the mechanism earning its keep):** (a) dropped "depth-scaling" — it reintroduced the orchestrator-judgment failure the whole design was eliminating; (b) readability-as-lens → separate-skill → back to a full-weight lens, once Erez set the premise that a Jira draft is as weighty as a rule; (c) dropped a publish-gate hook — unbuildable as specified (stateless hooks can't know a review ran) and disproportionate (guarded an unstated "forgot to invoke" failure, against the manual-trigger preference). Logged as a **GEN-58** instance.
+
+5. **Follow-ups filed.** **GEN-245** (Backlog, under GEN-223) — build the House-style + Reader lenses + the offer-rule, carrying 3 advisories (offer must be a `CLAUDE.md` behavioral rule; designated-source heading-rename risk; "default up" pulls most lenses on substantial drafts). **GEN-246** (Backlog, under GEN-53) — fresh look at catching wrong-reasoning in everyday responses, the gap the layered QA scheme doesn't close, with full diagnosis for cold resume.
+
+6. **Key reframes captured for resume:** always-on grounding/soundness stays a behavioral rule (a per-response independent sub-agent is too expensive + not reliably triggerable); independent review is on-demand only; the offer must live as a behavioral rule (a skill can't offer itself). A self-inflicted link slip — a GEN-58 link in GEN-246 reused GEN-245's URL tail — was caught on verification and fixed.
+
+**Auto-approval review.** No safe-set additions. This session's 43 deferrals were all state-mutating (`notion-update-page` ×20, `Edit` ×4, `notion-create-pages` ×3, `PowerShell` ×3 — correctly gated) or the `check-reviewer` panel spawns (`Agent` ×10, auto-approved via the GEN-232 fast-path but still logged → reconfirms **GEN-222**). Read-only Notion reads / `ToolSearch` are already auto-approved (absent from the log).
+
+**Open follow-ups:** **GEN-245** (build the content lenses — own session) and **GEN-246** (everyday-reasoning fresh-look — own session); parked: enforce-at-publish hook (only if manual invocation proves unreliable). Pre-existing untouched: GEN-189, GEN-233 token cleanup, GEN-218/219, GEN-227, GEN-176, GEN-237 (blocked on AN-1407).
 
 ## 2026-06-15 (session 2) — Resumed GEN-237 (Wheels analytics): `sync.ps1` exit-code fix, analytics rule, test-1019 pivot to Eloise (AN-1407), + GEN-240/241/242
 
