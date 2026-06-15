@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-15 — Built `/check` (GEN-223 → Done): the review-to-convergence skill; dogfooded it twice; prompt-cost fix via read-only `check-reviewer` (GEN-232 Done); credential-leak in `deferred-calls.jsonl` filed (GEN-233)
 - 2026-06-14 (session 2) — GEN-223: six build-time decisions converged by dogfooding `/check`; new global reviewer-briefing rule; GEN-58 #7
 - 2026-06-14 — GEN-223 pivoted to manual-trigger: Phase 1 built+verified, Phase 2 designed+converged (5 independent-review rounds), then deprioritized for an on-demand review command; GEN-58 #4; build spec written
 - 2026-06-11 — GEN-223 designed & locked (automated independent reviewer to run the three review questions); GEN-189 token confirmed dead; GEN-227 filed; 4 GEN-58 instances
@@ -17,6 +18,19 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-15 — Built `/check` (GEN-223 → Done) + prompt-cost fix (GEN-232) + credential-leak ticket (GEN-233)
+
+Built the GEN-223 deliverable from the converged spec: `/check`, a manually-invoked skill that runs Erez's three review questions (rule-check / pre-mortem / holistic) to convergence via a panel of fresh independent reviewer sub-agents. Then dogfooded it twice, fixed the permission-prompt cost it created, and surfaced a credential leak along the way.
+
+1. **Built the `/check` skill** at `C:\Users\Erez\.claude\skills\check\SKILL.md` — first-ever personal skill in `~/.claude/skills`. Implements all six converged decisions: adaptive panel (pre-mortem + holistic + soundness always; rule-check only for rule/`CLAUDE.md` artifacts), `GOAL`-verbatim briefs with premise-challenge on the pre-mortem lens, convergence loop with reviewer-owned RESOLVED/RECURRENCE/NEW-FROM-REVISION tagging, 3-round cap + escalate conditions, one depth, flat-Sonnet reviewers (Opus on "check this hard"/at cap), refine-in-chat-never-edit-source. Tightened the description to 238 chars (under the 250 listing cap).
+2. **Discovery gotcha (verified):** a brand-new `~/.claude/skills` dir isn't watched mid-session, so the first skill needs a **restart** to appear (Claude Code changelog confirms hot-reload only for already-watched dirs). Notably, a new `~/.claude/agents` dir **did** hot-load the `check-reviewer` agent without a restart — asymmetric behaviour, observed this session.
+3. **Dogfooded `/check` on its own build proposal** (before it was live, run by hand): panel split on whether the skills path was right; resolved by primary source (changelog) confirming `~/.claude/skills/<name>/SKILL.md`. Then **smoke-tested the live skill** end-to-end on a throwaway proposal — full panel, 3-round convergence, including a real NEW-FROM-REVISION catch (a fix that falsified history). **GEN-223 → Done** (title already matched; corrected the stale "not yet built" line in the body first).
+4. **Prompt-cost fix → GEN-232 (Done).** Each `/check` run spawned ~7–8 reviewer sub-agents, each prompting (the `Agent` tool isn't auto-approved); allow-listing `Agent`/`general-purpose` broadly would loosen full-access agents everywhere. Designed the fix *via `/check` itself* (converged in 2 rounds, reversing my first native-allow-rule idea after reading the live `auto-approve.js` + deferred log): (a) new **read-only `check-reviewer`** sub-agent (`.claude/agents/check-reviewer.md`); (b) repointed `/check` to `subagent_type: check-reviewer`; (c) added a narrow fast-path to `auto-approve.js` (via locked `update-config.ps1`) approving `Agent` calls with `subagent_type === 'check-reviewer'` (robust to field name; degrades to a prompt, no regression). Verified prompt-free: a live `check-reviewer` spawn left no `deferred-calls.jsonl` entry. `node --check` passed; synced to Drive.
+5. **Credential leak found → GEN-233 (Bug, High, To Do, under GEN-76, unassigned = Claude-owned).** While verifying the hook, found that `auto-approve.js`'s `logDeferred` writes full command text to `deferred-calls.jsonl` — which syncs to Drive + git history — and other sessions' `curl` calls had inlined Atlassian tokens: **33 token-bearing lines, 3 distinct tokens** (Jira reads of MD-3619/3620/3648/3649). Same exposure class as GEN-189. Ticket covers ad-hoc cleanup (enumerate/test/revoke/scrub incl. git-history purge) and systematic prevention (redact secrets in `logDeferred`; pass tokens via env var). Not yet acted on.
+6. **Auto-approval review.** No safe-set additions: deferrals are state-mutating (correctly gated) or already-allowed; `getJiraIssue` recurs but is already allow-listed yet still logs — **reconfirms GEN-222**. `jq` is the only read-only candidate but only ever appears chained with non-safe segments, so allow-listing it wouldn't help.
+
+**Open follow-ups:** **GEN-233** — start the ad-hoc token cleanup (enumerate + test validity are Claude-doable; revoke needs Erez); **GEN-222** reconfirmed; pre-existing untouched: GEN-189 cleanup (Erez), GEN-218/219, GEN-227 (parked), GEN-176 Track A/B. The deferred `gen223-reviewer-scratch/` archive-rename (the smoke-test's throwaway topic) was never executed — left as-is.
 
 ## 2026-06-14 (session 2) — GEN-223: six build-time decisions converged by dogfooding `/check`; new global reviewer-briefing rule
 
