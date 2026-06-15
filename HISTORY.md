@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-15 (session 4) — Fixed the recurring GitHub "Select an account" picker (GCM duplicate credential; root cause = no pinned default; durable fix = pin `credential.https://github.com.username`); GCM global learning + `cat`/`tail`/`head` safe-set; GEN-247 filed; GEN-58 instance
 - 2026-06-15 (session 3) — Backlog-triage continuation + designed the `/check` content-lens extension (GEN-234 → Done; GEN-245 build + GEN-246 reasoning-gap fresh-look filed); GEN-230 redline-flatten rule applied (Memory Pirates docs); GEN-58 instance (3 design slips caught by the panel)
 - 2026-06-15 (session 2) — Resumed GEN-237 (Wheels analytics): fixed `sync.ps1` exit-code leak (false exit-4; safe-set was already in place); global analytics rule; test-1019 data pivoted to Eloise (AN-1407) + pinned request; filed GEN-240/241/242; GEN-58 instance (unauthorized outbound Slack post)
 - 2026-06-15 — Built `/check` (GEN-223 → Done): the review-to-convergence skill; dogfooded it repeatedly; prompt-cost fix via read-only `check-reviewer` (GEN-232 Done); credential-leak in `deferred-calls.jsonl` filed (GEN-233); `sync.ps1` folder-backup upgrade + wrap-up config-sync rule
@@ -20,6 +21,26 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-15 (session 4) — Fixed the recurring GitHub "Select an account" picker (GCM duplicate credential); GCM global learning + `cat`/`tail`/`head` safe-set; GEN-247 filed
+
+Diagnosed and fixed a recurring GitHub "Select an account" popup that kept reappearing despite an earlier deletion. The episode also produced a `/check`-converged global learning, a safe-set extension, a user-verification ticket, and one GEN-58 instance.
+
+1. **Root cause.** GCM (the Windows-default git credential helper) held two credentials for `github.com`: the OAuth login (`erez-baron-muuula`) and a `ghp_` classic PAT cached under the placeholder username `x-access-token`. With **no default account pinned**, GCM showed the account picker on every interactive auth. Deleting the duplicate didn't stick — every `From-Claude` push to the `claude-config-history` repo (plain `https://github.com` remote) re-cached the PAT under `x-access-token` (confirmed by its 14:06 UTC re-write timestamp).
+
+2. **Fix-on-fix.** The first remedy (delete the cached credential) was wrong: it treated an actively-recreated credential as a stale one-off. The durable fix — pin the default with `git config --global credential.https://github.com.username erez-baron-muuula`, then delete the duplicate. **Verified empirically**: an authenticated `ls-remote` then used the right account and the `x-access-token` entry did **not** reappear (vs. reappearing before).
+
+3. **Global learning added** (`/check`-converged in 2 rounds, via locked `update-global-rule.ps1`): the GCM `x-access-token` behavior, the deletion-≠-revocation distinction, and the pin remedy. The panel's soundness lens (web-verified) **corrected a confident-wrong claim** I'd told Erez — that `x-access-token` is "GitHub's required username for PAT auth." It isn't: GitHub ignores the username when a valid token is supplied; `x-access-token` is the placeholder used when a token is embedded in a remote URL (and the convention for GitHub App installation tokens). Kept rot-free (conditional framing, no baked-in machine state).
+
+4. **Safe-set.** Added `cat`, `tail`, `head` to `auto-approve.js` `SAFE_STANDALONE` (via `update-config.ps1`); excluded `find` (supports `-delete`/`-exec`). The previously-suggested `get-content`/`get-childitem` were already present — caught before applying.
+
+5. **GEN-247 filed** (task, Review, assigned to Erez, under GEN-86, due 2026-06-22): confirm the picker no longer appears next time he does a git push from the app/IDE — the user-verification step, since the popup is visible only to him.
+
+6. **GEN-58.** Logged one instance — the confident-wrong `x-access-token` protocol claim caught by the `/check` panel (second consecutive session the Layer-5 reviewer caught an already-delivered confident error). Considered a second instance for the fix-on-fix but skipped it (Erez's call) to avoid stacking the same episode.
+
+**Auto-approval review.** One safe-set addition this session: `cat`/`tail`/`head` (read-only). Remaining deferrals were state-mutating (`update-config.ps1` / `sync.ps1` / `update-global-rule.ps1` runs, `notion-create-pages` / `notion-update-page`) or `cmdkey` / `CredRead` / `git config` one-offs, correctly gated.
+
+**Open follow-ups:** **GEN-247** (Erez to confirm the picker is gone, due 2026-06-22). Residual: the precise reason GCM keyed the PAT under `x-access-token` on plain-URL pushes wasn't fully nailed — the pin resolves both the picker and the recreation, but if it recurs, investigate the PAT source / GCM config. Pre-existing untouched: GEN-245, GEN-246, GEN-233, GEN-189, GEN-218/219, GEN-227, GEN-176, GEN-237 (blocked on AN-1407).
 
 ## 2026-06-15 (session 3) — Backlog triage continued + `/check` content-lens extension designed (GEN-234 → Done)
 
