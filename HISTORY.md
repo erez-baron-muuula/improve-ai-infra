@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-16 (session 5) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) **Done**: applied the 6 remaining trim items (R1/R2/C1/C2/C4/CO1, each `/check`-converged); moved staging rule M1 to Memory Pirates `CLAUDE.md` (fixed 2 stale refs); kept dev-content rule M2 global (it overrides a global rule); ticket corrected & closed; GEN-58 Class-B instance (reported C3 status from a stale ticket snapshot)
 - 2026-06-16 (session 4) — [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) Done: built & verified the two-layer credential-leak prevention (L1 redact in `auto-approve.js`+L2 `sync.ps1` backup-boundary scan of `settings.local.json`, shared `secret-patterns.json`); design `/check`-converged (3 rounds) + code review (2 rounds); ticket title/body corrected (the "log is synced" premise was false)
 - 2026-06-16 (session 3) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) CO2 applied: consolidated 9 PowerShell/shell rules into one block (−1,741 chars / ~435 tokens/turn); `/check`-converged (2 rounds); count corrected 8→9
 - 2026-06-16 (session 2) — Global `CLAUDE.md` size audit; C3 end-of-session block compressed and applied (~200 tokens/turn saved); [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed for 9 remaining items
@@ -26,6 +27,20 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-16 (session 5) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) Done: remaining trim items applied; staging rule moved to Memory Pirates; ticket closed
+
+Continued and completed [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) (trim the global `CLAUDE.md` per-turn overhead). Every change ran through `/check` to convergence before applying; all global edits went via the locked `update-config.ps1` (exit 0, synced).
+
+1. **Six compression/removal items applied**, each `/check`-converged first: **R1** (GitHub curl line → defer SSL flags to the TLS rule; a panel caught a dropped `Authorization: Bearer` header and restored it); **R2** (strip the GEN-23 anecdote from the "This Page" rule); **C1** (compress the ticket-verification matrix — kept bullets + the "schedule a self-trigger" detail after the panel rejected a run-on); **C2** (tighten the silent-edits rule — kept path, "bucket-1" classifier, "dedicated", "explicitly"); **C4** (strip GCM background; trigger broadened to picker + silent-wrong-auth and **gated** on `cmdkey /list` before the delete); **CO1** (merge 4 reasoning-quality rules → 2; all four triggers preserved, singular-check fires on the labeling act).
+
+2\. **M1 — staging rule moved to Memory Pirates `CLAUDE.md`.** Added a "STAGING EDITS TO LIVE DOCUMENTS" section; found and fixed **two** references to "the global staging rule" (lines 6 and 119), not the single one the prior note assumed; moved M2's staging-sandbox sentence there too; deleted from global.
+
+3\. **M2 — kept global** (a decision, not a move). `/check` established the dev-content rule *overrides* the global "always link what you mention" rule, so its scope must stay global; moving it would expose any future dev-facing project to the info-leak. Verified Invoice Automation + Improve AI Infra have no dev audience.
+
+4\. **C3 + CO2 confirmed already done** in prior sessions (`.claude-git-history` commits `4174eab`, `86601b7`). The GEN-258 Items table had gone stale on C3; corrected. Ticket → **Done**.
+
+5\. **GEN-58 instance (Class B, recurrence).** Early in the session I reported C3 as outstanding by reading the stale GEN-258 Items table without verifying live state — caught by Erez's pushback. Logged: index Class B bumped 6x→7x + a child-log trace.
 
 ## 2026-06-16 (session 4) — [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) Done: two-layer credential-leak prevention built & verified
 
