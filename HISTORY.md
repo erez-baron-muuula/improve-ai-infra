@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-16 — Restructured GEN-58 for a cheap pre-log value-check (70K append-only log → linked child page; 13-class index + logging protocol on the ticket); rule 206 rewired to the new protocol; adherence resolved as accept-residual (workspace is Free = 7-day version history); 2 Notion-MCP learnings; session self-logged as a GEN-58 instance (first use of the new machinery); GEN-257 filed
 - 2026-06-15 (session 5) — Auto-approve file edits inside project folders + per-turn "silent edit" report: expanded the read-only safe-set; built the project-edit auto-approve branch, durable log, and a "For you" surfacing rule; chose Claude-rendered display over a Stop-hook message; GEN-249 (Done) + GEN-250 (parked GEN-58 learning)
 - 2026-06-15 (session 4) — Fixed the recurring GitHub "Select an account" picker (GCM duplicate credential; root cause = no pinned default; durable fix = pin `credential.https://github.com.username`); GCM global learning + `cat`/`tail`/`head` safe-set; GEN-247 filed; GEN-58 instance
 - 2026-06-15 (session 3) — Backlog-triage continuation + designed the `/check` content-lens extension (GEN-234 → Done; GEN-245 build + GEN-246 reasoning-gap fresh-look filed); GEN-230 redline-flatten rule applied (Memory Pirates docs); GEN-58 instance (3 design slips caught by the panel)
@@ -22,6 +23,26 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-16 — Restructured GEN-58 for a cheap pre-log value-check; rule 206 rewired; adherence resolved (accept-residual)
+
+GEN-58's append-only log had grown to ~70K chars / 44 entries, so the pre-log "does this add value?" check meant re-reading the whole ticket. Reworked it into a cheap-to-scan structure, rewired the logging rule, resolved how to keep it from drifting, captured the tooling learnings, and logged the session itself — all heavily `/check`'d (the panel repeatedly caught my own over-engineering).
+
+1. **GEN-58 restructured.** Moved the 44 full write-ups to a linked child page ("GEN-58 — Reasoning-failure instance log"); GEN-58's body now holds a "How to log" protocol + a **13-class failure-class index** (the cheap value-check surface: per-class digests + counts) + the original design notes. Migration used a **native `notion-duplicate-page`** (byte-identical fidelity, no retyping) → moved the copy under GEN-58 to **de-list it to a plain child page** → trimmed off the design half. GEN-58 now opens in one fetch again (it had been overflowing the tool limit). Stays Backlog/deferred (Layer 5 itself unbuilt).
+
+2. **Global rule 206 rewired** (via locked `update-global-rule.ps1`, `/check`-converged): when a reasoning failure surfaces, read the index → classify (new class / new element / recurrence) → full entry to the child page or a dated tally; with a no-silent-drop fallback. References only the stable GEN-58 ID (no rot-prone child URL).
+
+3. **Adherence resolved — no enforcement built.** "How do we *guarantee* new logs follow the scheme?" ran through several `/check` rounds; rejected a PreToolUse hook (unverified/unbuildable + over-engineered), a Notion-**database** redesign (verified: a `collection://` fetch returns schema not rows, and there's no bulk-query tool — a DB would break the cheap value-check), a `/log-gen58` **skill** (a third copy of the procedure → drift), and a backup agent. Conclusion: the worry is recoverable — rule 206 prevents dropped entries and **Notion version history** reverts bad writes. Workspace confirmed **Free = 7-day retention**; **accepted the residual** (logging is append-dominated; the index is re-derivable from the child log). Recorded on the ticket.
+
+4. **Two Notion-MCP learnings → global Session Learnings** (`/check`-pruned of rot — dropped time-varying snapshots, kept timeless guidance): (a) verify what a `collection://` data-source fetch returns / which query tools exist before assuming a database's rows are readable; (b) duplicating a DB page creates a new row (a live ticket) — move it under a non-DB parent to de-list to a plain page (body kept); duplication is async.
+
+5. **Session self-logged as a GEN-58 instance** — the first real use of the new machinery (read index → classify → child entry + index tally → verify): class E (over-engineering) → 6x, class G (jump-to-make-a-rule) → 5x, noting the strongest single-session `/check` dogfooding to date.
+
+6. **GEN-257 filed** (task, Backlog, unassigned, sub-item of GEN-58): reconcile the index's count semantics — the index uses a per-class "seen Nx" header while the protocol/rule 206 say "bump the element's count" (no per-element counter exists today). Also fixed a protocol-wording imprecision in the same pass (a recurrence trace goes on the chronological child log, not "under a class").
+
+**Auto-approval review.** No safe-set additions — this session's 41 deferrals were all state-mutating (`notion-update-page`/`-move-pages`/`-create-pages`/`-duplicate-page`, `Write`, `PowerShell`) or shell (`Bash`) or one-offs (`Agent` index-builder, `mark_chapter`); read-only Notion reads and `ToolSearch` are already auto-approved (absent from the deferred log).
+
+**Open follow-ups:** **GEN-257** (count-semantics reconcile, Backlog, unassigned). Pre-existing untouched: GEN-245, GEN-246, GEN-233, GEN-189, GEN-218/219, GEN-227, GEN-237 (blocked on AN-1407).
 
 ## 2026-06-15 (session 5) — Auto-approve file edits inside project folders + a per-turn "silent edit" report
 
