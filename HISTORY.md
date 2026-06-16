@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-16 (session 3) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) CO2 applied: consolidated 9 PowerShell/shell rules into one block (−1,741 chars / ~435 tokens/turn); `/check`-converged (2 rounds); count corrected 8→9
 - 2026-06-16 (session 2) — Global `CLAUDE.md` size audit; C3 end-of-session block compressed and applied (~200 tokens/turn saved); [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed for 9 remaining items
 - 2026-06-16 — Restructured GEN-58 for a cheap pre-log value-check (70K append-only log → linked child page; 13-class index + logging protocol on the ticket); rule 206 rewired to the new protocol; adherence resolved as accept-residual (workspace is Free = 7-day version history); 2 Notion-MCP learnings; session self-logged as a GEN-58 instance (first use of the new machinery); GEN-257 filed
 - 2026-06-15 (session 5) — Auto-approve file edits inside project folders + per-turn "silent edit" report: expanded the read-only safe-set; built the project-edit auto-approve branch, durable log, and a "For you" surfacing rule; chose Claude-rendered display over a Stop-hook message; GEN-249 (Done) + GEN-250 (parked GEN-58 learning)
@@ -24,6 +25,22 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-16 (session 3) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) CO2 applied: PowerShell/shell rules consolidated
+
+Continued [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) (global `CLAUDE.md` trimming). Picked the largest-saving Ready item — CO2 — applied it, and logged the rest for a fresh session.
+
+1. **CO2 applied & verified live.** Consolidated 9 scattered PowerShell/shell rules into one `**PowerShell & shell gotchas (Windows, PS 5.1 + the Bash tool):**` block (former lines 222/224/226/228/230/232/234/250/254). Global `CLAUDE.md` 45,292 → 43,551 chars (−1,741 / ~435 tokens/turn — beat the ~360 estimate). Applied via `update-config.ps1 -Op write-file` from a temp copy (Edit-tool surgery on the copy, then byte-copy over) to dodge argv encoding hazards with em-dashes/`$`/backticks; a snapshot+diff confirmed only the target region changed. Exit 0, synced.
+
+2\. **`/check` converged (2 rounds).** One real material fix: bullet 5 had dropped `@"..."@` from the forbidden double-quoted forms — restored. Two other reviewer findings were artifacts of an abridged reviewer brief (the live block already carried the content) — resolved by evidence, not dismissed.
+
+3\. **Count corrected.** The CO2 item said "8 rules, not 6"; there were actually **9**. GEN-258's item row → Done, "8"→"9", and a dated Session-log note appended to the ticket for fresh-session handoff.
+
+4\. **Method learning (candidate global rule — not yet added, awaiting Erez's OK).** Running several deletions as *parallel* Edit calls on one file collides when they share adjacent context (blank-line boundaries) — produced 3 leftovers + 3 broken blanks to repair. Do deletions that share adjacent context **sequentially**.
+
+**Auto-approval review.** No safe-set additions — deferrals this session were all mutating (`update-config.ps1` write, `notion-update-page`) or one-offs (`Agent` reviewers); read-only Notion fetch/search and `ToolSearch` are already auto-approved.
+
+**Open follow-ups:** [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) — R1, R2, C1, C2, C4, CO1 Ready; M2 needs scope check; M1 blocked (In Progress, unassigned). Candidate global learning re: sequential deletions (awaiting OK).
 
 ## 2026-06-16 (session 2) — Global `CLAUDE.md` size audit; C3 applied; [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed
 
