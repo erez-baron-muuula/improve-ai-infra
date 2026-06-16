@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-16 (session 4) — [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) Done: built & verified the two-layer credential-leak prevention (L1 redact in `auto-approve.js`+L2 `sync.ps1` backup-boundary scan of `settings.local.json`, shared `secret-patterns.json`); design `/check`-converged (3 rounds) + code review (2 rounds); ticket title/body corrected (the "log is synced" premise was false)
 - 2026-06-16 (session 3) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) CO2 applied: consolidated 9 PowerShell/shell rules into one block (−1,741 chars / ~435 tokens/turn); `/check`-converged (2 rounds); count corrected 8→9
 - 2026-06-16 (session 2) — Global `CLAUDE.md` size audit; C3 end-of-session block compressed and applied (~200 tokens/turn saved); [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed for 9 remaining items
 - 2026-06-16 — Restructured GEN-58 for a cheap pre-log value-check (70K append-only log → linked child page; 13-class index + logging protocol on the ticket); rule 206 rewired to the new protocol; adherence resolved as accept-residual (workspace is Free = 7-day version history); 2 Notion-MCP learnings; session self-logged as a GEN-58 instance (first use of the new machinery); GEN-257 filed
@@ -25,6 +26,26 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-16 (session 4) — [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) Done: two-layer credential-leak prevention built & verified
+
+Continued the credential-leak work from the prior (compacted) session. Goal: make the leak unable to recur across both sinks, run it through `/check`, then correct and close [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15).
+
+1. **Threat model corrected.** The real off-machine exposure was `settings.local.json` "always-allow" entries (backed up to Drive + the private git config-history repo), NOT `deferred-calls.jsonl` (local-only — `sync.ps1` excludes it). GEN-233's original title/body wrongly stated the log is "synced to Drive + git"; fixed.
+
+2\. **Design converged — 3 `/check` rounds.** Settled on three layers: L0 keep the env-var habit; **L1** redact token-shaped text in `auto-approve.js` `logDeferred` before the log write (fail-safe to `[REDACTION-UNAVAILABLE]`, never raw); **L2** `sync.ps1` scans `settings.local.json` at the backup boundary, fail-closed, aborts before the first copy to Drive/git. The panel killed scope-creep (scanning *all* managed files would false-positive on the token prefixes documented in `CLAUDE.md`) → narrowed L2 to the one file with an automated secret-write path; removed a self-inflicted `-SkipScan` bypass.
+
+3\. **Code-correctness review — 2 rounds.** Two false-negatives caught and fixed: Atlassian charset was missing base64 `+`/`/`; Redis was only caught as `KEY=VALUE` (added the `redis://…@` URL form). False-positive scan against the live `settings.local.json` came back clean.
+
+4\. **Built & applied.** Created `secret-patterns.json` (9 patterns) and added it to `sync.ps1`'s backup set; applied L1 to `auto-approve.js` via the locked `update-config.ps1` (two `text-replace` ops); inserted the L2 scan block into `sync.ps1`.
+
+5\. **Verified end-to-end.** Hook `node --check` clean; a real-format token piped through the live hook logs as `[REDACTED]` (token does not survive); each planted token type is caught by L2; the live config file is clean and the two real `update-config.ps1` pushes ran the new scan and passed.
+
+6\. **[GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) → Done**, title/body rewritten to match what was built.
+
+**Auto-approval review.** No safe-set additions — every deferral this session was mutating (`update-config.ps1`, `PowerShell`, `Edit`, `Write`, `notion-update-page`).
+
+**Open follow-ups:** [GEN-254](https://app.notion.com/p/3816e495d07c81cfa865eeba1d1f1090) — Erez to rotate the live tokens (GitHub-testScripts, Atlassian, Redis) + precautionary Slack/Notion, save to the secure sheet, then say "tokens replaced" → Claude runs post-rotation cleanup (update usages, confirm old ones dead, purge git history with approval, close [GEN-189](https://app.notion.com/p/3786e495d07c81299a2acf49845f5cfe) + GEN-254).
 
 ## 2026-06-16 (session 3) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) CO2 applied: PowerShell/shell rules consolidated
 
