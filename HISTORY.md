@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-15 (session 5) — Auto-approve file edits inside project folders + per-turn "silent edit" report: expanded the read-only safe-set; built the project-edit auto-approve branch, durable log, and a "For you" surfacing rule; chose Claude-rendered display over a Stop-hook message; GEN-249 (Done) + GEN-250 (parked GEN-58 learning)
 - 2026-06-15 (session 4) — Fixed the recurring GitHub "Select an account" picker (GCM duplicate credential; root cause = no pinned default; durable fix = pin `credential.https://github.com.username`); GCM global learning + `cat`/`tail`/`head` safe-set; GEN-247 filed; GEN-58 instance
 - 2026-06-15 (session 3) — Backlog-triage continuation + designed the `/check` content-lens extension (GEN-234 → Done; GEN-245 build + GEN-246 reasoning-gap fresh-look filed); GEN-230 redline-flatten rule applied (Memory Pirates docs); GEN-58 instance (3 design slips caught by the panel)
 - 2026-06-15 (session 2) — Resumed GEN-237 (Wheels analytics): fixed `sync.ps1` exit-code leak (false exit-4; safe-set was already in place); global analytics rule; test-1019 data pivoted to Eloise (AN-1407) + pinned request; filed GEN-240/241/242; GEN-58 instance (unauthorized outbound Slack post)
@@ -21,6 +22,26 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-15 (session 5) — Auto-approve file edits inside project folders + a per-turn "silent edit" report
+
+Began with Erez asking why he's prompted to approve Claude's *verification* steps. That opened into two pieces: finishing the read-only auto-approve coverage, then a new feature — stop prompting for file edits inside his project folders while keeping him aware, each turn, of anything changed without approval. The design churned hard and was hammered into shape across many `/check` rounds.
+
+1. **Read-only safe-set expanded.** Added ~45 read-only commands/cmdlets to `auto-approve.js` `SAFE_STANDALONE` (cat/head/tail/wc/stat/jq/... and non-script-block PowerShell readers like Get-Item/Get-FileHash/Measure-Object), plus a **guarded `find`** (rejects `-delete`/`-exec`/etc.). Verified through the live hook. The MCP read tools I first flagged turned out to be **already** allow-listed — corrected after reading `settings.json` (not just the hook's SAFE_TOOLS).
+
+2. **Project-folder edit auto-approval — GEN-249 (Done, under GEN-76).** `auto-approve.js` now auto-approves `Edit`/`Write`/`MultiEdit` whose targets all resolve under `C:\Users\Erez\AI Projects\` or `C:\Users\Erez\MemoryPirates`. Carve-outs still prompt: `.git` internals, `.env`/`.env.*`, secret/signing files (`.pem`/`.key`/`.pfx`/`.p12`/`.jks`/`.keystore`); the four protected config files stay hard-blocked. Each silent approval is appended at approve-time (with a pre-write new-vs-overwrite flag) to a durable, append-only per-session log `auto-approved-edits.jsonl`.
+
+3. **Per-turn visibility — new global `CLAUDE.md` rule.** Each turn, silently-approved project edits are surfaced in a labelled sub-section of the "For you" block (framed as a bucket-1 "result Erez asked for"), read from that log; report new-since-last, never assume empty without reading, explicit error if unreadable.
+
+4. **Display = Claude-rendered (Option B), not a Stop-hook message.** A Stop-hook `systemMessage` was rejected: its rendering is client-dependent and unverified (and settings-registered Stop hooks may not reliably fire), while Claude-rendered output shows in any client. Trade-off: depends on Claude reading the log each turn — the durable (never-cleared) log makes a missed turn a *delay*, not a *loss*.
+
+5. **What `/check` caught (the mechanism earning its keep).** The surfacing mechanism reversed ~5x (per-turn pop-up -> dropped -> wrap-up -> "For you" -> Stop-hook `systemMessage` -> Claude-rendered). Across rounds the panel also caught: a **broken allow-glob** (single `*` doesn't recurse on Windows — would've missed nested files, which is every real file); **missing keystore carve-outs** (`.p12`/`.jks`/`.keystore` — silently overwriting an Android signing key is unrecoverable); a **coverage/label over-promise**; **silent-failure = false-safety**; and a **`..` path-escape** (resolved by `path.resolve`). Live-hook test: 9/9 cases correct.
+
+6. **GEN-250 (parked) — a GEN-58-class learning kept out of GEN-58.** Per Erez (he's actively working GEN-58), the Layer-5 instance was parked as a sub-item of GEN-249 rather than written into GEN-58: *when the deliverable is a notification/output mechanism, verify the delivery channel's real capability (renders? fires? reliably? in the user's client?) before designing on it.* The backbone causes (verify-platform-constraints; fix-on-fix reversal) were already-covered rules.
+
+**Auto-approval review.** No new safe-set additions — every recurring read-only call in the deferred log is already allow-listed; the lone uncovered read-only name (`search_session_transcripts`, 1x) is already auto-approved by the hook's SAFE_TOOLS. Remaining deferrals are mutating (`update-config.ps1` runs, `notion-*` writes, `Edit`/`Write`) and correctly gated.
+
+**Open follow-ups:** None blocking. The feature is live; its only residual is the Option-B reliability trade-off (the per-turn report depends on Claude reading the log; the durable log makes a miss a delay, not a loss). Pre-existing untouched: GEN-245, GEN-246, GEN-233, GEN-189, GEN-218/219, GEN-227, GEN-237 (blocked on AN-1407).
 
 ## 2026-06-15 (session 4) — Fixed the recurring GitHub "Select an account" picker (GCM duplicate credential); GCM global learning + `cat`/`tail`/`head` safe-set; GEN-247 filed
 
