@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-16 (session 2) — Global `CLAUDE.md` size audit; C3 end-of-session block compressed and applied (~200 tokens/turn saved); [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed for 9 remaining items
 - 2026-06-16 — Restructured GEN-58 for a cheap pre-log value-check (70K append-only log → linked child page; 13-class index + logging protocol on the ticket); rule 206 rewired to the new protocol; adherence resolved as accept-residual (workspace is Free = 7-day version history); 2 Notion-MCP learnings; session self-logged as a GEN-58 instance (first use of the new machinery); GEN-257 filed
 - 2026-06-15 (session 5) — Auto-approve file edits inside project folders + per-turn "silent edit" report: expanded the read-only safe-set; built the project-edit auto-approve branch, durable log, and a "For you" surfacing rule; chose Claude-rendered display over a Stop-hook message; GEN-249 (Done) + GEN-250 (parked GEN-58 learning)
 - 2026-06-15 (session 4) — Fixed the recurring GitHub "Select an account" picker (GCM duplicate credential; root cause = no pinned default; durable fix = pin `credential.https://github.com.username`); GCM global learning + `cat`/`tail`/`head` safe-set; GEN-247 filed; GEN-58 instance
@@ -23,6 +24,22 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-16 (session 2) — Global `CLAUDE.md` size audit; C3 applied; [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed
+
+Erez noticed a spike in per-turn token consumption and suspected the growing global `CLAUDE.md`. Root cause confirmed: the file was ~45,500 chars / ~11,400 tokens loaded on every turn. Audited it for reduction candidates, applied one compression (C3), and captured all remaining work in a ticket.
+
+1. **Root cause confirmed.** Per-turn overhead from growing CLAUDE.md files — not the context window size. Global `CLAUDE.md` alone is ~11,400 tokens/turn. Against full session overhead (~18,600 tokens), the 10 identified items represent ~3,750 tokens/turn (~20%) addressable reduction. Corrected a prior session's wrong diagnosis (that session blamed the 1M context flag).
+
+2\. **Audit: 10 items identified — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) filed.** Under parent [GEN-93](https://app.notion.com/p/3726e495d07c819fafcbe23caaa297cf) (AI Infra Efficiency). Categories: R1–R2 (rewrite/strip stale facts), M1–M2 (move to project `CLAUDE.md`), C1–C4 (compress), CO1–CO2 (consolidate). `/check` on the audit found 6 material findings: R1 should rewrite not remove; C2 must keep the path; C3 needs a `/check`-converged draft; M1 has a broken cross-reference; M2 scope unverified; CO2 misclassifies a shell rule. All addressed before filing.
+
+3\. **C3 drafted, `/check`-converged (2 rounds), applied.** Compressed the end-of-session block from ~1,500 chars to ~700 chars (~53% reduction, ~200 tokens/turn). Round 1 found 2 material findings: dropped `Bash(...)`/`settings.json` catch-all guard (restored) and dropped "build ToC from scratch if absent" note (restored). Round 2: PASS. Applied via `update-global-rule.ps1` — success.
+
+4\. **[GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) updated with per-item continuation notes.** Exact old-text anchors and constraints for each of the 9 remaining items — a fresh session can execute without re-reading this conversation. R1, R2, C1, C2, C4, CO1, CO2 are Ready. M2 needs scope check (IA/Improve AI Infra audience). M1 is blocked (Memory Pirates `CLAUDE.md` line 6 references the global staging rule; both files must change simultaneously).
+
+**Auto-approval review.** No safe-set additions — all calls this session were mutating (Notion creates/updates, PowerShell edits).
+
+**Open follow-ups:** [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) (9 remaining items, In Progress, unassigned).
 
 ## 2026-06-16 — Restructured GEN-58 for a cheap pre-log value-check; rule 206 rewired; adherence resolved (accept-residual)
 
