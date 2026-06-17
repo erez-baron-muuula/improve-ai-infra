@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-17 — Token-trim execution + GEN-93 epic architecture: measured `CLAUDE.md` (Instructions 64% / Session-Learnings 29%); compressed the GCM + 4 Notion entries, deferred the behavioral compressions (asymmetric-risk call); a PowerShell-escape / `Replace`-null near-miss silently deleted 4 rules (caught + fixed forward); 3 new global learnings; 2 GEN-58 class-D instances; net size ~flat — real levers (GEN-126 dedup, Instructions trims) deferred
 - 2026-06-16 (session 5) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) **Done**: applied the 6 remaining trim items (R1/R2/C1/C2/C4/CO1, each `/check`-converged); moved staging rule M1 to Memory Pirates `CLAUDE.md` (fixed 2 stale refs); kept dev-content rule M2 global (it overrides a global rule); ticket corrected & closed; GEN-58 Class-B instance (reported C3 status from a stale ticket snapshot)
 - 2026-06-16 (session 4) — [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) Done: built & verified the two-layer credential-leak prevention (L1 redact in `auto-approve.js`+L2 `sync.ps1` backup-boundary scan of `settings.local.json`, shared `secret-patterns.json`); design `/check`-converged (3 rounds) + code review (2 rounds); ticket title/body corrected (the "log is synced" premise was false)
 - 2026-06-16 (session 3) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) CO2 applied: consolidated 9 PowerShell/shell rules into one block (−1,741 chars / ~435 tokens/turn); `/check`-converged (2 rounds); count corrected 8→9
@@ -27,6 +28,28 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-17 — Token-reduction execution + GEN-93 epic architecture; a destructive-edit near-miss; 3 learnings; 2 GEN-58 instances
+
+Worked the AI-infra token-reduction goal end-to-end via repeated `/check` dogfooding — acted as architect on the GEN-93 epic, then executed only the safe slice of the trim.
+
+1. **GEN-93 epic triage + architecture.** Surveyed all 20 children (10 Done/Wont-Do, 10 open). Core finding: the epic is **frozen on its own never-completed "synthesis" step**, which Blocks GEN-129/130/131/135. Architect recommendation (`/check`-converged across rounds): **don't run the synthesis** — it's an audit-engine investment that fights the token goal; instead measure → de-load → directly reduce, and park the run-time audit tooling. Verified GEN-131 is NOT superseded by GEN-258. *Not yet executed — Erez to decide whether to park/close the 4 Blocked tickets + the synthesis.*
+
+2\. **Token measurement.** Global `CLAUDE.md` ~10,440 tok/turn: Instructions 64% (~6,727), Session Learnings 29% (~3,070), rest ~645. Confirmed (claude-code-guide): `@import` doesn't save tokens (loads eagerly); de-load only via skills (unreliable auto-trigger) or path-scoped rules (file-triggered only) — so the tool-triggered situational gotchas can't be cheaply de-loaded. **Compression + dedup are the reliable levers.**
+
+3\. **Compressions applied** (each `/check`-reviewed, via locked `update-config.ps1`): the GCM entry (compress-in-place — review killed the relocate-to-memory idea), and 4 Notion *factual* Session-Learnings entries (C5–C8). **Behavioral rules (C1–C4) deliberately left at full length** — architect call: asymmetric risk (emphasis loss on core working rules) isn't worth ~360 tok/turn when safer levers (GEN-126 dedup, pruning) exist.
+
+4\. **Destructive-edit near-miss (caught + fixed).** The first batch-apply built filenames with `"$p` + backtick-n + `.txt"` — backtick-n is PS's newline escape, so the new-text files didn't load and `String.Replace(old,$null)` **silently deleted** C5–C8 into the live synced file. Caught from the size delta, reverted forward by reinserting the compressed text via anchored regex, verified (new present, old absent). Net state correct.
+
+5\. **3 global learnings added** (`/check`-converged): the PS interpolated-escape trap; `String.Replace(x,$null)` deletes; and **gate destructive file rewrites** (build → inspect size/diff → then overwrite), folded into the existing destructive-operations rule per the panel. Resolved a soundness-vs-rule-check contradiction by evidence — the incident itself proved `.Replace(null)` deletes (doesn't throw).
+
+6\. **GEN-58:** two class-D instances logged (10x→11x): the GEN-93 *regrowth-premise* error (claimed `CLAUDE.md` had regrown post-GEN-258; it had monotonically shrunk — caught by `/check`), and the destructive-write near-miss.
+
+**Net token effect:** ~flat — the 3 safety learnings (~700 chars) roughly offset this session's compressions. The substantive reduction (GEN-126 dedup + the deferred Instructions-section trims) remains for next session.
+
+**Auto-approval review.** No safe-set additions — all recent deferrals are mutating (`PowerShell`, `Write`, `notion-update-page`, `editJiraIssue`, `slack_send_message`, `Bash`) or one-offs (`Agent`, `Monitor`); read-only Notion reads / `ToolSearch` already auto-approved.
+
+**Open follow-ups:** **GEN-126** (fold overlapping rule clusters) — next session (Erez starting it fresh). GEN-93 architecture decision pending (park/close the 4 Blocked + the synthesis). Behavioral compressions C1–C4 parked (Erez's call). GEN-162 found already Done (no action).
 
 ## 2026-06-16 (session 5) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) Done: remaining trim items applied; staging rule moved to Memory Pirates; ticket closed
 
