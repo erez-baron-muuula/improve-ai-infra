@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-17 (session 2) — Rules-to-skills: which `CLAUDE.md` rules should be skills (`/check`-converged) → built the `/wrap` end-of-session skill and atomically replaced the global "End of session" block with a one-line pointer; fixed stale "Append"→"Prepend (newest-first)" wording in the Invoice + Memory Pirates `CLAUDE.md`s; logged a new GEN-58 Class-N element; diagnosed the desktop-app "/" menu not listing newly-added skills (known client behaviour — engine registers them, `/wrap` works by typing)
 - 2026-06-17 — Token-trim execution + GEN-93 epic architecture: measured `CLAUDE.md` (Instructions 64% / Session-Learnings 29%); compressed the GCM + 4 Notion entries, deferred the behavioral compressions (asymmetric-risk call); a PowerShell-escape / `Replace`-null near-miss silently deleted 4 rules (caught + fixed forward); 3 new global learnings; 2 GEN-58 class-D instances; net size ~flat — real levers (GEN-126 dedup, Instructions trims) deferred
 - 2026-06-16 (session 5) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) **Done**: applied the 6 remaining trim items (R1/R2/C1/C2/C4/CO1, each `/check`-converged); moved staging rule M1 to Memory Pirates `CLAUDE.md` (fixed 2 stale refs); kept dev-content rule M2 global (it overrides a global rule); ticket corrected & closed; GEN-58 Class-B instance (reported C3 status from a stale ticket snapshot)
 - 2026-06-16 (session 4) — [GEN-233](https://app.notion.com/p/3806e495d07c81879de9dfd1aca20e15) Done: built & verified the two-layer credential-leak prevention (L1 redact in `auto-approve.js`+L2 `sync.ps1` backup-boundary scan of `settings.local.json`, shared `secret-patterns.json`); design `/check`-converged (3 rounds) + code review (2 rounds); ticket title/body corrected (the "log is synced" premise was false)
@@ -28,6 +29,22 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-17 (session 2) — Rules-to-skills: built `/wrap`; HISTORY-wording cleanup; GEN-58 Class-N; desktop-menu diagnosis
+
+Asked which global/project `CLAUDE.md` rules should become skills, then built the strongest candidate end-to-end.
+
+1. **Analysis (`/check`-converged).** Three-part test for rule→skill: confined relevance, real bulk, safe-to-miss. Conclusion: only procedures with an explicit invocation point are clean skill candidates; always-on guardrails stay rules; bulky situational gotchas are better split via `@import` than skill-ified (silent-trigger risk). Corrected two wrong first-pass calls (end-of-session is only safe as an explicit slash command, not phrase-triggered; the "hybrid pointer-rule + skill" idea for gotchas was unsound).
+
+2\. **Built `/wrap`** (`.claude/skills/wrap/SKILL.md`, `/check`-converged over 2 rounds): the end-of-session procedure as an explicit slash command (Steps 0–6: project-detect → apply-learnings → auto-approval scan → HISTORY.md → config sync → project closing steps → report). **Atomically replaced** the global `CLAUDE.md` "End of session" block with a one-line pointer to it (via `update-global-rule.ps1`), reclaiming that block from per-turn context.
+
+3\. **Cleanup (`/check`-converged).** Fixed stale wording "Append a dated summary" → "Prepend a dated entry (newest-first)" in both `InvoiceAutomation` and `Memory Pirates Documentation` `CLAUDE.md` SESSION HISTORY (both `HISTORY.md` files were already newest-first).
+
+4\. **GEN-58:** logged a new **Class-N** element (asked whether `sync.ps1` syncs the skills folder instead of reading the script — first internal-tooling-state instance of the class). Count N → 5×.
+
+5\. **Desktop-app menu diagnosis.** Newly-added user skills don't appear in the desktop app's "/" autocomplete even after a full restart, while older ones (`/check`) do; the engine registers them fine and they run when typed. Confirmed (claude-code-guide) as known desktop-app behaviour, not a file problem. Fixed an unrelated YAML bug found en route (an unquoted `: ` in the skill `description`).
+
+**Follow-ups:** (a) `/approve-ticket` skill (Memory Pirates DEV-TICKET APPROVAL SEQUENCE) — the next skill candidate, not yet built. (b) 1–2 candidate global learnings to propose (quote skill `description:` values to avoid YAML `: ` breakage; desktop-app skill-visibility caveat) — pending Erez's review.
 
 ## 2026-06-17 — Token-reduction execution + GEN-93 epic architecture; a destructive-edit near-miss; 3 learnings; 2 GEN-58 instances
 
