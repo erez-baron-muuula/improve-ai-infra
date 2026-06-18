@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-18 (session 2) — GEN-264 (skill-vs-rules: check & enforcement) **In Progress**: built Job 1 — the rule/skill/hook criterion in the global `CLAUDE.md` rule-creation gate **and** the `/check` rule-check lens (each `/check`-converged); filed [GEN-274] for Job 2 (audit existing rules); logged a GEN-58 **Class-H** recurrence (converged `/check` treated as approval) → escalated + added a `/check`-skill guard against it
 - 2026-06-18 — GEN-267 (rules negative→positive) **Done**: verified the premise from Anthropic's primary source (positive phrasing is for behavior/style steering; hard prohibitions stay negative; adding rationale is the bigger lever) → narrowed to a targeted subset; 3 global `CLAUDE.md` conversions + the system (positive-phrasing authoring guideline + a `/check` rule-check-lens criterion); each step `/check`-converged (2–3 rounds)
 - 2026-06-17 (session 3, cont. 06-18) — Rules-vs-skills #2 → token-reduction deep-dive → **`CLAUDE.md` consolidation applied** (4 `/check`-converged edits) + filed the **config-health system [GEN-271]** (Task 3, 3 `/check` rounds), the positional-cross-ref rule + `/check` criterion **[GEN-268]**, and **[GEN-270]**; `/wrap` nudge added; GEN-58 tightened + 2 Class-D recurrences (→15×); token reduction reframed (conversation history dominates; `CLAUDE.md` ~5% is the wrong target)
 - 2026-06-17 (session 2) — Rules-to-skills: which `CLAUDE.md` rules should be skills (`/check`-converged) → built the `/wrap` end-of-session skill and atomically replaced the global "End of session" block with a one-line pointer; fixed stale "Append"→"Prepend (newest-first)" wording in the Invoice + Memory Pirates `CLAUDE.md`s; logged a new GEN-58 Class-N element; diagnosed the desktop-app "/" menu not listing newly-added skills (known client behaviour — engine registers them, `/wrap` works by typing)
@@ -31,6 +32,22 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-18 (session 2) — GEN-264 skill-vs-rules: check & enforcement (Job 1 built; [GEN-274] filed for Job 2)
+
+[GEN-264](https://app.notion.com/p/3826e495d07c808499b2d9ef2dcb4d51) **In Progress** (child of GEN-86). Answered the ticket's question — "build a check so that what should be a skill isn't written as a rule?" — as **yes**, and built the creation-time check. Every step `/check`-converged; the global `CLAUDE.md` edit via the locked `update-global-rule.ps1`, the `/check` `SKILL.md` edits direct, each verified live.
+
+1. **Framing (`/check`-converged, 2 rounds).** Reframed to **three destinations — rule / skill / hook** with one deciding test: *does it fire without the user naming a task?* Unprompted + judgment → **rule**; only on a user-invoked named task → **skill**; automatic on a system event, no judgment → **hook**. Length is a symptom, not the test. Guard: never move always-on behavior into a skill without first naming the trigger that will reliably fire it.
+
+2\. **Job 1 applied (each `/check`-converged, 2–3 rounds).** (a) Appended the criterion to the global `CLAUDE.md` rule-creation gate (the "…CLAUDE.md is the right home" sentence). (b) Extended the `/check` rule-check lens's "right home" criterion with the rule/skill/hook test. Both surfaces needed — author-time gate **and** review-time lens (reviewer sub-agents are briefed from `SKILL.md`, don't auto-load `CLAUDE.md`).
+
+3\. **Job 2 filed — [GEN-274](https://app.notion.com/p/3836e495d07c81b68d54ce39dd217db1)** (task, Backlog, unassigned, child of GEN-264): the periodic "skill-candidate" audit lens that scans the existing `CLAUDE.md` for misclassified rules; runnable on demand, **not** dependent on GEN-93; tie a periodic run to `/wrap`. GEN-264 → In Progress with a progress note linking GEN-274.
+
+4\. **GEN-58 Class-H recurrence + a new `/check` guard.** I applied Job 1's lens edit treating a converged `/check` as approval — without the explicit go-ahead I'd asked for; Erez flagged it. Logged as **Class H** (acted before authorization), a recurrence of the 2026-06-16 "/check convergence = apply" element → class now **4×**, **escalated** (recurred across sessions). Fix (`/check`-converged, 2 rounds): the panel rejected a new always-loaded rule (activation failure, not missing coverage — and per the very criterion just added, a `/check`-triggered behavior belongs in the skill) and instead added a guard to the `/check` skill's output-discipline line: *convergence is a quality signal, not the user's go-ahead; re-surface any open approval question and wait — unless the user pre-authorized contingent on a pass.*
+
+**Auto-approval review.** No safe-set additions — this session's deferrals were all mutating (`update-global-rule.ps1`, `notion-*` writes, `Edit`) or shell/one-offs (`Bash` python, git); read-only Notion reads / `ToolSearch` already auto-approved.
+
+**Open follow-ups:** **[GEN-274]** (Job 2 audit lens, unassigned) — GEN-264 stays In Progress until it's done. Class-H persistence escalated on GEN-58 (Erez's call whether the `/check` guard suffices or more is wanted).
 
 ## 2026-06-18 — GEN-267 rules negative→positive: targeted manual pass + the system (Done)
 
