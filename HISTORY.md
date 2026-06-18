@@ -1,6 +1,8 @@
 # Project History
 
 ## Table of contents
+- 2026-06-18 — GEN-267 (rules negative→positive) **Done**: verified the premise from Anthropic's primary source (positive phrasing is for behavior/style steering; hard prohibitions stay negative; adding rationale is the bigger lever) → narrowed to a targeted subset; 3 global `CLAUDE.md` conversions + the system (positive-phrasing authoring guideline + a `/check` rule-check-lens criterion); each step `/check`-converged (2–3 rounds)
+- 2026-06-17 (session 3) — Rules-vs-skills #2 + token-reduction deep-dive (heavy `/check` dogfooding): decided `/approve-ticket` stays a rule (rule→skill token win doesn't apply to project rules); tightened GEN-58 step-3 logging protocol + logged D-class recurrences (→13×, escalation residual accepted); added a proactive work-completion `/wrap` nudge to global `CLAUDE.md`; `/context`-grounded finding that the dominant token cost is conversation history, not `CLAUDE.md` (~5%) or deferred-MCP (mostly non-resident) — real levers are auto-compaction + `/clear` + trimming unused MCP servers; queued (all needing approval + `/check`): `# Compact Instructions` block, `/clear` rule clarification, Session-Learnings consolidation; **mid-session compaction checkpoint** (`/wrap` to finalize)
 - 2026-06-17 (session 2) — Rules-to-skills: which `CLAUDE.md` rules should be skills (`/check`-converged) → built the `/wrap` end-of-session skill and atomically replaced the global "End of session" block with a one-line pointer; fixed stale "Append"→"Prepend (newest-first)" wording in the Invoice + Memory Pirates `CLAUDE.md`s; logged a new GEN-58 Class-N element; diagnosed the desktop-app "/" menu not listing newly-added skills (known client behaviour — engine registers them, `/wrap` works by typing)
 - 2026-06-17 — Token-trim execution + GEN-93 epic architecture: measured `CLAUDE.md` (Instructions 64% / Session-Learnings 29%); compressed the GCM + 4 Notion entries, deferred the behavioral compressions (asymmetric-risk call); a PowerShell-escape / `Replace`-null near-miss silently deleted 4 rules (caught + fixed forward); 3 new global learnings; 2 GEN-58 class-D instances; net size ~flat — real levers (GEN-126 dedup, Instructions trims) deferred
 - 2026-06-16 (session 5) — [GEN-258](https://app.notion.com/p/3816e495d07c81b0b248f3e97d5411c6) **Done**: applied the 6 remaining trim items (R1/R2/C1/C2/C4/CO1, each `/check`-converged); moved staging rule M1 to Memory Pirates `CLAUDE.md` (fixed 2 stale refs); kept dev-content rule M2 global (it overrides a global rule); ticket corrected & closed; GEN-58 Class-B instance (reported C3 status from a stale ticket snapshot)
@@ -29,6 +31,47 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-18 — GEN-267 rules negative→positive: targeted manual pass + the system (Done)
+
+[GEN-267](https://app.notion.com/p/3836e495d07c80a2b0e0cc6ea807ebfe) **Done** (child of GEN-86). Convert negatively-phrased `CLAUDE.md` rules to positive phrasing — a one-time pass plus a durable mechanism. Ran the whole arc through repeated `/check` dogfooding.
+
+1. **Plan + Phase 0 (`/check`-converged, 2 rounds).** Verified the ticket's premise against Anthropic's live prompting docs rather than from memory: "tell Claude what to do, not what not to do" is real but **narrower** than "generally better" — it's for output/behavior-style steering; Anthropic's own production prompts keep negatives for safety/scope; and adding the *rationale* is a bigger lever than flipping polarity. Conclusion: do option **B** — the lightweight system + a targeted pass over only the behavior/style subset, leaving hard prohibitions negative.
+
+2\. **Phase 1 manual pass (`/check`-converged, 3 rounds).** Classified all four `CLAUDE.md` files (global 57 raw negative hits, Invoice 32, Memory Pirates 14, Improve AI Infra 0) — the genuine convert-set is tiny; the files are ~95% already correctly phrased. Converted **3 global rules**: "Don't over-explain…" (→ dropped the clause, redundant with "Concise, direct, truthful"), the autocomplete rule (preserving its 2nd guard sentence), and the multi-item-feedback rule. The panel **dropped 2** candidates: "Never guess unless asked" (a hard prohibition, and the rewrite changed meaning) and the Memory Pirates Confluence rule (hard safety prohibition, out of scope).
+
+3\. **Merge refinement (`/check`-converged, 2 rounds).** Per Erez's question, folded the "don't over-explain" idea into the existing "Concise, direct, truthful" mantra rather than restating it — "direct" already covers unsolicited elaboration, so the dedicated clause was dropped (net token saving, helps GEN-93).
+
+4\. **Phase 2 — the system (`/check`-converged, 2 rounds).** (a) New authoring guideline in the global `CLAUDE.md` rule-authoring cluster: state the behavior to take, where it preserves meaning without materially adding length, keeping genuine prohibitions negative. (b) New "positively phrased" criterion in `/check`'s rule-check lens (`SKILL.md`). Both surfaces needed — verified that `/check` reviewer sub-agents are briefed from `SKILL.md` and do **not** auto-load the user's `CLAUDE.md`, so author-time (a) and review-time (b) are distinct.
+
+5\. **Applied + verified.** All global-`CLAUDE.md` edits via the locked `update-global-rule.ps1` (em-dash passed as `[char]0x2014` to dodge encoding mangling; LF newline matched for the inserted rule); the `/check` `SKILL.md` edit direct. Each verified in the live file (new present, old absent). GEN-267 → Done with a result note.
+
+6\. **No new rule captured** — the session's learning ("positive where it helps; hard prohibitions stay negative") is now *enforced* by the system built (the authoring guideline + `/check` screen), so it needs no separate rule.
+
+**Follow-ups (parked, unchanged):** `/approve-ticket` skill; 2 candidate global learnings (YAML `: ` quoting, desktop-app skill-visibility); GEN-93 synthesis park/close decision.
+
+## 2026-06-17 (session 3) — Rules-vs-skills #2 + token-reduction deep-dive; `/wrap` nudge added; GEN-58 tightened; **mid-session compaction checkpoint**
+
+Continuation of the rules-vs-skills thread that became a token-reduction deep-dive. Heavy `/check` dogfooding (many rounds; several of my Claude-Code-mechanics claims were caught wrong and corrected against the live docs / `/context`). **This entry is a mid-session checkpoint written so the session can be `/compact`ed safely — `/wrap` will finalize it at true session end.**
+
+**Done & verified:**
+1. **Proactive work-completion `/wrap` nudge** added to global `CLAUDE.md` (line 110, appended to the end-of-session rule) via locked `update-global-rule.ps1` — exit 0, synced, re-read to confirm. Lean wording (trigger + throttle only; the explanatory clauses were dropped per Erez — they were rationale, not behaviour). Fires when the *session as a whole* is at a natural stopping point, at most once, no re-prompt.
+2\. **GEN-58 step-3 logging protocol tightened** (applied + verified): sharper "new element only if the *actionable lesson* differs" test; recurrence → one-line trace + count bump (no full write-up); escalation clause — when a class clearly persists (3+ of the same shape) flag once to Erez and note `escalated: <date>` on the class header.
+3\. **GEN-58 instances logged:** Class D `/approve-ticket` rule→skill entry (→12×); then the MCP-cost-premise recurrence (→13×) with the escalation note. **Erez accepted the residual** on the recurring "assert Claude Code token/loading mechanics from memory" sub-pattern — no new rule (it's an activation failure of the existing no-claims-from-memory guard, which `/check` catches).
+
+**Decisions:**
+4\. **`/approve-ticket` stays a rule, not a skill.** The rule→skill token win applies to *global* `CLAUDE.md` rules (per-turn injection); a *project* rule (Memory Pirates' DEV-TICKET APPROVAL SEQUENCE) loads on-demand, so converting saves ~nothing and a discoverable skill would have to be global anyway.
+5\. **Token reduction reframed by `/context`** (264k used this session): the dominant cost is **conversation history (messages ≈ 218.7k)**, NOT `CLAUDE.md` (~13.7k / ~5%) and NOT deferred-MCP (83.5k but mostly *non-resident* potential — only tool *names* are resident). **Stop optimizing `CLAUDE.md`; it's the wrong target.** Real levers: built-in **auto-compaction** (already on, no toggle), **`/clear`** for unrelated work, **`/mcp` disable** (session-only) / **`claude mcp remove`** (permanent) for unused servers, **`/context`** to monitor. Per-project scoping doesn't help — Erez launches the desktop app from the home folder, conversation-driven (says "hi" → picks a project, or states the task).
+
+**Key facts verified from docs (correcting my earlier in-session errors):**
+6\. `/context` shows context usage (NOT `/statusline`, which configures the shell status line). `/compact` preserves the on-disk transcript; post-compact context is the *summary*. **`PreCompact` hook** exists (fires before manual + auto compaction) but is shell/MCP — it can't compose an intelligent Notion write; **GEN-208** (parked) is the checkpoint ticket, **GEN-209** (parked) the transcript-path one. MCP scopes: Local (default) / Project (`.mcp.json`) / User. CLAUDE.md best-practice is <200 lines; the file is now ~245.
+
+**Queued — each needs Erez's approval + `/check` before applying:**
+7\. **`# Compact Instructions` block** for global `CLAUDE.md` (drafted): preserve current task + requirements, key decisions + pending approvals, ticket IDs + status, verified-vs-unverified, unresolved `/check` findings; drop verbose tool output / file dumps / superseded back-and-forth. NOT yet applied.
+8\. **`/clear` clarification** to the context rule (line 108) — name `/clear` as the in-window fresh-context command, distinct from "a new session."
+9\. **Consolidation pass** on the Session-Learnings section (~lines 188–245) to get back toward <200 lines. Erez to choose whether this runs before #7/#8.
+
+**Open follow-ups / related tickets:** GEN-208, GEN-209 (parked); GEN-126 (consolidate overlapping rule clusters); GEN-93 epic (AI Infra Efficiency) — earlier-session decision on park/close the synthesis still pending.
 
 ## 2026-06-17 (session 2) — Rules-to-skills: built `/wrap`; HISTORY-wording cleanup; GEN-58 Class-N; desktop-menu diagnosis
 
