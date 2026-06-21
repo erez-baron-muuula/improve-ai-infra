@@ -1,7 +1,7 @@
 # Project History
 
 ## Table of contents
-- 2026-06-19 — GEN-268 (positional cross-refs) **Done**: global cross-ref-robustness rule + `/check` rule-check criterion + sweep (all `/check`-converged); first rec (fold-in) flipped to standalone by the panel → logged GEN-58 new Class-G element; filed [GEN-275] for the oversized GEN-58 log page
+- 2026-06-19 — GEN-268 (positional cross-refs) **Done**: global cross-ref-robustness rule + `/check` rule-check criterion + sweep (all `/check`-converged); filed [GEN-275] (oversized GEN-58 log) + [GEN-277] (reduce always-loaded `CLAUDE.md` burden) from a 3-round tool-knowledge-location `/check`; drafted-then-withdrew a Notion-verify clause (`/check`-rejected); GEN-58 Class-G + Class-D elements logged
 - 2026-06-18 (session 2) — GEN-264 (skill-vs-rules: check & enforcement) **In Progress**: built Job 1 — the rule/skill/hook criterion in the global `CLAUDE.md` rule-creation gate **and** the `/check` rule-check lens (each `/check`-converged); filed [GEN-274] for Job 2 (audit existing rules); logged a GEN-58 **Class-H** recurrence (converged `/check` treated as approval) → escalated + added a `/check`-skill guard against it
 - 2026-06-18 — GEN-267 (rules negative→positive) **Done**: verified the premise from Anthropic's primary source (positive phrasing is for behavior/style steering; hard prohibitions stay negative; adding rationale is the bigger lever) → narrowed to a targeted subset; 3 global `CLAUDE.md` conversions + the system (positive-phrasing authoring guideline + a `/check` rule-check-lens criterion); each step `/check`-converged (2–3 rounds)
 - 2026-06-17 (session 3, cont. 06-18) — Rules-vs-skills #2 → token-reduction deep-dive → **`CLAUDE.md` consolidation applied** (4 `/check`-converged edits) + filed the **config-health system [GEN-271]** (Task 3, 3 `/check` rounds), the positional-cross-ref rule + `/check` criterion **[GEN-268]**, and **[GEN-270]**; `/wrap` nudge added; GEN-58 tightened + 2 Class-D recurrences (→15×); token reduction reframed (conversation history dominates; `CLAUDE.md` ~5% is the wrong target)
@@ -50,7 +50,11 @@
 
 **Auto-approval review.** No safe-set additions — this session's deferrals were all mutating (`update-global-rule.ps1`, `notion-*` writes, `Edit`/`Write`) or shell one-offs; read-only Notion reads / `ToolSearch` already auto-approved.
 
-**Open follow-ups:** [GEN-275] (oversized GEN-58 log, unassigned). Candidate global learning pending Erez's OK: to verify a write to a Notion page too large to re-fetch, use a scoped `notion-search` (page_url=) for distinctive text from the edit.
+6\. **Tool-knowledge-location design (`/check`, 3 rounds).** Asked "should tool-usage gotchas be always-loaded rules?" Converged after correcting two wrong turns of mine (fold-into-an-existing-rule, then `~/.claude/rules/`-as-size-fix): for guidance Claude must *read* there is no just-in-time mechanism and file-splitting doesn't cut loaded context (docs-verified) — so the only real size levers are **prune/compress** + **mechanically encode** (scripts / deny-hooks); relocation is maintainability-only. Filed **[GEN-277](https://app.notion.com/p/3846e495d07c81458b4ec239fef9f215)** (task, Medium, child of GEN-86) scoped to those two levers.
+
+7\. **Notion-verify clause — drafted, `/check`-rejected, withdrawn.** Proposed folding "verify an oversized-page write via a scoped `notion-search`" into the verify-after-write rule. The panel (4 lenses, REVISE) showed search is a probabilistic verifier that also misses property-only writes; the deterministic fix (slice the tool-result file the errored `notion-fetch` saves) is already surfaced just-in-time by the fetch error, so per GEN-277 no rule was warranted. **Nothing applied.** Logged the miss as a GEN-58 **Class-D** element [notion-search verify]; corrected two factual errors the panel made (the local `notion-search` *does* take `page_url`; oversized `notion-fetch` errors wholesale with no partial properties).
+
+**Open follow-ups:** [GEN-275](https://app.notion.com/p/3836e495d07c818ebe44fac63e8f725d) (oversized GEN-58 log) and [GEN-277](https://app.notion.com/p/3846e495d07c81458b4ec239fef9f215) (reduce always-loaded `CLAUDE.md` burden) — both unassigned, Backlog.
 
 ## 2026-06-18 (session 2) — GEN-264 skill-vs-rules: check & enforcement (Job 1 built; [GEN-274] filed for Job 2)
 
