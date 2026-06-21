@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-21 (session 2) — GEN-275 (GEN-58 log → rolling volumes) **Done**: froze the 110k-char child page as Vol. 1 (archived), created Vol. 2 (current), added a current-volume pointer + per-volume write-up counter atop the index, and rewrote the GEN-58 "How to log" protocol for volumes (rollover at ~25 write-ups; an over-limit `notion-fetch` auto-saves a sliceable file, so no risky migration of irreplaceable data); global `CLAUDE.md` rule reworded to point at the current volume + recurrence branch disambiguated (both `/check`-converged 2 rounds); candidate learning — Notion `update_content` silently no-ops on an unescaped `~` (stored as `\~`); concurrency observed on GEN-58
 - 2026-06-21 — GEN-274 (audit rules for skill/hook) **Done**: pivoted to write-time prevention — applied the auto-`/check`-on-every-rule gate + `/wrap` Step 1 + global "apply learnings" rewrite (all `/check`-converged), dropping the planned periodic reminder (Part 3); GEN-271 coord note; fixed `notion-ticket-lookup` (epic fetch = bare URLs, SQL Enterprise-gated, pinned GEN-58); GEN-58 D→20× (new "user-workflow premise" element) + E→9×; (cont.) two further `/check` panels rejected/**held** a "verify premises about Erez's own workflow" rule as premature/already-covered → logged 2 held follow-ups (widen the gate to fire on *suggestions* not just adds/edits; a verify-from-source sharpening for recurrence)
 - 2026-06-19 — GEN-268 (positional cross-refs) **Done**: global cross-ref-robustness rule + `/check` rule-check criterion + sweep (all `/check`-converged); filed [GEN-275] (oversized GEN-58 log) + [GEN-277] (reduce always-loaded `CLAUDE.md` burden) from a 3-round tool-knowledge-location `/check`; drafted-then-withdrew a Notion-verify clause (`/check`-rejected); GEN-58 Class-G + Class-D elements logged
 - 2026-06-18 (session 2) — GEN-264 (skill-vs-rules: check & enforcement) **In Progress**: built Job 1 — the rule/skill/hook criterion in the global `CLAUDE.md` rule-creation gate **and** the `/check` rule-check lens (each `/check`-converged); filed [GEN-274] for Job 2 (audit existing rules); logged a GEN-58 **Class-H** recurrence (converged `/check` treated as approval) → escalated + added a `/check`-skill guard against it
@@ -34,6 +35,24 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-21 (session 2) — GEN-275 GEN-58 log restructured into rolling volumes (Done)
+
+[GEN-275](https://app.notion.com/p/3836e495d07c818ebe44fac63e8f725d) **Done** (child of GEN-86). The GEN-58 reasoning-failure instance-log child page outgrew a single `notion-fetch` (110k chars); restructured it so the active log stays single-fetch. Design `/check`-converged (2 rounds); the global-rule edit `/check`-converged (2 rounds).
+
+1. **Design — freeze-and-rollover (Option 1) + slice/search for the archive (Option 4).** An empirical read-access check settled the key fact: an over-limit `notion-fetch` **auto-saves the full page to a sliceable tool-result file**, so the archive is never unreadable — **no risky migration of irreplaceable data needed** (eliminated the worst design branch). Earlier `/check` rounds added a session-resolvable current-volume pointer and an entry-count rollover trigger (page size can't be measured once over-limit).
+
+2\. **Applied & verified live:** froze the 110k page as **Vol. 1 (archived)**; created **[Vol. 2 (current)](https://app.notion.com/p/3866e495d07c81a2a975cc8c46a65945)** child page; added a **Current log volume** pointer + per-volume write-up counter atop the failure-class index on the [GEN-58 ticket](https://app.notion.com/p/36d6e495d07c816e9e0cce265d694ab3); rewrote the "How to log" protocol for volumes (rollover at ~25 write-ups / ~60k chars, tracked via the index counter; recurrences bump the index only and don't count toward rollover).
+
+3\. **Global `CLAUDE.md`** rule reworded "GEN-58's instance-log child page" → "current log volume (the child page named in its index)", and the recurrence branch disambiguated ("there" → "on that volume" + "in the index") to match the protocol; via locked `update-global-rule.ps1` (exit 0, synced). The round-1 rule-check finding rested on a false premise (claimed the recurrence tally goes to the index); resolved by evidence from the live protocol (trace → volume, count → index) and the correct fix applied instead.
+
+4\. **Candidate global learning (proposed, NOT yet applied — needs `/check` + approval):** Notion `update_content` `old_str` must match the fetch's escaped serialization — a literal `~` is stored/matched as `\~`, so an unescaped tilde **silently no-ops** (no error, no change). Two of five protocol edits failed exactly this way and were caught only by the post-edit re-fetch; re-applied with `\~`. Lesson: escape `~` in `old_str`, and always verify edits via re-fetch.
+
+5\. **Concurrency observed:** a parallel session bumped GEN-58's class-G index entry mid-task (7×→8×) — no collision (different region). The auto-approve edit log shows other sessions concurrently editing Memory Pirates / InvoiceAutomation today.
+
+**Auto-approval review.** No safe-set additions — deferrals were all mutating (`notion-update-page`, `notion-create-pages`) or one-offs (`PowerShell`, `Agent`, `Skill`); reads / `ToolSearch` already auto-approved. No Improve-AI-Infra project-folder file edits this session (HISTORY.md edited during this wrap).
+
+**Open follow-ups:** [GEN-277](https://app.notion.com/p/3846e495d07c81458b4ec239fef9f215) (reduce always-loaded `CLAUDE.md`), [GEN-278](https://app.notion.com/p/3866e495d07c811aa70bd44762151f16) (re-home skill candidates), [GEN-271](https://app.notion.com/p/3836e495d07c8130bc65d11838ff0501) (config-health checks), the two parked spec items; and the `update_content` tilde learning pending `/check` + approval.
 
 ## 2026-06-21 — GEN-274 audit rules for skill/hook (Done): pivoted to write-time prevention; fixed `notion-ticket-lookup`
 
