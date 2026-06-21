@@ -1,0 +1,45 @@
+# Rule-hygiene automation — converged build spec (GEN-274 line of work)
+
+Captured 2026-06-21 so it survives a `/compact`. This is the converged design after multiple `/check` rounds (several first-draft designs were overturned — see "Decisions / reversals"). UPDATE 2026-06-21: prevention was applied (see "Prevention — APPLIED"); Part 3 was DROPPED. Only Part 4 remains as an optional future build.
+
+## Goal
+Keep the always-loaded `CLAUDE.md` files free of rules that would work better as on-demand **skills** or automatic **hooks** — as automated as is proportionate, safe under Erez's many concurrent sessions. "As automated as possible" reframed: prevent/clean cheaply, keep ONE human gate on applying a change (moving a safety rule to a skill that doesn't reliably fire could silently drop a guardrail — asymmetric, near-irreversible).
+
+## The rule/skill/hook test (used everywhere)
+- **rule** — fires unprompted, needs judgment (always-on guardrail). Keep.
+- **skill** — fires ONLY when the user invokes a named task, never on its own.
+- **hook** — fires automatically on a system event, no judgment.
+- Guard: never move an always-on behavior to a skill without naming a trigger that reliably fires it. Borderline (fires both unprompted and on a named task) → stays a rule.
+
+## Status
+- **Part 1 (prevention rule) — DROPPED.** The rule/skill/hook test already exists in two places: `/check`'s rule-check lens and the global rule-creation gate. Adding another soft rule is redundant, unreliable (soft rules don't always fire), and against the project principle "prefer system enforcement over a behavioral rule." Prevention is handled by `/check` (on deliberate rule changes) + the on-demand sweep (catches the rest). If misclassified rules keep slipping in, the escalation is REAL enforcement: make the locked editing tool refuse a rule edit without a supplied classification — NOT another rule.
+- **Part 2 (the sweep) — BUILT.** `C:\Users\Erez\.claude\skills\audit-rules\SKILL.md`. On-demand `/audit-rules`, `disable-model-invocation: true`. Target: `global` / a project name / `all` — NO default; if no target given, it ASKS. Resolves project paths from the Projects Directory table at run time (no hardcoded paths). Classifies behavioral rules; SKIPS pure reference data (Personal Context, the projects table). Read-only shortlist output; nothing applied. First sweep run 2026-06-21 → findings filed on GEN-278.
+- **Part 3 (change-reminder) — DROPPED (2026-06-21).** Superseded by shift-left prevention applied this session (see "Prevention — APPLIED" below): `/check` now auto-runs on every rule add/edit before it reaches Erez, so misplacement is caught at write-time and a periodic re-audit reminder is unnecessary (and would only add noise, firing on already-`/check`'d changes).
+- **Part 4 (safe apply) — TO BUILD.** Now scoped to the one-time re-homing of whatever legacy rules the Part 2 sweep flags — not a recurring need. Lower priority. See below.
+
+## Part 3 — DROPPED (superseded by prevention)
+The change-gated `/wrap` reminder is NOT being built. Rationale: Erez runs `/check` on every rule suggestion, so automating *that* (catch misplacement at write-time) is the higher-leverage fix; a downstream file-diff reminder would also fire on already-`/check`'d changes → noise that trains him to ignore it. The detailed concurrency-safe reminder design (per-target fingerprints under `audit-rules-state\`, atomic temp+rename writes, fail-safe reads, and the read-time-snapshot under-fire fix) is preserved in this file's git history if it ever needs reviving.
+
+## Prevention — APPLIED (2026-06-21)
+Three edits, each converged via `/check` (rounds noted in session HISTORY), then applied:
+- **Global rule — auto-`/check` gate** (`update-global-rule.ps1`): "Before adding or editing a rule in a CLAUDE.md file (global or project), first run `/check` on the proposed text, then show Erez the result … and wait for his explicit confirmation before applying it." Plus a mechanical-fix carve-out (spelling/punctuation/whitespace/formatting → confirmation but no `/check`) and an anti-recursion note (`/check`'s in-chat revisions don't re-trigger it).
+- **`/wrap` Step 1** (direct edit): draft each learning worth keeping in its right home — a CLAUDE.md rule, a skill, a hook, or other system enforcement — present each for Erez's approval, never apply unilaterally.
+- **Global "apply learnings" rule** (`update-global-rule.ps1`): same home-choice framing; no longer presumes a learning becomes a CLAUDE.md rule.
+
+Net effect: every rule the assistant proposes is placement-vetted before it lands, so misplacement is prevented at the source. The Part 2 sweep (`/audit-rules`) remains the on-demand tool for the LEGACY corpus, which predates `/check` and was never placement-vetted.
+
+## Part 4 — safe apply-on-approval (converged)
+- One human gate: applying a proposed move shows the ACTUAL current rule text + proposed destination + named trigger (real friction, not a polished one-click diff — avoid rubber-stamp complacency).
+- On approval, mechanical apply is automated: create the skill/hook file + remove the rule (global via `update-global-rule.ps1`; project files by DIRECT edit, not the locked tool) + sync. BUT: snapshot the rule text before; verify each step independently; on partial failure surface it AND revert (e.g. re-add the rule if the skill was created but the edit failed); CONCURRENCY GUARD — re-check the file hash at apply time; if it changed since the proposal was drafted, abort + re-audit (prevents concurrent-session clobber).
+
+## Decisions / reversals (so they're not relitigated)
+- **Component C — DEFERRED.** C = a continuous auto-classifier that, on every rule change, classifies changed rules and files a durable review ticket unprompted. More hands-off but more machinery; panel judged marginal once prevention + on-demand sweep exist. Add ONLY if rules keep slipping through in practice. If built: deliver findings to a DURABLE tracker (Notion sub-item), never an ephemeral wrap note.
+- **Scheduled headless run — PARKED.** A Windows scheduled task / cloud routine that audits unattended on a cadence. Feasibility UNVERIFIED (sub-agents can't run shell here; headless/MCP/permission constraints; a cloud routine would need to read rules from the GitHub config-history repo). Verify before promising. Likely unnecessary given the above.
+- **GEN-271 relationship:** the Part 3 reminder folds into GEN-271 (the config-health system meant to auto-fire at `/wrap`). BUT GEN-271's auto-fire is DIFF-scoped (only rules changed that session) and does NOT cover the pre-existing legacy corpus — so it does NOT replace the full on-demand sweep (Part 2). GEN-271's planned on-demand full-corpus mode IS the `/audit-rules` skill (don't rebuild). Add a coordination note to GEN-271 covering both the skill and the reminder.
+
+## Outstanding follow-ups (not yet done)
+- Part 3 dropped (above). Decide whether to build Part 4 (one-time legacy re-homing helper) — lower priority now that prevention is live and the sweep is read-only.
+- Update GEN-274: widen its scope text to include project `CLAUDE.md` files (originally global-only); note Part 1 dropped, Part 3 dropped (superseded by the auto-`/check` prevention), and Component C deferred. Re-read title/description against what was actually built before any status change.
+- Add the coordination note to GEN-271 (covers the `/audit-rules` skill + the auto-`/check` prevention edits; note the reminder was dropped).
+- GEN-58 logging: this session had several confident design calls overturned by `/check` — the GEN-271 "fold" error, "SessionStart hook as primary," the dismissed concurrency residual, the completion-rehash under-fire hole, and "automate the back-end" missing shift-left. Classify per the GEN-58 index (likely recurrences of the memory-asserted-premise / over-engineering classes) and log.
+- GEN-278 (filed): captures the sweep findings (Memory Pirates `/approve-ticket` + `/document-feature` skill candidates; low-value items; none in Improve AI Infra; no hooks).
