@@ -57,7 +57,10 @@
 
 **Auto-approval review.** No safe-set additions — this session's read-only calls (`notion-fetch`, `Read`/`Grep`/`Glob`) are already allow-listed; all deferrals were mutations (`notion-update-page`, `update-global-rule.ps1`) or one-offs (`Bash`, `Agent`, `Skill`). The 921 KB historical `deferred-calls.jsonl` was not exhaustively re-scanned (append-only; covered by prior wraps).
 
-**Open follow-ups:** **GEN-271 config-health script bug** (detect-global git-warning-as-error) — fix before Done; the **escalated Class C** decision (Erez's call); **GEN-290** (`settings.json` health) and **GEN-291** (cross-file consistency) still unbuilt.
+**Open follow-ups:** the **escalated Class C** decision (Erez's call); **GEN-290** (`settings.json` health) and **GEN-291** (cross-file consistency) still unbuilt.
+
+### Follow-up (post-wrap, same session) — config-health bug diagnosed + fixed (Fix A); a second bug found
+Ran `/check` on the config-health failure. The panel forced empirical verification, which corrected the record twice: my first diagnosis (wrap report: "gate on `$LASTEXITCODE`") was wrong — it already gates; my second (`$ErrorActionPreference='Stop'` promotes git's native stderr to a terminating throw in PS 5.1, even with `2>$null`) was **right** — and the `/check` panel's confident rebuttal of it was **wrong**. A probe replicating the script's exact lines settled it (only the probe was authoritative; neither memory nor a reasoning-only panel is reliable on a platform primitive). **Fix A applied + verified + synced:** scoped `$ErrorActionPreference='Continue'` around the three native git calls in `config-health-scan.ps1` (keeping the `$LASTEXITCODE` checks); `detect-global` now returns `ok:true`. Logged the two-wrong-diagnoses miss as a **GEN-58 Class D new element** \[config-health PS native-stderr\] (D → 24×). **NEW open bug (not fixed):** `detect-global` reports `changed:true` spuriously — the captured `git show` HEAD content is mojibake-encoded (PS console codepage) while the live file is read as UTF-8, so every em-dash diffs. Distinct from the throw; needs its own fix. **GEN-271 stays Review** until this second bug is fixed and an organic auto-fire passes clean.
 
 ## 2026-06-22 (session 2) — GEN-271 config-health pass: built + deterministic core verified (Status → Review)
 
