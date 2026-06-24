@@ -1,7 +1,8 @@
 # Project History
 
 ## Table of contents
-- 2026-06-24 (cont.) — **Built the compact-gate (loggate)**: a per-session `/loghistory` + `SessionStart`/`PreCompact` hooks that block a manual `/compact` until the session is logged to HISTORY (design `/check`-converged over 4 rounds; both hooks unit-tested; live env-chain self-verifies on first `/loghistory`); added a write-time HISTORY entry-hygiene checklist and tidied the recent TOC lines (all projects except Invoice Automation); no Notion ticket yet
+- 2026-06-24 (session 3) — **loggate ticket: duplicate found & resolved**: filed a Notion ticket for the compact-gate, then the `/wrap` auto-approval scan revealed a parallel session had already filed [GEN-302](https://app.notion.com/p/3896e495d07c8128be01e70210dbb207) (Done) for the same feature; de-listed my duplicate (GEN-303, moved out of the tracker), repointed the loggate TOC line at GEN-302, and logged a **GEN-58 Class-B** new element (a stale HISTORY "no ticket yet" absence-claim drove a duplicate creation — confirm absence against the live tracker before creating)
+- 2026-06-24 (cont.) — **Built the compact-gate (loggate)**: a per-session `/loghistory` + `SessionStart`/`PreCompact` hooks that block a manual `/compact` until the session is logged to HISTORY (design `/check`-converged over 4 rounds; both hooks unit-tested; live env-chain self-verifies on first `/loghistory`); added a write-time HISTORY entry-hygiene checklist and tidied the recent TOC lines (all projects except Invoice Automation); ticket [GEN-302](https://app.notion.com/p/3896e495d07c8128be01e70210dbb207) (filed separately, Done)
 - 2026-06-24 — **Filed the 5 Notion items session 5 left blocked** (connector restored): [GEN-299](https://app.notion.com/p/3896e495d07c81d787d1d2cbbba82c63) (keep-list follow-up → Review), [GEN-300](https://app.notion.com/p/3896e495d07c8190955fc41a99ff8200) (PowerShell-cluster-home eval → Backlog), 3 GEN-58 new elements on Vol. 2, and the GEN-290 cross-link — all re-fetch-verified; pure filing session, no code/`CLAUDE.md` changes
 - 2026-06-23 (session 5) — **GEN-290 backlog cleanup done** (`settings.local.json` 172→134 allow) + **keep-list follow-up built & verified** (a memory side-list so the on-demand cleanup reviews each approved entry at most once without skipping a first review; added to `config-health-scan.ps1` + `SKILL.md`, `/check`-converged over 2 rounds, 28-assertion harness all-pass); Notion down most of the session so the follow-up ticket + 2 GEN-58 items were staged unfiled; post-wrap applied 2 global learnings (PowerShell + `/check` load-tier)
 - 2026-06-23 (session 4) — **GEN-290 (`settings.json` config-health) built → Review**: folded into `/config-health` as a 7-day-gated weekly `/wrap` nudge + an on-demand settings cleanup (deterministic dup/contradiction/dead-hook checks + an adversarial grounded pass, default-keep), helpers validated live; design `/check`-converged over 3 panels (incl. an efficiency pass); GEN-58 Class-D new element (→25×); one-time backlog cleanup deferred to a fresh session
@@ -45,7 +46,20 @@
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
 
-## 2026-06-24 (cont.) — Compact-gate (loggate): /loghistory + a PreCompact gate, HISTORY hygiene, TOC tidy
+## 2026-06-24 (session 3) — loggate ticket: a duplicate filing, found & resolved at wrap
+
+Asked to file a Notion ticket for the compact-gate (loggate) work. Filed it, then `/wrap`'s auto-approval scan surfaced that the work already had a ticket.
+
+**What happened**
+- Drafted and filed **GEN-303** ("Block a manual `/compact` until the session is logged to HISTORY", Done, under GEN-93), trusting the loggate HISTORY entry's "no Notion ticket yet" line.
+- During `/wrap`, reading `deferred-calls.jsonl` revealed a *parallel* session earlier that day (~11:57) had already filed **[GEN-302](https://app.notion.com/p/3896e495d07c8128be01e70210dbb207)** ("Compact-gate: require session logging before a manual `/compact`", Done, under the broader "Improving AI Infra" epic) for the identical feature. GEN-303 was a duplicate.
+- Resolution (Erez chose full removal over a "Wont Do" tombstone): moved GEN-303 to workspace level via `notion-move-pages`, de-listing it from the tracker (verified — empty ancestor-path, DB properties dropped). GEN-302 is the keeper. Repointed the loggate TOC line at GEN-302.
+
+**Why it happened / GEN-58.** Self-review thoroughly verified the *write* (re-fetched GEN-303's properties) but never asked whether a ticket already existed — and trusted HISTORY's "no ticket yet" absence-claim (itself stale; the parallel session's GEN-302 backfill never reached origin). Logged as a **GEN-58 Class-B new element** \[loggate dup ticket\] (→9×): a stale *absence*-claim from a point-in-time narrative drove an erroneous *creation*; confirm absence against the live tracker (search/query), not HISTORY, before creating a "none exists yet" artifact.
+
+**Wrap housekeeping.** Config-health: global `CLAUDE.md` unchanged since last sync, no project `CLAUDE.md` edits, settings nudge not due → nothing flagged. Auto-approval scan: no new recurring safe calls to add (recent entries were one-shot Bash/PowerShell and mutating Notion writes).
+
+
 
 Goal: make a manual `/compact` log the session to HISTORY *first*, so nothing is lost. (Same session as the filing entry below, continued after a `/compact`.)
 
