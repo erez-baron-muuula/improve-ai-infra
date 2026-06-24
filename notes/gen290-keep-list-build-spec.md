@@ -55,10 +55,29 @@ Spec converged in 2 rounds. Round 1: 3–4 needle-related flaws (keep-record cou
 Read the GEN-58 failure-class index first and classify each as new-class / new-element / recurrence; don't re-read the whole log.
 1. **Mis-modeled the recurring cost -> wrongly deferred the general fix.** Recommended deferring the persistence layer on YAGNI grounds by treating the kept-survivor set as static/bounded ("17 rare entries"), when it actually grows monotonically each run. Surfaced by Erez's pushback ("should it be baked in? every health check can have new cases"). Self-review AND the round-1 holistic reviewer both initially missed the growth dynamic. Lesson: when judging "is it worth building," model the recurrence dynamic, not a single snapshot.
 2. **Needle-1 blind spot in the first proposal.** The original "Part A + sidecar" proposal included structural exclusions (stop flagging `cat`/`xxd`/`tasklist`/` *`-wildcards) that would bypass FIRST review of one-off-looking entries — violating Erez's explicit "never stop reviewing what's needed" priority. Caught by the `/check` panel (round 1, two lenses), not by self-review. Lesson: an "avoid re-review" optimization that also skips first review trades against the opposite needle; check both directions.
+3. **Holistic-completeness miss on rule placement (classify on reconnect — likely a recurrence/element, not a new class).** When adding the empty-string-arg gotcha, both my self-review and the `/check` holistic + rule-check lenses accepted placement in the always-loaded global `CLAUDE.md` PowerShell cluster without surfacing the legitimate adjacent question — should the whole cluster be always-loaded vs an on-demand reference — even though GEN-277 (reduce always-loaded burden) is an active, directly-relevant concern. Erez had to raise it ("powershell is a tool... is there a better place?"). The final conclusion (global IS correct, because these must fire unprompted at compose time) held up on the merits, so this is a thoroughness gap, not a wrong conclusion: the holistic lens is supposed to ask "is each part needed / is there a wider framing" and didn't connect to the live always-loaded-burden goal. Lesson: when placing always-loaded text, proactively weigh it against the active burden-reduction goal and surface the relocate/keep tradeoff rather than defaulting to the existing cluster.
+   - **FIX APPLIED 2026-06-23 (session 5):** added a "load tier" criterion to the `/check` rule-check lens in `C:\Users\Erez\.claude\skills\check\SKILL.md` (`/check`-converged 3 rounds; synced to Drive + git). It forces reviewers to ask, for any always-loaded addition, whether a reliable prior signal (named context/tool/task) would cue on-demand lookup → if so propose a reference file + pointer, else keep always-loaded; reliability wins ties. So only the GEN-58 **miss-log entry** (this item) still needs to be written to Notion — the systemic fix is done.
 
 ---
 
 ## Next steps after compact
 1. ~~Build per the v2 spec; run the verification checklist live.~~ **DONE 2026-06-23.**
-2. Erez reconnects Notion → file the ticket (above); log the two GEN-58 items. STILL PENDING (connector was down).
-3. At `/wrap`: HISTORY.md entry + git push + config sync (NOT done yet — session continues).
+2. Erez reconnects Notion → file the GEN-290 follow-up ticket (above) + the cluster-home ticket (below); log the two GEN-58 items. STILL PENDING (connector down all session).
+3. ~~At `/wrap`: HISTORY.md entry + git push + config sync.~~ **DONE 2026-06-23** (session 5 wrap; committed `1e01bc5`, synced).
+
+---
+
+## ALSO QUEUED FOR NOTION (NOT GEN-290) — PowerShell-cluster-home evaluation ticket
+
+Drafted 2026-06-23, approved-to-open by Erez ("both"), unfiled because Notion was down. Arose when adding a new "empty-string arg dropped when calling a native exe" gotcha to the global `CLAUDE.md` PowerShell cluster — Erez asked whether tool-specific gotchas belong in the always-loaded global file at all. The bullet WAS added (line ~228, `/check`-converged 2 rounds, synced); this ticket is the separate, broader question.
+
+- **Title:** Decide the right home for the PowerShell/shell gotcha cluster (always-loaded global `CLAUDE.md` vs on-demand reference)
+- **Type:** task · **Priority:** Low · **Status:** Backlog · **Project:** AI · **Assignee:** unassigned (Claude future work)
+- **Parent item:** [GEN-277](https://app.notion.com/p/3846e495d07c81458b4ec239fef9f215) (reduce always-loaded `CLAUDE.md` burden). Apply the Team-Tasks Task template.
+- **Body:**
+  - *Question:* the global `CLAUDE.md` carries an ~11-bullet "PowerShell & shell gotchas" cluster (plus the outbound-TLS and GCM environment gotchas), loaded every session in every project. Should the detail move to an on-demand reference file with a one-line pointer in global, to cut the per-turn token burden (the GEN-277 goal)?
+  - *The tension to resolve (the crux):* these gotchas must fire UNPROMPTED at command-compose time; the failure mode they guard is "didn't think to check." A fetched reference only helps if Claude remembers to fetch it first — vulnerable to the very same lapse. So the open question is whether a pointer reliably triggers the fetch, or whether always-loaded is the only reliable home for compose-time guardrails.
+  - *Precedent (partial):* the GEN-103 `-Op` cheat-sheet was successfully converted to a header pointer in the GEN-277 work — but that was a lookup table (consulted deliberately), not a compose-time guardrail; different reliability profile.
+  - *Options:* (a) keep as-is (accept the burden for reliability); (b) convert the cluster to a fetched reference + a one-line "before writing PowerShell/shell, consult X" pointer; (c) hybrid — keep the highest-frequency guardrails inline, move rarely-hit detail out. Decide via `/check`.
+  - *Scope note:* same reasoning may apply to the TLS/GCM environment gotchas; consider together.
+  - Cross-link from the always-loaded-burden epic; note it was spun off while adding the empty-string-arg gotcha (2026-06-23 session 5).
