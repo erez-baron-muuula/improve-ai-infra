@@ -6,6 +6,8 @@
 
 This file is the source of truth for resuming after compact. When Notion reconnects: (1) file the ticket below under the config-health epic; (2) log the two GEN-58 items below; then (3) build + verify.
 
+**ALL FILED 2026-06-24 (Notion reconnected).** Keep-list ticket = [GEN-299](https://app.notion.com/p/3896e495d07c81d787d1d2cbbba82c63) (Review). Cluster-home ticket = [GEN-300](https://app.notion.com/p/3896e495d07c8190955fc41a99ff8200) (Backlog). The 3 GEN-58 items logged to Vol. 2 (2026-06-24) as new elements: D [keep-list YAGNI static-snapshot] (D→27x), C [keep-list needle-1 first-review bypass] (C→8x), G [always-loaded load-tier placement] (G→13x); volume pointer 13→16. GEN-290 cleanup-log cross-link repointed to GEN-299. Nothing below remains pending.
+
 ---
 
 ## Decisions locked (all approved by Erez)
