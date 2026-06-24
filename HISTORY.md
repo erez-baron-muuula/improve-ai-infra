@@ -69,8 +69,9 @@ Goal: make a manual `/compact` log the session to HISTORY *first*, so nothing is
 - TOC tidy: Improve AI Infra + Memory Pirates condensed (TOC lines only, bodies untouched); Invoice Automation deferred to its own wrap.
 
 **Follow-ups**
-- File a Notion ticket for this feature under the AI-infra epic (GEN-86) — drafted at this wrap for Erez's approval.
+- Notion ticket filed: [GEN-302](https://app.notion.com/p/3896e495d07c8128be01e70210dbb207) (task, under GEN-86, Task Template applied) — **Done** (feature built + verified live). Created post-`/compact` this session, before `/wrap`, so this entry could cite the ID.
 - GEN-58 reasoning-failure logged this wrap: repeatedly promised cross-session proactivity that a memoryless fresh session can't deliver (3× this session) — fixed by building the self-verifying `SessionStart` self-test rather than relying on "future-me remembering".
+- **`sync.ps1` backup gap (found at this wrap):** its manifest copies only named hook files (`auto-approve.js`, `secret-patterns.json`) + the `skills`/`agents` folders, so the new loggate hook scripts and `commands/loghistory.md` did NOT reach Drive — yet `settings.json` synced *with* their hook registrations. Feature works on this machine; another machine restoring from Drive would have the registrations but missing scripts (hooks error/fail-open, `/loghistory` absent). **Fixed post-`/compact` this session:** added both loggate hook scripts as named entries in `sync.ps1`'s `$FileMap` and a whole-folder `commands/` entry in `$DirMap` (matching the `skills`/`agents` pattern, so future commands are auto-covered); ran `From-Claude` — all three previously-missing files now present on Drive + pushed to config-history git; verified by `Test-Path`.
 - Memory Pirates TOC tidy is uncommitted — rides its next `/wrap`.
 
 ## 2026-06-24 — Filed the 5 Notion items session 5 left blocked (Notion reconnected)
