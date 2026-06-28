@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-28 (6) — **[GEN-312](https://app.notion.com/p/38d6e495d07c81dcb8ffd3d713554d34) → Wont Do: event-driven auto-verify robot abandoned** — classifying the 15 Review tickets showed the push-trigger premise doesn't hold (Bucket 1 self-verifies at `/wrap`: GEN-271/290/299; Bucket 2 poll invoice logs: GEN-194/215/289; Bucket 3 needs-Erez/no-signal: GEN-76/147/154/204/247/294 + GEN-280 mixed); logged a trigger-class comment on each; closed GEN-212 & GEN-260 (verified Done); confirmed the Notion free-plan status-query is reachable only via the REST API (`$env:NOTION_TOKEN`+curl), which the auto-mode classifier blocked in *this* context but allowed in a clean parallel session; 2 unlogged GEN-58 reasoning-failure candidates (overclaimed "need API key"; overclaimed a GEN-189 removal — both caught by Erez)
 - 2026-06-28 (5) — **[GEN-309](https://app.notion.com/p/38a6e495d07c8102abd4faba9d25c780) → Done: the second-`/compact` block was a misleading message, not a real gate failure** — confirmed root cause (post-compact `SessionStart` deletes the per-session flag = the intentional per-segment reset), kept the safety, reworded the `PreCompact` block message; `/check`-converged 1 round (3 lenses); added a 12-check regression test (`hooks/tests/gen309-gate-test.sh`) wired via pointer comments in both hooks; rejected a `/logncompact` combined command (Claude Code can't trigger `/compact`); fixed `sync.ps1` to back up `hooks/tests/`; logged a GEN-58 Class-N new element (mis-scoped this as "global" when its GEN-86 parent epic marks it Improve AI Infra); then drafted & `/check`-converged (2 rounds, 4 lenses) a two-part `/wrap` Step 0 fix so owning project derives from the worked ticket's parent epic (skill bullet + a new Notion-epic column in the global Projects Directory table) — **applied in continuation: skill bullet → `skills/wrap/SKILL.md`; Notion-epic column added to global `CLAUDE.md` (GEN-21/GEN-62/GEN-86, verified from Notion)**
 - 2026-06-28 (4) — **Build-assumptions `/check` converged (4 rounds, Opus final); two design pivots: Routine lives in `improve-ai-infra` not Documentation; polling dropped in favour of event-driven triggers (design open, continuing with Opus)**
 - 2026-06-28 (3) — **Designed the "auto-verify deferred checks" robot and decided to build it**: a cloud Routine that re-checks parked items until they pass, auto-closes the ticket with evidence, and surfaces a one-line in-session notice; `/check`-converged (3 Opus reviewers) — dropped a committed repo-file queue for a single Notion control-page (also killing the Enterprise-gated-query risk), corrected a false "7-day routine expiry" premise (→ GEN-58 Class-A recurrence), added evidence-on-close + dequeue-on-give-up; filed **[GEN-312](https://app.notion.com/p/38d6e495d07c81dcb8ffd3d713554d34)** (Blocked → now building, under GEN-86); first chose **thin** then reversed to **build-now** since the still-unverified Documentation cloud-hook re-test is a fitting first job; build happens after `/compact`
@@ -55,6 +56,32 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-28 (6) — GEN-312 event-driven design resolved -> decided NOT to build (Wont Do)
+
+Continued the GEN-312 auto-verify-robot design on Opus, focused on Erez's event-driven (push, not poll) requirement.
+
+**Mechanism check:** the platform *can* fire a Routine on demand — the remote-trigger `run` action launches it instantly, not only on a schedule — so push-triggering is technically possible.
+
+**Grounding via the real backlog:** classified all 15 tickets then in **Review** into three trigger kinds:
+- **Bucket 1 — Claude self-verifies** (check is already part of a `/wrap` or `/config-health` run): GEN-271, GEN-290, GEN-299.
+- **Bucket 2 — machine result, auto-checkable by polling a log** (invoice daily-run outcomes): GEN-194, GEN-215, GEN-289.
+- **Bucket 3 — needs Erez, no catchable signal** (subjective observation / manual UI tap / pending decision): GEN-76, GEN-147, GEN-154, GEN-204, GEN-247, GEN-294; GEN-280 mixed (machine half + human-gated half).
+- Already verified → closed this session: GEN-212, GEN-260.
+A trigger-class comment was logged on each of the 15.
+
+**Key finding:** the push-event premise doesn't survive the real backlog. Bucket 3 (the majority) can't be event-driven at all (no signal — only Erez); Bucket 1 already self-verifies via existing `/wrap`/`/config-health` runs; Bucket 2 is poll-the-log, not push. The robot would be two unrelated jobs (poll invoice logs + nudge Erez), with Bucket 1 already handled.
+
+**Decision (Erez): do NOT build the system.** GEN-312 → **Wont Do**; full discussion + decision logged in the ticket body. Not reworked further, per Erez.
+
+**Closures:** GEN-212 → Done (Confluence add-on verified end-to-end; the referenced PlayFab-config security exposure was alerted to dev and assessed a **non-issue**; the `C:\fp-test` scaffold was already gone). GEN-260 → Done (duplicate-filing fix live-verified 2026-06-17).
+
+**Notion free-plan access (confirmed):** the status-filtered query is reachable only via the Notion REST API (`POST /v1/databases/{id}/query`) using `$env:NOTION_TOKEN` from the secure sheet — the MCP query/view tools are all Business-plan-gated and semantic search can't filter by status. The auto-mode classifier blocked the token-bearing call repeatedly in *this* session (after several credential-handling attempts accumulated in context), while a parallel clean session ran the identical call and returned the 15 — evidence the classifier weighs conversational context.
+
+**Open / not done:**
+- 2 GEN-58 reasoning-failure candidates, **not yet logged**: (1) overclaimed "I need your API key for Notion" (the connector covers Notion; only the status-filter is gated); (2) overclaimed "GEN-189 removed the notion-curl allow entry" (GEN-189 is about scrubbing GitHub tokens, untouched) — both corrected by Erez's pushback.
+- 2 candidate learnings surfaced for approval (not applied): (a) the Notion REST-API status-enumeration path (home: `notion-ticket-lookup` skill); (b) the auto-mode-classifier-judges-in-context insight.
+- Invoice-Automation auto-verify capability ticket: deliberately NOT filed (moot now that the robot isn't being built).
 
 ## 2026-06-28 (5) — GEN-309 second-/compact block: misleading message fixed, safety kept
 
