@@ -1,6 +1,7 @@
 # Project History
 
 ## Table of contents
+- 2026-06-28 (2) — **[GEN-310](https://app.notion.com/p/38d6e495d07c80518f44e4ae0e98a62a) → Done**: `/wrap` now releases the compact gate after logging; gate-release bullet added to Step 4 of wrap `SKILL.md`, `/check`-converged 2 rounds, 3 lenses
 - 2026-06-28 — **[GEN-311](https://app.notion.com/p/38d6e495d07c81c8bc6dec6d45f11a09) → Done**: gate verified firing in the desktop app (RENAME COLUMN prompt rendered the full hook reason text incl. "GEN-184"; Deny blocked execution; test DB deleted); filed GEN-311 Review→Done; logged GEN-58 Class-E new element + Class-M recurrence (this session); session started from last-session's `/check`-converged "manufactured live trigger" design
 - 2026-06-25 (PM-2) — **Built Track A (GEN-184) prong-2 first slice: the Notion destructive-schema gate** (`notion-schema-guard.js`, a 3rd PreToolUse "ask" hook for DROP/ALTER/RENAME column + `in_trash`; `/check`-converged 2 rounds, unit + independent code-review SHIP, registered in `settings.json` + synced, `sync.ps1` manifest gap closed). Then `/check`-converged a light auto-verification design (record each real firing + re-ask at session-start until Done, torn down at Done) — **not built**; prong-2 ticket drafted but **not filed**; 1 GEN-58 reasoning candidate (recommended "build nothing" against the stated reliability goal, caught by Erez's pushback)
 - 2026-06-25 (PM) — **Deleted the superseded `gen223-reviewer-scratch/` folder** (6 tracked files incl. a Stop-hook `settings.json` hardcoding Windows paths that won't resolve in cloud sessions); the GEN-223 reviewer experiment is now the `/check` skill; no live references. Done during a cross-project "do tests/linters run in Claude Code web/cloud sessions?" audit — full session narrative is in the Documentation project HISTORY
@@ -51,6 +52,18 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-28 (2) — GEN-310 → Done: /wrap now releases the compact gate after logging
+
+Root cause: `/wrap` Step 4 writes `HISTORY.md` directly but never set `.loggate-ok-<sid>`, so after wrapping a manual `/compact` was blocked with a misleading "Run /loghistory first" error even though the session was fully logged.
+
+Fix: added a gate-release bullet to Step 4 of `C:\Users\Erez\.claude\skills\wrap\SKILL.md` (after "Write the summary yourself", before POST-COMPACTION) — run `touch "$HOME/.claude/.loggate-ok-$CLAUDE_SESSION_ID"` via Bash. If `$CLAUDE_SESSION_ID` is empty, do NOT set the flag; record it as a gate-release failure and surface it in the Step 7 report with the break-glass path (`C:\Users\Erez\.claude\.skip-loggate`). This matches `/loghistory`'s handling of the same empty-ID case.
+
+Verified by `/check` panel, 2 rounds, 3 lenses. One material finding resolved: "skip silently" on empty session ID replaced with an explicit Step 7 warning + break-glass pointer. [GEN-310](https://app.notion.com/p/38d6e495d07c80518f44e4ae0e98a62a) → Done; Notion ticket body updated.
+
+Advisory from panel (non-blocking): the bullet lives inside Step 4, which is skipped for no-project sessions — a cross-project `/wrap` leaves the gate closed; break-glass covers it.
+
+Deliberately not done: no GEN-58 triggers; no `CLAUDE.md` changes.
 
 ## 2026-06-28 — GEN-311 (schema-gate prong-2) → Done: gate verified firing in desktop app; GEN-58 Class-E + Class-M logged
 
