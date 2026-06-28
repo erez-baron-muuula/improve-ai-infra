@@ -1,6 +1,9 @@
 # Project History
 
 ## Table of contents
+- 2026-06-28 (5) — **[GEN-309](https://app.notion.com/p/38a6e495d07c8102abd4faba9d25c780) → Done: the second-`/compact` block was a misleading message, not a real gate failure** — confirmed root cause (post-compact `SessionStart` deletes the per-session flag = the intentional per-segment reset), kept the safety, reworded the `PreCompact` block message; `/check`-converged 1 round (3 lenses); added a 12-check regression test (`hooks/tests/gen309-gate-test.sh`) wired via pointer comments in both hooks; rejected a `/logncompact` combined command (Claude Code can't trigger `/compact`); fixed `sync.ps1` to back up `hooks/tests/`; logged a GEN-58 Class-N new element (mis-scoped this as "global" when its GEN-86 parent epic marks it Improve AI Infra)
+- 2026-06-28 (4) — **Build-assumptions `/check` converged (4 rounds, Opus final); two design pivots: Routine lives in `improve-ai-infra` not Documentation; polling dropped in favour of event-driven triggers (design open, continuing with Opus)**
+- 2026-06-28 (3) — **Designed the "auto-verify deferred checks" robot and decided to build it**: a cloud Routine that re-checks parked items until they pass, auto-closes the ticket with evidence, and surfaces a one-line in-session notice; `/check`-converged (3 Opus reviewers) — dropped a committed repo-file queue for a single Notion control-page (also killing the Enterprise-gated-query risk), corrected a false "7-day routine expiry" premise (→ GEN-58 Class-A recurrence), added evidence-on-close + dequeue-on-give-up; filed **[GEN-312](https://app.notion.com/p/38d6e495d07c81dcb8ffd3d713554d34)** (Blocked → now building, under GEN-86); first chose **thin** then reversed to **build-now** since the still-unverified Documentation cloud-hook re-test is a fitting first job; build happens after `/compact`
 - 2026-06-28 (2) — **[GEN-310](https://app.notion.com/p/38d6e495d07c80518f44e4ae0e98a62a) → Done**: `/wrap` now releases the compact gate after logging; gate-release bullet added to Step 4 of wrap `SKILL.md`, `/check`-converged 2 rounds, 3 lenses
 - 2026-06-28 — **[GEN-311](https://app.notion.com/p/38d6e495d07c81c8bc6dec6d45f11a09) → Done**: gate verified firing in the desktop app (RENAME COLUMN prompt rendered the full hook reason text incl. "GEN-184"; Deny blocked execution; test DB deleted); filed GEN-311 Review→Done; logged GEN-58 Class-E new element + Class-M recurrence (this session); session started from last-session's `/check`-converged "manufactured live trigger" design
 - 2026-06-25 (PM-2) — **Built Track A (GEN-184) prong-2 first slice: the Notion destructive-schema gate** (`notion-schema-guard.js`, a 3rd PreToolUse "ask" hook for DROP/ALTER/RENAME column + `in_trash`; `/check`-converged 2 rounds, unit + independent code-review SHIP, registered in `settings.json` + synced, `sync.ps1` manifest gap closed). Then `/check`-converged a light auto-verification design (record each real firing + re-ask at session-start until Done, torn down at Done) — **not built**; prong-2 ticket drafted but **not filed**; 1 GEN-58 reasoning candidate (recommended "build nothing" against the stated reliability goal, caught by Erez's pushback)
@@ -52,6 +55,80 @@
 - 2026-06-03 — Playwright MCP cleanup, GEN-104/107/118, project rename
 - 2026-06-02 — GEN-43 sub-items resolution, git push fix, four global rules
 - 2026-06-01 — Notion Team-Tasks sub-item backfill
+
+## 2026-06-28 (5) — GEN-309 second-/compact block: misleading message fixed, safety kept
+
+[GEN-309](https://app.notion.com/p/38a6e495d07c8102abd4faba9d25c780) (Bug, under GEN-86) → **Done** (QA'd automatically only; not yet on a real live `/compact`).
+
+**Confirmed root cause** (the ticket's prior stale-`CLAUDE_SESSION_ID` theory was already retracted): the gate file `/loghistory` writes (`.loggate-ok-<id>`) is correctly named, but `sessionstart-loggate.js` deletes it on every session segment — **including `source: "compact"`** (the intentional per-segment reset). So after the first `/compact` the flag is gone and the next `/compact` blocks. Verified `SessionStart` re-fires post-compact with `source: "compact"` (Claude Code docs, via claude-code-guide). The block happens regardless of session-id stability.
+
+**Decision:** the per-segment reset is correct and was **kept** — after a compact the model sees only a summary and can't log the prior detail, so each compact should be preceded by a fresh log. The only real defect was the block message, which falsely said "this session isn't logged yet" on a second compact.
+
+**Fix:** reworded the `PreCompact` `reason` string in `precompact-loggate.js` (gate logic untouched). `/check`-converged in 1 round (pre-mortem + soundness + holistic, all PASS; advisories non-blocking). Verified: `node --check`, plus a live hook run emitting the new message.
+
+**Regression test:** added `hooks/tests/gen309-gate-test.sh` — drives the real hooks through the full sequence (startup → unlogged compact blocks → log → compact allowed → post-compact reset deletes flag → second compact blocks with the new message) using a throwaway session id; 12/12 pass. Anti-rot: pointer comments added to the top of both `precompact-loggate.js` and `sessionstart-loggate.js` telling anyone editing the gate to re-run it.
+
+**Rejected:** a combined `/logncompact` command — Claude Code provides no way for a command to trigger the built-in `/compact` (confirmed via claude-code-guide), so it would save no step.
+
+**Tooling fix:** `sync.ps1` didn't copy `hooks/tests/`, so the new test wasn't reaching the Drive/git backup. Added `hooks/tests/` to the sync manifest and re-synced.
+
+**Auto-approve:** added Google Drive `download_file_content` (read-only) to the `settings.json` allowlist (surfaced by the `/wrap` auto-approval scan).
+
+**GEN-58:** logged a **Class-N** new element — I classified this session as "global/cross-project" and asked which project to log to, when GEN-309's parent epic (GEN-86 = Improve AI Infra) was already in the fetched ticket data and settles it. Resolve a ticket's owning project from its parent epic before classifying; caught by Erez's pushback. (The original stale-id misdiagnosis was already logged Class-D on 2026-06-25 — not re-logged.)
+
+## 2026-06-28 (4) — Build-assumptions /check converged; two design pivots; event-driven trigger design open
+
+Continued directly from entry (3) post-`/compact`. GEN-312 was moved to In Progress at session start.
+
+**`/check` on build assumptions — 4 rounds (final round Opus), converged.**
+
+Starting assumptions: 10-item checklist covering control-page location, daily cadence, Routine target = `Muuula/Documentation`, pass condition (non-empty `node_modules`), 7-attempt give-up, on-pass/give-up actions, notification, control-page structure, config discovery, and prerequisites.
+
+Key material findings resolved across 4 rounds:
+- **No ticket URL for first job** (shared by all 3 lenses, rounds 1–2) → made ticket URL an optional queue field; require formal ticket to exist before queue entry is created (prerequisite 10d / 10c after renumbering).
+- **Pass condition too weak**: non-empty `node_modules` alone can be a partial/failed install → added `.npm-install-ok` sentinel file written by the hook only on successful `npm ci`; hook modification + gitignore update made prerequisites with explicit ordering.
+- **Notion MCP connector** → confirmed cloud connector; MCP traffic proxied through Anthropic's servers; `api.notion.com` needs no network allowlist entry (initial item 10c was wrong; removed).
+- **`CLAUDE_CODE_REMOTE=true` in Routines** → confirmed by official Anthropic docs (code.claude.com/docs/en/claude-code-on-the-web line 251-253); cited explicitly in the checklist.
+- **Hook modification sequencing** → must commit hook + gitignore changes to main before creating the queue entry; creating the entry first causes 7 wasted failed attempts with a false Blocked outcome.
+
+Advisory (non-blocking, from Opus final round): first run is also a probe of whether a Routine fires a repo's `.claude/settings.json` SessionStart hook at all; if the hook doesn't fire, the 7-attempts-then-Blocked is the correct actionable outcome, not silent failure.
+
+**Design pivot 1: Routine home repo → `improve-ai-infra`, not `Muuula/Documentation`.**
+
+The robot is meant to check items across many projects. A Routine fixed to one repo only fires that repo's hooks. Single permanent Routine in `improve-ai-infra`; for jobs in other repos, the Routine clones the target repo and runs the equivalent commands directly. For the Documentation hook job: clone `Muuula/Documentation`, run `npm ci` in `confluence-playfab-addon/`. Erez confirmed: whether the hook fires naturally or the command runs directly doesn't matter — same result. This removed the need for the sentinel file and hook modification (pass condition simplifies back to: `npm ci` exits 0).
+
+**Design pivot 2: Event-driven triggering, not time-based polling (design OPEN).**
+
+Erez: "I don't want time-based checks. I want that when the action that blocked the review happens, it triggers an auto check." This is a fundamental redesign — push not pull. Session ended here; will continue with Opus. Open question: what are examples of blocking actions the robot waits for? The answer determines what event sources and trigger mechanisms exist.
+
+**[GEN-312](https://app.notion.com/p/38d6e495d07c81dcb8ffd3d713554d34) updated** with the full session log: `/check` panel findings, both design pivots, open questions for next session. Stays In Progress.
+
+**Status:** event-driven trigger design not resolved. Next session: start with Opus, begin by collecting concrete examples of blocking actions to determine available trigger mechanisms, then re-`/check` the updated design before building anything.
+
+## 2026-06-28 (3) — Auto-verify deferred-checks robot: designed, /check-converged, GEN-312 filed, decided to build
+
+Continued from the Documentation cloud-`SessionStart`-hook work (see Documentation `HISTORY.md`, 2026-06-25 PM-2, follow-up #4). That left an open question — automate the deferred verification instead of a manual reminder. This session turned it into a general mechanism, reviewed it, and committed to building. Logged here (not Documentation) because the robot is cross-project AI-infra and its ticket (GEN-312) lives under GEN-86.
+
+**Requirements (from Erez, one question at a time):** the situation ("finished, but can only be confirmed later/elsewhere") recurs *often*; he forgets to re-check and has no bandwidth → fully unattended; re-check until it passes, then **auto-close the ticket itself** (he explicitly reversed an earlier "leash"/report-only preference); per-check cadence matched to the thing checked; result = a **ticket comment + an in-session notice in the project the ticket belongs to**; a give-up cutoff.
+
+**Platform verified (via `claude-code-guide` + docs):** cloud **Routines** run server-side unattended, clone the repo fresh each run (firing its `SessionStart` hook), reach Erez's **claude.ai-account** connectors (Notion/Slack) headless, recurring cron (hourly min), and are **durable — no 7-day expiry** (that belongs to session-scoped `/loop`). **Desktop scheduled tasks** only run while the app is open (can't do this). "Cloud" = claude.ai (Anthropic-hosted), not an external server Erez must run — a terminology mix-up that briefly derailed us. Notion connector confirmed active at the account level.
+
+**`/check` — 1 round, 3 Opus reviewers, all REVISE, all folded in:**
+- Dropped the committed per-repo queue file (a routine pushes only to `claude/` branches, so its edits never merge back → it would re-check/re-close forever) → **single Notion control page** read by known URL holds both the waiting-list and the notices; this also removed the Enterprise-gated property-filter-query risk.
+- Corrected the false **"routines auto-expire after 7 days"** premise I'd fed the panel → logged as a **GEN-58 Class-A recurrence** (element "/check reviewer-model premise"; index → seen 14×). The panel's premise-challenge lens caught it, so NOT a Class-M poisoned-premise outcome.
+- Auto-close keeps **no human gate** (per Erez) but must quote **actual evidence** in the closing comment; checks limited to **external end-states** the robot can't self-satisfy; give-up **dequeues** the entry (not just comments) so it stops consuming the daily run cap.
+- Kept Erez's **in-session-notice** choice over the reviewers' simpler Slack suggestion — viable because the single-page approach removes the fragility they objected to.
+
+**Decision arc:** first recommended **thin** (defer building until a fitting check exists) and Erez agreed → filed GEN-312 **Blocked**. Then, on Erez's "shouldn't we build now?", re-examined and corrected myself: I'd been too quick to say "nothing pending" — the **cloud-hook re-test itself fits the robot** (external, re-check-until-pass, no live session) and is a real first job. Checked its status: the `retest-documentation-cloud-hook` reminder **fired 2026-06-25 but recorded no result**, no project HISTORY notes an outcome, transcript search is blocked in this mode, and cloud state can't be verified locally → **effectively still unverified**. So building now has a genuine first case. **Erez chose build-now.**
+
+**Filed [GEN-312](https://app.notion.com/p/38d6e495d07c81dcb8ffd3d713554d34)** — "Auto-verify deferred checks and close their tickets without manual follow-up" (Project AI, task, Low, parent **GEN-86**, Task Template applied, re-fetch-verified). Body carries the converged design, verified platform facts, build trigger, prerequisites, and the known discoverability limitation. Filed **Blocked** under the thin plan — **now moving to build**. Supersedes the Documentation PM-2 follow-up #4 open question.
+
+**Status / next (post-`/compact`):**
+- **Build the robot**, first job = verify the Documentation cloud hook (does `confluence-playfab-addon/node_modules` install in a fresh cloud session), re-checking until it passes, then close its ticket.
+- Build steps: confirm **Routines is enabled** on Erez's claude.ai plan; create the single Notion **control page** (queue + notices); set up the routine pointed at `Muuula/Documentation`; **prove** the one unverified piece (robot reliably reads/edits the control page headless) before trusting it; **supervise the first run or two** before fully unattended auto-close.
+- Move **GEN-312 → In Progress** at build start; → Done only after the cloud-hook close is verified correct.
+- Per "before writing automation, list assumptions and confirm": present concrete build assumptions (cadence, control-page location, routine prompt) for Erez before writing code.
+- **GEN-58 Class-A recurrence logged + verified** (the 7-day-expiry miss).
 
 ## 2026-06-28 (2) — GEN-310 → Done: /wrap now releases the compact gate after logging
 
