@@ -56,7 +56,7 @@ Unresolved items filed: [GEN-322](https://app.notion.com/p/38e6e495d07c814b8449f
 
 ## 2026-06-29 (8) — Closed a `sync.ps1` backup gap for the two GEN-316 hooks
 
-Two Claude Code hook scripts created earlier for [GEN-316](https://app.notion.com/p/38e6e495d07c8124960dd6f0b8d1e6c9) (credential-denial detector) — `permission-denied-log.js` (PermissionDenied hook) and `stop-cred-denial-surface.js` (Stop hook) — were registered in `settings.json` but absent from `sync.ps1`'s explicit `$FileMap`, so they were not backed up to Drive or git history. `settings.json` thus referenced two scripts that existed only on the local machine — a backup gap.
+Two Claude Code hook scripts created earlier for [GEN-316](https://app.notion.com/p/38d6e495d07c814eb9a1eba96f8b96fa) (credential-denial detector) — `permission-denied-log.js` (PermissionDenied hook) and `stop-cred-denial-surface.js` (Stop hook) — were registered in `settings.json` but absent from `sync.ps1`'s explicit `$FileMap`, so they were not backed up to Drive or git history. `settings.json` thus referenced two scripts that existed only on the local machine — a backup gap.
 
 Fix: added both as `$FileMap` hashtable entries (Drive/Claude/Git paths, following the existing `hooks\*.js` pattern) and documented them in the header comment block. Ran `sync.ps1 -Direction From-Claude` via the PowerShell tool (its host has Process-scope Bypass for the `G:` mount).
 
