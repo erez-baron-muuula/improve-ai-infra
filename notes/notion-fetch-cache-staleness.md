@@ -37,6 +37,9 @@ For time-sensitive Notion reads — reconciling against the CURRENT state of a l
 
 **Re-entry trigger for future root-cause depth:** if you observe `notion-fetch` returning a repeated identical `as of` stamp that lags REST's `last_edited_time`, that is this bug — GEN-377 is the durable record; capture the live instance there.
 
+## Guard design — alternative considered (why warn-only)
+A `/check` panel raised a third hook shape beyond warn (chosen) and block (rejected as disproportionate — never block a read): **auto-refetch-and-replace**, i.e. have the hook fetch `/v1/blocks/{id}/children` via REST and substitute the fresh content into the tool result (`updatedToolOutput`), removing the "model must notice the warning and re-read" step. Chosen warn-only anyway, deliberately: (1) it closes GEN-372's actual failure mode (silence — the model getting no signal at all), which is the ticket's core goal; (2) auto-replace carries real reformatting-parity risk — the hook would have to reconstruct notion-fetch's exact page-view response shape from raw block JSON, and a subtle mismatch could inject a *wrong-looking* result that's harder to catch than an explicit warning; (3) the note's residual advice (prefer REST directly for time-sensitive reconciliation) already gives a reliable escape hatch. If the warn-only hook proves insufficient in practice (warnings ignored/deprioritized), auto-refetch-and-replace is the pre-vetted next step — the REST plumbing, token handling, and page-id parsing are already built in the hook; the remaining work is the block-children fetch + response-shape reformatting.
+
 ## Not established (honest limits)
 - Exact TTL / whether the cache ever refreshes mid-session on its own (never observed to, but not proven never).
 - Whether the cache key is per-session, per-connection, or per-MCP-server-process.
