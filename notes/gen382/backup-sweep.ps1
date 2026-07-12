@@ -193,26 +193,46 @@ function Add-Failure {
 
 # ---------------------------------------------------------------------------
 # Per-repo lock. FileShare::None handle; auto-releases if the process dies. Returns the
-# open stream on success, $null if another sweep already holds this repo's lock.
+# open stream on success, or $null if another sweep already holds this repo's lock.
+# IMPORTANT: $null means ONLY "already locked" (a sharing violation -- benign, the other
+# sweep is backing this repo up). Any OTHER failure (e.g. UnauthorizedAccessException from
+# an ACL-restricted StateDir, or a directory-creation error) is a real problem and is
+# re-THROWN, so the caller can queue it rather than mistake it for a benign lock-skip. This
+# distinction matters: swallowing all exceptions as $null would silently drop a repo whose
+# lock we could not even attempt -- exactly the silent-skip hole this project exists to kill.
+# (A file sharing violation surfaces as IOException whose HResult is 0x20/0x21; treat those
+# as "locked" and every other IOException/exception as a real failure to re-throw.)
 # ---------------------------------------------------------------------------
 function Enter-RepoLock {
     param([string]$RepoKey)
+    if (-not (Test-Path -LiteralPath $StateDir)) {
+        # Let a failure here propagate to the caller's try/catch (it will be queued, not
+        # swallowed) -- a StateDir we cannot create is a real error, not a lock contention.
+        New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+    }
+    $lockPath = Join-Path $StateDir ("$RepoKey.lock")
     try {
-        if (-not (Test-Path -LiteralPath $StateDir)) { New-Item -ItemType Directory -Path $StateDir -Force | Out-Null }
-        $lockPath = Join-Path $StateDir ("$RepoKey.lock")
         $stream = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
         return $stream
     } catch [System.IO.IOException] {
-        return $null   # already locked by a concurrent sweep
+        $hr = $_.Exception.HResult -band 0xFFFF
+        if ($hr -eq 0x20 -or $hr -eq 0x21) { return $null }  # ERROR_SHARING_VIOLATION / LOCK_VIOLATION -> already locked
+        throw                                                 # any other IOException is a real failure
     }
+    # (a non-IOException, e.g. UnauthorizedAccessException, is not caught here and propagates)
 }
 
 # ---------------------------------------------------------------------------
 # Secret scan -- runs on WORKING-TREE FILES, before any git object is written.
-# Enumerates exactly the files `git add -A` would stage: tracked (per ls-files) plus
-# untracked-not-ignored (per status --porcelain), with deletions excluded (a deleted
-# file has no content to scan). Returns the FIRST match as an object, or $null if clean.
-# Fail-closed: caller must have already validated the patterns loaded.
+# Enumerates exactly the files `git add -A` would stage: tracked (per `ls-files -z`)
+# plus untracked-not-ignored (per `ls-files -z --others --exclude-standard`), with
+# deletions excluded (a deleted file has no content to scan). Returns the FIRST match
+# as an object, or $null if clean.
+# Fail-closed on uncertainty: caller must have already validated the patterns loaded,
+# AND a file that cannot be READ (locked mid-write etc.) is reported as a match with
+# Pattern='<unreadable>' -- NOT skipped. A skip would be fail-OPEN: `git add -A` runs
+# later as a separate process and could stage that same file once its lock clears,
+# pushing content the scan never inspected. So an unreadable file quarantines the repo.
 # ---------------------------------------------------------------------------
 function Get-SecretMatch {
     param([string]$RepoPath, [array]$Patterns)
@@ -235,24 +255,30 @@ function Get-SecretMatch {
     foreach ($rel in $files) {
         $full = Join-Path $RepoPath $rel
         if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { continue }  # deleted/never-present
-        # Read the raw BYTES and decode as Latin1 (ISO-8859-1) -- a 1:1 byte<->char map, so
-        # every byte becomes a character and no bytes are lost or mis-folded. Reading with
-        # -Encoding UTF8 would mis-decode a UTF-16/UTF-16LE file (common on Windows) into
-        # garbage, so an ASCII token stored in such a file would NOT match its regex and the
-        # secret would slip through the gate (fail-OPEN). With Latin1 the token's own bytes
-        # are preserved verbatim, so a byte-for-byte token pattern matches regardless of the
-        # file's declared text encoding. Scan candidate encodings: the raw Latin1 view (covers
-        # UTF-8/ASCII/Latin1) AND a UTF-16LE decode (covers UTF-16 where token chars are
-        # separated by NUL bytes in the Latin1 view and so wouldn't match a contiguous regex).
+        # Read the raw BYTES and decode across multiple candidate encodings -- a token stored
+        # in a non-UTF-8 text file must still match its (ASCII) regex. Latin1 (ISO-8859-1) is a
+        # 1:1 byte<->char map, so every byte becomes a character and no bytes are lost or
+        # mis-folded; it covers UTF-8/ASCII/Latin1. Reading with -Encoding UTF8 would instead
+        # mis-decode a UTF-16 file (common on Windows) into garbage, so an ASCII token stored
+        # there would NOT match and the secret would slip through (fail-OPEN). UTF-16 splits each
+        # ASCII char across two bytes, so the token isn't contiguous in the Latin1 view and needs
+        # its own decode -- and BOTH byte orders occur: Unicode (=UTF-16LE) AND BigEndianUnicode
+        # (=UTF-16BE, produced by e.g. `Set-Content -Encoding BigEndianUnicode`). A BE file is
+        # byte-swapped garbage in the LE view and vice versa, so both must be scanned or a
+        # secret in the un-scanned byte order slips through (verified fail-OPEN). Scan all three.
         try {
             $bytes = [System.IO.File]::ReadAllBytes($full)
         } catch {
-            continue   # unreadable (locked mid-write etc.) -- torn/locked handled by caller path
+            # UNREADABLE (locked mid-write, ACL, etc.). Do NOT skip -- that is fail-OPEN (see the
+            # function header). Report it as a match so the caller quarantines this repo: we
+            # cannot prove this file is secret-free, and `git add -A` may stage it later.
+            return [PSCustomObject]@{ File = $rel; Pattern = '<unreadable>'; Masked = 'n/a' }
         }
         if ($null -eq $bytes -or $bytes.Length -eq 0) { continue }
         $views = @(
             [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetString($bytes),
-            [System.Text.Encoding]::Unicode.GetString($bytes)          # UTF-16LE
+            [System.Text.Encoding]::Unicode.GetString($bytes),             # UTF-16LE
+            [System.Text.Encoding]::BigEndianUnicode.GetString($bytes)     # UTF-16BE
         )
         foreach ($text in $views) {
             if (-not $text) { continue }
@@ -295,12 +321,17 @@ function Get-OversizeFile {
 
 # ---------------------------------------------------------------------------
 # Is the repo mid-merge / mid-rebase? Snapshotting conflict debris is worse than skipping.
+# Returns $true = "do not snapshot" (either a real mid-op marker exists, OR we could not
+# verify -- fail-CLOSED). Returning $false on a failed `rev-parse --git-dir` would be
+# fail-OPEN: a transient git failure while the repo is genuinely mid-rebase would let the
+# sweep snapshot conflict debris. "Cannot confirm safe" must resolve to "skip", so a
+# git-dir lookup failure returns $true and the caller skips+logs this repo for the next run.
 # ---------------------------------------------------------------------------
 function Test-MidOperation {
     param([string]$RepoPath)
     $r = Invoke-Git @('-C', $RepoPath, 'rev-parse', '--git-dir')
     $gitDir = if ($r.Ok) { ($r.Out | Select-Object -First 1) } else { $null }
-    if (-not $gitDir) { return $false }
+    if (-not $gitDir) { return $true }   # cannot resolve git dir -> fail-closed, treat as unsafe
     if (-not [System.IO.Path]::IsPathRooted($gitDir)) { $gitDir = Join-Path $RepoPath $gitDir }
     foreach ($marker in @('MERGE_HEAD', 'rebase-merge', 'rebase-apply', 'CHERRY_PICK_HEAD', 'REVERT_HEAD')) {
         if (Test-Path -LiteralPath (Join-Path $gitDir $marker)) { return $true }
@@ -314,26 +345,40 @@ function Test-MidOperation {
 function Invoke-RepoSweep {
     param([string]$RepoPath, [array]$Patterns)
 
-    if (-not (Test-Path -LiteralPath $RepoPath)) {
-        Add-Failure -Repo $RepoPath -Kind 'error' -Detail 'repo path does not exist'
+    # The pre-lock region (existence/work-tree checks, repoKey hash, lock acquisition) runs
+    # BEFORE the main try/catch below. Any exception here -- e.g. an ACL-restricted StateDir
+    # making Enter-RepoLock throw UnauthorizedAccessException (NOT an IOException, so not
+    # caught inside the lock helper) -- must NOT propagate: Main's repo loop has no try/catch,
+    # and $ErrorActionPreference='Stop' would turn one such throw into a whole-sweep crash that
+    # skips every remaining repo with nothing queued (collapsing the 0/2/4 exit contract). Wrap
+    # it so a real failure is queued and only THIS repo is skipped.
+    $lock = $null
+    try {
+        if (-not (Test-Path -LiteralPath $RepoPath)) {
+            Add-Failure -Repo $RepoPath -Kind 'error' -Detail 'repo path does not exist'
+            return
+        }
+        $rIs = Invoke-Git @('-C', $RepoPath, 'rev-parse', '--is-inside-work-tree')
+        if (-not $rIs.Ok -or (($rIs.Out | Select-Object -First 1) -ne 'true')) {
+            Add-Failure -Repo $RepoPath -Kind 'error' -Detail 'not a git work tree'
+            return
+        }
+
+        # Stable per-repo key for lock + state file names (repo path is not filename-safe).
+        # Use a short SHA-1 of the full path (not the mangled path itself) so state filenames
+        # stay well under the Windows MAX_PATH limit regardless of how deep the repo lives.
+        $sha1 = [System.Security.Cryptography.SHA1]::Create()
+        $repoKey = ([System.BitConverter]::ToString(
+            $sha1.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($RepoPath.ToLowerInvariant()))
+        ) -replace '-', '').Substring(0, 16)
+        $sha1.Dispose()
+
+        $lock = Enter-RepoLock -RepoKey $repoKey
+    } catch {
+        Add-Failure -Repo $RepoPath -Kind 'error' -Detail "could not begin sweep (lock/setup failed): $($_.Exception.Message)"
+        Write-Host "ERROR (logged, repo skipped): $RepoPath -> $($_.Exception.Message)"
         return
     }
-    $rIs = Invoke-Git @('-C', $RepoPath, 'rev-parse', '--is-inside-work-tree')
-    if (-not $rIs.Ok -or (($rIs.Out | Select-Object -First 1) -ne 'true')) {
-        Add-Failure -Repo $RepoPath -Kind 'error' -Detail 'not a git work tree'
-        return
-    }
-
-    # Stable per-repo key for lock + state file names (repo path is not filename-safe).
-    # Use a short SHA-1 of the full path (not the mangled path itself) so state filenames
-    # stay well under the Windows MAX_PATH limit regardless of how deep the repo lives.
-    $sha1 = [System.Security.Cryptography.SHA1]::Create()
-    $repoKey = ([System.BitConverter]::ToString(
-        $sha1.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($RepoPath.ToLowerInvariant()))
-    ) -replace '-', '').Substring(0, 16)
-    $sha1.Dispose()
-
-    $lock = Enter-RepoLock -RepoKey $repoKey
     if ($null -eq $lock) {
         # A concurrent sweep already holds this repo, so this repo IS being backed up right
         # now by that other sweep -- a lock-skip is therefore NOT an actionable failure and is
@@ -344,11 +389,14 @@ function Invoke-RepoSweep {
         return
     }
 
+    # $localRef tracks the local pin ref so the catch can clean it up if an exception fires
+    # after it's created; $null means "no pin to delete" (never created, or already deleted).
+    $localRef = $null
     try {
-        # 1. Mid-operation guard.
+        # 1. Mid-operation guard (fail-closed: also true if the git-dir couldn't be resolved).
         if (Test-MidOperation -RepoPath $RepoPath) {
-            Add-Failure -Repo $RepoPath -Kind 'mid-op' -Detail 'repo is mid-merge/rebase/cherry-pick; skipped to avoid snapshotting conflict state'
-            Write-Host "SKIP (mid-operation): $RepoPath"
+            Add-Failure -Repo $RepoPath -Kind 'mid-op' -Detail 'repo is mid-merge/rebase/cherry-pick OR git-dir could not be verified; skipped to avoid snapshotting conflict state. Next sweep retries.'
+            Write-Host "SKIP (mid-operation or unverifiable): $RepoPath"
             return
         }
 
@@ -363,11 +411,19 @@ function Invoke-RepoSweep {
             return
         }
 
-        # 3. Secret scan -- BEFORE any git object is written. Fail-closed on match.
+        # 3. Secret scan -- BEFORE any git object is written. Fail-closed on match AND on any
+        #    file that could not be read (Pattern='<unreadable>'): both abort the repo so nothing
+        #    unscanned can be snapshotted. The unreadable case is logged as 'locked' (transient,
+        #    retried next sweep), the real match as 'secret' (needs Erez to rule).
         $hit = Get-SecretMatch -RepoPath $RepoPath -Patterns $Patterns
         if ($null -ne $hit) {
-            Add-Failure -Repo $RepoPath -Kind 'secret' -Detail "suspected secret '$($hit.Pattern)' ($($hit.Masked)) in $($hit.File); repo QUARANTINED -- no snapshot created or pushed. You must rule."
-            Write-Host "QUARANTINE (suspected secret): $RepoPath -> $($hit.File) [$($hit.Pattern)]"
+            if ($hit.Pattern -eq '<unreadable>') {
+                Add-Failure -Repo $RepoPath -Kind 'locked' -Detail "could not read $($hit.File) during the secret scan (locked/ACL); repo skipped this sweep so no unscanned file is snapshotted. Next sweep retries."
+                Write-Host "SKIP (unreadable file -- cannot scan safely): $RepoPath -> $($hit.File)"
+            } else {
+                Add-Failure -Repo $RepoPath -Kind 'secret' -Detail "suspected secret '$($hit.Pattern)' ($($hit.Masked)) in $($hit.File); repo QUARANTINED -- no snapshot created or pushed. You must rule."
+                Write-Host "QUARANTINE (suspected secret): $RepoPath -> $($hit.File) [$($hit.Pattern)]"
+            }
             return
         }
 
@@ -383,9 +439,18 @@ function Invoke-RepoSweep {
         # an empty index makes `git add -A` re-stat the whole working tree from scratch,
         # so every changed/added file is captured; .gitignore is still honored and
         # untracked files are still included (both verified).
-        # Session id may be a long UUID; truncate it in the temp filename to stay under MAX_PATH.
-        $sessTag = $SessionId
-        if ($sessTag.Length -gt 12) { $sessTag = $sessTag.Substring(0, 12) }
+        # Per-session tag for the temp-index + state-file names. Use a short SHA-1 of the FULL
+        # SessionId (like $repoKey), NOT a 12-char prefix truncation: two sessions whose ids
+        # share the first 12 chars would otherwise collide on the (non-PID-scoped) state file,
+        # and session B would read session A's last-tree, wrongly "skip" as unchanged, and never
+        # create its own backup ref (the exact cross-session-sharing failure the per-session
+        # state file exists to prevent). A 16-hex hash of the whole id stays under MAX_PATH,
+        # is filename-safe, and preserves full-id uniqueness.
+        $sha1s = [System.Security.Cryptography.SHA1]::Create()
+        $sessTag = ([System.BitConverter]::ToString(
+            $sha1s.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($SessionId))
+        ) -replace '-', '').Substring(0, 16)
+        $sha1s.Dispose()
         $tempIndex = Join-Path $StateDir ("$repoKey.$PID.$sessTag.index")
 
         $snapSha = $null
@@ -421,7 +486,8 @@ function Invoke-RepoSweep {
         }
 
         # 6. Skip-if-unchanged: compare this snapshot's tree to the last tree THIS SESSION
-        #    backed up. The state file is per-repo AND per-session ($repoKey.$sessTag), NOT
+        #    backed up. The state file is per-repo AND per-session ($repoKey.$sessTag, where
+        #    $sessTag is a full-SessionId hash -- see the note above on why not a prefix), NOT
         #    shared across sessions: a shared file would let session B skip because session A
         #    already pushed the identical tree, leaving B's own ref refs/backup/.../<B>/latest
         #    never created (B would rely on A's differently-named ref, which retention could
@@ -447,9 +513,11 @@ function Invoke-RepoSweep {
         #    the pin -- the next sweep re-snapshots the then-current working tree from scratch,
         #    so a stale pin would only leak (one per failed session per repo). The offline
         #    window is covered by that next sweep, not by keeping this pin.
-        $localRef = "refs/backup-local/$Machine/$SessionId"
-        $rPin = Invoke-Git @('-C', $RepoPath, 'update-ref', $localRef, $snapSha)
-        if (-not $rPin.Ok) { throw "failed to pin local ref $localRef ($($rPin.Err))" }
+        $localRefName = "refs/backup-local/$Machine/$SessionId"
+        $rPin = Invoke-Git @('-C', $RepoPath, 'update-ref', $localRefName, $snapSha)
+        if (-not $rPin.Ok) { throw "failed to pin local ref $localRefName ($($rPin.Err))" }
+        # Pin now EXISTS -- record it so the catch cleans it up if a later step throws.
+        $localRef = $localRefName
 
         $backupRef = "refs/backup/$Machine/$SessionId/latest"
 
@@ -501,14 +569,28 @@ function Invoke-RepoSweep {
             return
         }
 
-        # 9. Success: record last tree, delete the local pin ref.
-        try { Set-Content -LiteralPath $stateFile -Value $thisTree -Encoding UTF8 } catch { }
+        # 9. Success: record last tree, delete the local pin ref. Only write the state file if
+        #    $thisTree actually resolved -- writing a null/empty value would blank the state and
+        #    silently disable skip-if-unchanged on the next run (Set-Content coerces $null to an
+        #    empty file, read back as "" -> always-push).
+        if ($thisTree) {
+            try { Set-Content -LiteralPath $stateFile -Value $thisTree -Encoding UTF8 } catch { }
+        }
         Invoke-Git @('-C', $RepoPath, 'update-ref', '-d', $localRef) | Out-Null
+        $localRef = $null   # deleted; don't re-delete in a finally/catch
         Write-Host "backed up: $RepoPath  $snapSha -> $backupRef"
 
     } catch {
         Add-Failure -Repo $RepoPath -Kind 'error' -Detail "unexpected error: $($_.Exception.Message)"
         Write-Host "ERROR (logged): $RepoPath -> $($_.Exception.Message)"
+        # If an exception fired AFTER the local pin was created but before one of the explicit
+        # delete paths ran, the pin would otherwise leak permanently (unique SessionId ref,
+        # never overwritten, nothing else prunes it) AND permanently pin the snapshot object,
+        # blocking gc and growing .git. Delete it here too. $localRef is $null if the pin was
+        # never created or was already deleted, so this is a no-op in those cases.
+        if ($localRef) {
+            Invoke-Git @('-C', $RepoPath, 'update-ref', '-d', $localRef) | Out-Null
+        }
     } finally {
         $lock.Close()
         $lock.Dispose()
