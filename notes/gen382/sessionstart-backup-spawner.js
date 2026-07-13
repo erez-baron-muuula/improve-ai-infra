@@ -140,23 +140,41 @@ process.stdin.on('end', () => {
     // launch). @(...) forces an array from either a scalar or an array, so a
     // one-repo project backs up correctly.
     //
-    // NEVER-SILENT invariant: if reading/parsing the payload throws BEFORE the
-    // sweep starts, the sweep's own failure queue never runs — so the catch here
-    // appends a durable 'error' record itself (best-effort), so the next session's
-    // surfacer still shows that this session's backup did not launch.
+    // NEVER-SILENT invariant — two distinct failure modes, both must leave a trace:
+    //   (1) reading/parsing the payload throws BEFORE the sweep starts → the sweep's
+    //       own failure queue never runs, so the CATCH here writes a durable record.
+    //   (2) the sweep RUNS but exits non-zero on a fail-closed path (2=bad
+    //       invocation / no repos, 4=secret-patterns load failed). PowerShell's `&`
+    //       does NOT throw on a native/script non-zero exit — even under
+    //       $ErrorActionPreference='Stop' — and the sweep deliberately uses
+    //       Write-FatalLine+`exit N` (not Write-Error) on those paths, precisely so
+    //       -Stop won't promote them. So the catch never fires for (2); left
+    //       unhandled, a fail-closed sweep would be SILENT (stderr is discarded by
+    //       the disowned stdio:'ignore' process, and Add-Failure is never reached on
+    //       those exit paths). We therefore check $LASTEXITCODE after the call and
+    //       write the same durable record ourselves. (Verified against
+    //       backup-sweep.ps1: 0=ran, 2/4=fatal; any non-zero = a real failure.)
+    // WriteFail centralises the record shape so (1) and (2) can't drift apart; the
+    // shape (ts/machine/session/repo/kind/detail/surfaced) matches the sweep's own
+    // Add-Failure and what the surfacer reads.
     const psCommand =
       "$ErrorActionPreference='Stop'; " +
+      '$WriteFail = { param($k,$dt); try { ' +
+      '$rec = [ordered]@{ ts=(Get-Date -Format o); machine=' + psLit(os.hostname()) + '; ' +
+      'session=' + psLit(sessionId) + '; repo=' + psLit('(spawn)') + '; kind=$k; ' +
+      'detail=$dt; surfaced=$false } | ConvertTo-Json -Compress; ' +
+      '[System.IO.File]::AppendAllText(' + psLit(failureQueue) + ', $rec + [char]10) } catch {} }; ' +
       'try { ' +
       '$p = ' + psLit(payloadFile) + '; ' +
       '$d = Get-Content -LiteralPath $p -Raw | ConvertFrom-Json; ' +
       'Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; ' +
-      '& ' + psLit(sweepScript) + ' -SessionId $d.sessionId -RepoPaths @($d.repos) ' +
+      '& ' + psLit(sweepScript) + ' -SessionId $d.sessionId -RepoPaths @($d.repos); ' +
+      '$ec = $LASTEXITCODE; ' +
+      'if ($ec -ne 0) { ' +
+      "& $WriteFail 'error' ('backup-sweep exited non-zero (' + $ec + '); backup did NOT complete this session'); " +
+      'exit $ec } ' +
       '} catch { ' +
-      'try { ' +
-      '$rec = [ordered]@{ ts=(Get-Date -Format o); machine=' + psLit(os.hostname()) + '; ' +
-      'session=' + psLit(sessionId) + '; repo=' + psLit('(spawn)') + '; kind=' + psLit('error') + '; ' +
-      "detail=('spawner launch failed before sweep: ' + $_.Exception.Message); surfaced=$false } | ConvertTo-Json -Compress; " +
-      '[System.IO.File]::AppendAllText(' + psLit(failureQueue) + ", $rec + [char]10) } catch {}; " +
+      "& $WriteFail 'error' ('spawner launch failed before sweep: ' + $_.Exception.Message); " +
       'exit 1 }';
 
     // TRUE fire-and-forget on Windows: a plain `spawn('powershell', {detached})`
