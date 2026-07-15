@@ -59,6 +59,30 @@ param(
     # Skip any single blob larger than this (GitHub rejects >100MB; LFS is a future ticket).
     [int]$MaxBlobMB = 100,
 
+    # Per-network-call timeout (seconds) for ls-remote and push, passed to Invoke-GitNet.
+    # Default 90 preserves the original behavior for every existing caller. A caller that runs
+    # the sweep inline (e.g. the session-start spawner) passes a SHORT value so an unreachable/
+    # slow remote can never make an inline (blocking) run hang long on a per-call basis: each
+    # call is bounded by this timeout, and on a healthy network returns in well under a second
+    # so it is not felt. A timed-out call is treated exactly as today: logged 'unreachable',
+    # work safe locally, retried next sweep (fail-open, no loss). NOTE this bounds a SINGLE
+    # network call; the whole-run bound is $OverallDeadlineSeconds below.
+    [int]$NetTimeoutSeconds = 90,
+
+    # Overall wall-clock budget (seconds) for the ENTIRE repo loop. 0 = unlimited (the default,
+    # preserving every existing caller — /wrap and manual runs are unbounded). A caller that runs
+    # the sweep inline on a latency-sensitive path (the session-start spawner) passes a modest
+    # value so the whole sweep self-bounds: before starting each repo the loop checks elapsed
+    # wall-clock, and once the budget is exceeded every remaining repo is SKIPPED-AND-QUEUED
+    # ('unreachable' / deadline) via the normal failure-queue path — no repo is entered past the
+    # deadline, so there is no half-done snapshot, no leaked temp index, and no leaked local pin
+    # ref (those only exist inside Invoke-RepoSweep, which deadline-skipped repos never enter).
+    # This makes any external hard-kill (e.g. the spawner's spawnSync timeout) a true last resort
+    # rather than the primary bound: on realistic repo counts the sweep exits cleanly on its own.
+    # NetTimeoutSeconds bounds one call; this bounds the run. A skipped repo's work is never lost
+    # (local copy always safe; the next non-throttled sweep re-snapshots the full working tree).
+    [int]$OverallDeadlineSeconds = 0,
+
     # Do everything EXCEPT the network push (for testing). The snapshot commit is still
     # built locally so the full local path is exercised.
     [switch]$DryRun
@@ -340,6 +364,64 @@ function Test-MidOperation {
 }
 
 # ---------------------------------------------------------------------------
+# Reap stale artifacts left by a PRIOR sweep of THIS repo that was hard-killed (e.g. by the
+# session-start spawner's spawnSync hard timeout) before its finally/catch could clean up.
+# MUST be called only while THIS repo's lock is held (the caller does), which -- together with
+# the fact that a temp-index filename is namespaced by $repoKey (per-repo) -- guarantees no
+# concurrently-running sweep can own an artifact this reaps:
+#   - Temp index files are named "$repoKey.$PID.$sessTag.index". A different repo's sweep uses a
+#     different $repoKey, so it can't match this pattern; a same-repo sweep is serialized by the
+#     lock. So any "$repoKey.*.index" whose embedded PID is NOT a live process is an orphan owned
+#     by nobody -> safe to delete. (PID reuse only ever makes us SKIP a reap -- treat an alive PID
+#     as in-use -> conservative, never an unsafe delete.)
+#   - The local pin ref refs/backup-local/<Machine>/<SessionId> is namespaced by SessionId, NOT
+#     PID, so there is no cheap liveness test for ANOTHER session's pin -- reaping it could drop a
+#     live concurrent session's safety pin mid-push. We therefore reap ONLY this session's OWN pin
+#     (same $SessionId), which a prior killed run in the same session may have left; that is free
+#     and safe under the lock. A CROSS-SESSION leaked pin (one pinned commit object per hard-killed
+#     session per repo, blocking gc of just that object, tiny .git growth, hard-kill-only) is an
+#     ACCEPTED, bounded leak -- documented here rather than reaped unsafely. FUTURE (only if that
+#     accumulation ever exceeds the modeled harm): embed PID+Machine in the pin ref name so it
+#     becomes dead-PID-reapable under the same predicate as the temp index; do NOT build that now.
+# Every step is best-effort: any error is swallowed so cleanup never aborts or fails a sweep.
+# ---------------------------------------------------------------------------
+function Remove-StaleArtifacts {
+    param([string]$RepoPath, [string]$RepoKey)
+    # (1) Orphaned temp-index files for this repo whose owner PID is dead.
+    try {
+        $pattern = "$RepoKey.*.index"
+        Get-ChildItem -LiteralPath $StateDir -Filter $pattern -File -ErrorAction SilentlyContinue | ForEach-Object {
+            # Anchored parse: "<repoKey>.<pid>.<sessTag>.index" -- pull the PID field explicitly.
+            $m = [regex]::Match($_.Name, ('^' + [regex]::Escape($RepoKey) + '\.(?<pid>\d+)\.[0-9a-fA-F]+\.index$'))
+            if (-not $m.Success) { return }
+            # NOTE: do NOT name this $pid -- $PID/$pid is a read-only PowerShell AUTOMATIC variable
+            # (the current process id) and is case-insensitive, so assigning $pid would clobber it
+            # and make the self-check below always true. Use a distinct name.
+            # Parse via [long]::TryParse (NOT a [int] cast): the regex \d+ is unbounded, and a [int]
+            # cast on an 11+ digit run throws OverflowException, which would escape ForEach-Object
+            # and abort reaping the REST of this repo's orphans. TryParse fails softly -> skip only
+            # this one malformed name. [long] comfortably holds any real Windows PID.
+            $ownerPidRef = [long]0
+            if (-not [long]::TryParse($m.Groups['pid'].Value, [ref]$ownerPidRef)) { return }
+            $ownerPid = $ownerPidRef
+            if ($ownerPid -eq $PID) { return }   # never our own in-use index
+            $alive = $true
+            try { $alive = [bool](Get-Process -Id $ownerPid -ErrorAction Stop) }
+            catch { $alive = $false }        # no such process -> dead owner -> safe to reap
+            if (-not $alive) {
+                try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue } catch { }
+            }
+        }
+    } catch { }
+    # (2) This session's OWN leaked pin (safe: same SessionId means no OTHER live session owns it).
+    try {
+        $ownPin = "refs/backup-local/$Machine/$SessionId"
+        $rShow = Invoke-Git @('-C', $RepoPath, 'rev-parse', '--verify', '--quiet', $ownPin)
+        if ($rShow.Ok) { Invoke-Git @('-C', $RepoPath, 'update-ref', '-d', $ownPin) | Out-Null }
+    } catch { }
+}
+
+# ---------------------------------------------------------------------------
 # Sweep a single repo. Best-effort: every problem is logged to the queue, never thrown.
 # ---------------------------------------------------------------------------
 function Invoke-RepoSweep {
@@ -393,6 +475,11 @@ function Invoke-RepoSweep {
     # after it's created; $null means "no pin to delete" (never created, or already deleted).
     $localRef = $null
     try {
+        # 0. Reap this repo's stale artifacts from a prior hard-killed sweep (safe under the lock;
+        #    see Remove-StaleArtifacts). Best-effort; runs before we create this run's own index/pin
+        #    so a hard-kill self-heals on the next sweep rather than accumulating orphans.
+        Remove-StaleArtifacts -RepoPath $RepoPath -RepoKey $repoKey
+
         # 1. Mid-operation guard (fail-closed: also true if the git-dir couldn't be resolved).
         if (Test-MidOperation -RepoPath $RepoPath) {
             Add-Failure -Repo $RepoPath -Kind 'mid-op' -Detail 'repo is mid-merge/rebase/cherry-pick OR git-dir could not be verified; skipped to avoid snapshotting conflict state. Next sweep retries.'
@@ -530,7 +617,7 @@ function Invoke-RepoSweep {
         # 8. Push to the backup channel on the repo's own 'origin'. Compare-and-swap on the
         #    remote ref so a same-session double-fire can't clobber the parent chain: read
         #    the remote's current value and pass it as the expected old (empty if absent).
-        $rLs = Invoke-GitNet @('-C', $RepoPath, 'ls-remote', 'origin', $backupRef)
+        $rLs = Invoke-GitNet @('-C', $RepoPath, 'ls-remote', 'origin', $backupRef) -TimeoutSeconds $NetTimeoutSeconds
         if ($rLs.TimedOut) {
             Add-Failure -Repo $RepoPath -Kind 'unreachable' -Detail "ls-remote for $backupRef timed out; remote unreachable. Work is safe locally; next sweep retries."
             Write-Host "REMOTE UNREACHABLE (ls-remote timeout; next sweep retries): $RepoPath"
@@ -553,7 +640,7 @@ function Invoke-RepoSweep {
         # Note the backtick before ':' is required so PS doesn't parse "$var:" as a scope.
         $pushArgs = @('-C', $RepoPath, '-c', 'http.sslVerify=false', 'push',
                       "--force-with-lease=$backupRef`:$expected", 'origin', "$snapSha`:$backupRef")
-        $rPush = Invoke-GitNet $pushArgs
+        $rPush = Invoke-GitNet $pushArgs -TimeoutSeconds $NetTimeoutSeconds
         if (-not $rPush.Ok) {
             $detail = if ($rPush.TimedOut) {
                 "push to $backupRef timed out; remote unreachable. Work is safe locally; next sweep retries."
@@ -633,9 +720,29 @@ try {
     exit 4
 }
 
-Write-Host "backup-sweep: machine=$Machine session=$SessionId repos=$($RepoPaths.Count) dryRun=$($DryRun.IsPresent)"
+Write-Host "backup-sweep: machine=$Machine session=$SessionId repos=$($RepoPaths.Count) dryRun=$($DryRun.IsPresent) overallDeadline=$(if ($OverallDeadlineSeconds -gt 0) { "${OverallDeadlineSeconds}s" } else { 'none' })"
+
+# Overall wall-clock budget for the whole repo loop (see -OverallDeadlineSeconds). Use a
+# Stopwatch (monotonic; independent of the wall clock, so a clock adjustment mid-sweep cannot
+# distort it) rather than Get-Date subtraction. 0 = unlimited: the check below is skipped
+# entirely, so existing callers behave exactly as before.
+$deadlineSw = [System.Diagnostics.Stopwatch]::StartNew()
+$deadlineHit = $false
 
 foreach ($rp in $RepoPaths) {
+    # Deadline gate — checked BEFORE entering the repo so no repo is ever started past the
+    # budget. Once tripped, every remaining repo is queued (not swept) through the normal
+    # failure-queue path: no snapshot object, no temp index, and no local pin ref is ever
+    # created for a deadline-skipped repo (those live only inside Invoke-RepoSweep), so there
+    # is nothing to leak. Its work is safe locally and the next sweep re-captures it.
+    if ($OverallDeadlineSeconds -gt 0 -and $deadlineSw.Elapsed.TotalSeconds -ge $OverallDeadlineSeconds) {
+        if (-not $deadlineHit) {
+            Write-Host "DEADLINE reached (${OverallDeadlineSeconds}s); remaining repos queued for next sweep."
+            $deadlineHit = $true
+        }
+        Add-Failure -Repo $rp -Kind 'unreachable' -Detail "overall sweep deadline (${OverallDeadlineSeconds}s) reached before this repo was swept; skipped. Work is safe locally; next sweep retries."
+        continue
+    }
     Invoke-RepoSweep -RepoPath $rp -Patterns $patterns
 }
 
