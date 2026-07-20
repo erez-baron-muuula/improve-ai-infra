@@ -10,6 +10,7 @@
 2026-07-20 (5): GEN-503 vetting-gate fail-open fixed via /vet-code (anchored -File/-Op extraction); settings.json hooks-arm blast radius found; GEN-504/505/506 filed <!-- toc-session:ae834e73-22a8-42a8-9840-dc3e51c8e746 -->
 2026-07-20 (5) — Silence-on-success self-audit narration ban shipped to global CLAUDE.md (3-round /check, applied via /vet-rule); enforcement deferred to GEN-507 <!-- toc-session:1479d958-a207-433e-97e5-66e7f895b6c1 -->
 2026-07-20 (5) — GEN-495 shipped: mechanical-lane hardening — in-fence whitespace edits now gated + mechanical fixes defer to confirmation instead of silent auto-approve; full /vet-code; GEN-58 Class D logged; filed GEN-509 <!-- toc-session:3f1294e4-4de3-4a01-ad17-b568ddce3184 -->
+[2026-07-20 (8)](#2026-07-20-8-three-field-priority-system-designed-for-team-tasks-importance--gain-ratio--derived-priority): Three-field priority system (Importance + Gain ratio + derived Priority) designed for Team-Tasks; GEN-512 (build) + GEN-513 (rule) filed, not yet built. <!-- toc-session:a17f632c-3e7c-475c-b1cb-0b9c030e41d7 -->
 - 2026-07-20 (6): /wrap learning-capture — reversal-capture rule + near-duplicate dedupe sub-step (both vetted via /check + /vet-rule); GEN-511 filed <!-- toc-session:ef5b356b-15d1-4b39-892f-67b563d5b8f1 -->
 - [2026-07-20 (7)](#2026-07-20-7-gen-501-signal-surfacing-enforcer-shipped): GEN-501 signal-surfacing enforcer shipped — two hooks (PostToolUse detector + Stop deliverer) + /wrap Step 3b, through the full /vet-code gate. <!-- toc-session:38697241-76cc-4c83-92d5-ee55cbbbf46d -->
 - 2026-07-20 (5) — **Ticket-completeness bar added to the global ticket-drafting rule** (drafted bodies must stand alone; killed a skill-homed first attempt, fixed a GEN-58-exception conflict + a line-155 hardcoded-ticket-number slip; filed GEN-508) <!-- toc-session:00aa7395-bfef-4f57-8701-de4d229807eb -->
@@ -140,6 +141,34 @@
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-07-20 (8) — Three-field priority system designed for Team-Tasks (Importance + Gain ratio + derived Priority)
+<!-- session:a17f632c-3e7c-475c-b1cb-0b9c030e41d7 -->
+
+**Request:** "From now on, every time you file a Notion ticket, file it with a priority" — plus suggest how, and a priority system. Evolved through pushback into a full three-field data-model design.
+
+**What was designed (not yet built — awaiting Erez's OK-to-build next session):**
+- **Importance** (select): Urgent / Not-urgent / Nice-to-have.
+- **Gain ratio** (select): 1 (best payoff — big gain for little effort) / 2 / 3 (worst). Confirmed 1 = best.
+- **Priority** (select, set by hand): Highest / High / Medium / Low — derived from a 9-cell Importance × Gain table (monotonic; "Highest" only for Urgent + Gain 1; Urgent never < High; Nice-to-have never > Medium). Manual, not a formula field, because a Notion formula outputs plain text, not a coloured/groupable select.
+
+**How the design converged:** started as a single-field urgency scale → Erez added gain÷effort → /check panel killed the literal division as "fake precision" (rewrote as plain Steal/Middling/Trap verdicts) → Erez restructured into three separate fields with a derived Priority → verified formula-field constraint → landed on manual select + 9-cell table. Each stage ran through /suggest + /check (all converged, mostly ≤2 rounds).
+
+**Tickets filed:**
+- **GEN-512** (Medium) — Build three-field priority model in Team-Tasks. Self-contained build spec: field definitions, 9-cell table, data-source ID, MCP DDL how-to, the one open build decision (repurpose existing Priority field vs. build fresh), acceptance criteria. Parented to GEN-86.
+- **GEN-513** (Low) — Encode the three-field priority system as a global CLAUDE.md rule. Depends on GEN-512; must go through /vet-rule; flags the redundancy risk vs. the existing "draft the full proposal … priority …" rule (likely extend it, not add a new rule). Parented to GEN-86, cross-linked to GEN-512.
+
+**Fixed during wrap-verify:** GEN-512's "Parent item" had been set to GEN-513 by the sibling-relation write (single-value relation collision); corrected back to the GEN-86 epic and re-verified.
+
+**Unresolved items filed: none** (both follow-ups GEN-512/513 filed mid-session; no new items surfaced at wrap).
+
+**Reversals judged: 1 learning, 1 non-learning.**
+- Learning (logged to GEN-58, Class D recurrence of the GEN-444 element, seen 2x): leaned "auto-computed Priority" as a pickable option before verifying a Notion formula can't output a coloured select — Erez's "Are you sure?" surfaced it; capability asserted before verification.
+- Non-learning: two exhaustiveness overstatements ("the only downside", "the only thing left") were caught by the claim-linter hook in-turn and corrected before reaching a decision — the wired trigger already enforces it, so no new rule/ticket.
+
+**Dropped learnings: none.**
+
+---
+
 ## 2026-07-20 (6) — /wrap learning-capture: reversal-capture rule + near-duplicate dedupe
 <!-- session:ef5b356b-15d1-4b39-892f-67b563d5b8f1 -->
 
