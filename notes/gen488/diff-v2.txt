@@ -1,0 +1,269 @@
+﻿diff --git "a/C:\\Users\\Erez\\.claude\\hooks\\auto-approve.js" "b/C:\\Users\\Erez\\AppData\\Local\\Temp\\claude\\C--Users-Erez-AI-Projects-Improve-AI-Infra\\e3e00658-0915-4262-a1f9-0dd412ee3cee\\scratchpad\\auto-approve.gen488.js"
+index 4d7aadc..426eb0d 100644
+--- "a/C:\\Users\\Erez\\.claude\\hooks\\auto-approve.js"
++++ "b/C:\\Users\\Erez\\AppData\\Local\\Temp\\claude\\C--Users-Erez-AI-Projects-Improve-AI-Infra\\e3e00658-0915-4262-a1f9-0dd412ee3cee\\scratchpad\\auto-approve.gen488.js"
+@@ -24,6 +24,7 @@
+  */
+ 
+ const fs = require('fs');
++const os = require('os');
+ const path = require('path');
+ 
+ const HOOK_DIR = __dirname;
+@@ -69,8 +70,25 @@ function approve(reason) {
+   process.exit(0);
+ }
+ 
+-function defer() {
+-  // No output => normal permission flow (allow-list / prompt) applies.
++function defer(additionalContext) {
++  // No decision output => normal permission flow (allow-list / prompt) applies.
++  // GEN-488: an optional advisory string may ride along. additionalContext is a
++  // documented PreToolUse field that injects text into the model's context WITHOUT
++  // reporting a permission decision, so the flow is identical to a silent exit
++  // (same channel inject-shell-refs.js uses). Only the SHELL_TOOLS defer passes an
++  // argument; every other call site stays argument-less (behavior unchanged).
++  if (typeof additionalContext === 'string' && additionalContext !== '') {
++    try {
++      process.stdout.write(JSON.stringify({
++        hookSpecificOutput: {
++          hookEventName: 'PreToolUse',
++          additionalContext: additionalContext
++        }
++      }));
++    } catch (e) {
++      // Advisory only -- never let the nudge break a defer.
++    }
++  }
+   process.exit(0);
+ }
+ 
+@@ -134,6 +152,9 @@ const SHELL_TOOLS = new Set(['Bash', 'PowerShell']);
+ // (Symlinks inside a root pointing outside it are NOT dereferenced -- a known
+ // low-risk gap requiring deliberate symlink creation.)
+ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit']);
++// NOTE (GEN-488): classifyNudgeParent selects the 'ai projects' entry below by
++// name-match as the projects CONTAINER root. If this list is renamed or restructured,
++// update that selector too (it fails open: no match -> that nudge clause silently no-ops).
+ const PROJECT_ROOTS = ['c:\\users\\erez\\ai projects\\', 'c:\\users\\erez\\memorypirates\\'];
+ const SECRET_EXTS = new Set(['.pem', '.key', '.pfx', '.p12', '.jks', '.keystore']);
+ const EDITS_LOG = path.join(HOOK_DIR, 'auto-approved-edits.jsonl');
+@@ -856,6 +877,12 @@ function vettingTargets(tool, ti, command, cwd) {
+     // design's fail-safe stance means anything we DON'T confidently identify as a write falls through
+     // to a normal prompt -- never a silent approve, and never a spurious hard block. Recognized
+     // write-destination patterns (PowerShell + POSIX), each capturing the destination path token:
++    // NOTE (GEN-488): three of these patterns (redirect, PS content-writers, .NET
++    // writers -- NOT move/copy) are duplicated VERBATIM in redirectNudgeContext --
++    // BY DESIGN, not for refactoring into a shared helper: this vetting gate is a
++    // security mechanism and must stay independent of that advisory feature. A change
++    // here does not propagate there (and must not); the nudge's -o/--output pattern
++    // is nudge-only and must NOT be added here.
+     const destPatterns = [
+       /(?:^|[\s;&|(])>>?\s*("([^"]+)"|'([^']+)'|([^\s;&|)]+))/g,                 // > file / >> file (redirect)
+       /\b(?:Set-Content|Add-Content|Out-File|Tee-Object)\b[^\n]*?(?:-(?:Path|FilePath|LiteralPath)\s+)?("([^"]+)"|'([^']+)'|([^\s;&|)]+))/gi, // PS content-writers
+@@ -1225,6 +1252,190 @@ function findCheckPassFile(matchFn, exclude) {
+   return null;
+ }
+ 
++// ---- GEN-488: advisory redirect-target nudge (prevention, NOT a safety mechanism) ----
++// Fires a one-line additionalContext warning when a shell command's redirect target
++// LITERALLY resolves to a junk-prone directory (GEN-373 evidence: top-level strays):
++// directly in the home dir, directly in a PROJECT_ROOTS entry, or directly in an
++// individual project folder (a direct child of the 'ai projects' container entry).
++// It rides on the SHELL_TOOLS defer (see defer()) and can never change an
++// approve/defer/block decision. Best-effort literal parse only -- accepted misses
++// (variable-built paths, here-strings/multi-line, no-space redirects like `echo hi>f`,
++// piped Export-*, move/copy destinations, staging/vetting pass-consumption approves)
++// are design-approved.
++// Fail-open is absolute: ANY uncertainty or internal error returns null (no warning).
++
++// Quoted-span scanner for the nudge. Returns an array of [start, end) index spans of
++// quoted regions, or null when quoting is unbalanced/uncertain (caller then skips the
++// nudge entirely -- fail open). A simplified SIBLING of scanChain's quote state
++// machine, deliberately NOT a modification or reuse of scanChain (that function is
++// security-critical -- mixed-chain block + staging/vetting smuggle-hole guards -- and
++// only exposes unquoted text for CHAINED verdicts; blanking-based reuse would also
++// blank quoted PATHS like "> \"C:\\Users\\Erez\\out file.txt\"", which the nudge must
++// still see). Wrong-span error modes here can only suppress or skip a warning, never
++// alter a decision.
++function quotedSpansForNudge(s, tool) {
++  const isPS = (tool === 'PowerShell');
++  const spans = [];
++  let state = 'none'; // none | sq | dq
++  let start = -1;
++  for (let i = 0; i < s.length; i++) {
++    const c = s[i];
++    const d = (i + 1 < s.length) ? s[i + 1] : '';
++    if (state === 'sq') {
++      if (c === "'") {
++        if (isPS && d === "'") { i++; continue; } // PS: doubled '' = literal quote
++        spans.push([start, i + 1]); state = 'none';
++      }
++      continue;
++    }
++    if (state === 'dq') {
++      if (!isPS && c === '\\') { i++; continue; }              // bash: \ escapes next
++      if (isPS && c === '`') { i++; continue; }                // PS: ` escapes next
++      if (isPS && c === '"' && d === '"') { i++; continue; }   // PS: doubled "" = literal
++      if (c === '"') { spans.push([start, i + 1]); state = 'none'; }
++      continue;
++    }
++    // state === 'none'
++    if (!isPS && c === '\\') { i++; continue; }  // bash: escaped char outside quotes
++    if (isPS && c === '`') { i++; continue; }    // PS: escaped char outside quotes
++    if (c === "'") { state = 'sq'; start = i; continue; }
++    if (c === '"') { state = 'dq'; start = i; continue; }
++  }
++  return state === 'none' ? spans : null; // unbalanced quote -> uncertain -> null
++}
++
++// Best-effort absolute path of the CURRENT session's scratchpad, derived at fire time
++// (never hardcoded/stale): <tmp>\claude\<slug>\<session_id>\scratchpad, where slug is
++// the project dir with every non-alphanumeric char replaced by '-'. Named in the
++// warning only if it actually exists on disk; otherwise a generic phrase -- a wrong
++// path would misdirect, a generic one cannot.
++function scratchpadHintForNudge(input) {
++  try {
++    const base = process.env.CLAUDE_PROJECT_DIR || (input && input.cwd) || '';
++    const sid = (input && typeof input.session_id === 'string') ? input.session_id : '';
++    if (base && sid) {
++      const slug = String(base).replace(/[^A-Za-z0-9]/g, '-');
++      const cand = path.join(os.tmpdir(), 'claude', slug, sid, 'scratchpad');
++      if (fs.existsSync(cand)) return cand;
++    }
++  } catch (e) {
++    // fall through to the generic phrase
++  }
++  return 'the session scratchpad directory';
++}
++
++// Classify a resolved parent dir (lowercased backslash form) as a junk-prone location
++// phrase, or null. Parent-dir-EXACT matching, deliberately NOT subtree: a subtree match
++// would warn on every legitimate deep write (AppData, .claude, project subfolders) and
++// erode trust in the nudge. PROJECT_ROOTS semantics differ per entry: 'ai projects\' is
++// a CONTAINER of project folders (so a stray lands depth-1 under it), while
++// 'memorypirates\' IS a repo root itself -- the direct-child clause applies only to the
++// container entry. If the container entry is ever renamed/removed, containerRoot is
++// null and that clause silently no-ops (fail open).
++function classifyNudgeParent(parent, home) {
++  if (parent === home) return 'the home directory';
++  const containerRoot = PROJECT_ROOTS.find(r => r.indexOf('\\ai projects\\') !== -1) || null;
++  for (const root of PROJECT_ROOTS) {
++    if (parent + '\\' === root) {
++      return root === containerRoot ? 'the AI Projects folder' : 'a project root';
++    }
++  }
++  if (containerRoot && parent.indexOf(containerRoot) === 0 &&
++      parent.slice(containerRoot.length).indexOf('\\') === -1) {
++    return 'a project root'; // direct child of the container = an individual project folder
++  }
++  return null;
++}
++
++// The nudge itself. Returns the one-line advisory string, or null (= say nothing).
++// Called ONLY on the SHELL_TOOLS defer path in main(), after every guard and approve
++// carve-out has already had its say -- it decorates a defer that is already happening.
++function redirectNudgeContext(input, tool, cmd) {
++  try {
++    if (typeof cmd !== 'string' || cmd === '') return null;
++    // Single-line only: heredoc/here-string bodies carry arbitrary prose in which '>'
++    // shapes are common (commit messages etc.) -- unparseable, so say nothing.
++    if (/[\r\n]/.test(cmd)) return null;
++    const spans = quotedSpansForNudge(cmd, tool);
++    if (spans === null) return null; // unbalanced/uncertain quoting -> no nudge
++    // Spans ascend, so stop scanning once a span starts past idx.
++    const insideSpan = idx => {
++      for (const sp of spans) {
++        if (sp[0] > idx) return false;
++        if (idx < sp[1]) return true;
++      }
++      return false;
++    };
++    // Destination patterns: the first three are duplicated VERBATIM from vettingTargets'
++    // destPatterns -- duplicated BY DESIGN, do not refactor into a shared helper: the
++    // vetting gate is a security mechanism and must stay independent of this advisory
++    // feature (see the matching comment in vettingTargets). vettingTargets' move/copy
++    // pattern is deliberately NOT used here: the ticket's scope is output REDIRECTION
++    // (> >> -o Out-File), and mv/cp destinations are routinely directories
++    // ("Copy-Item x C:\Users\Erez\Downloads"), which this file-target geometry would
++    // misread as home-dir strays -- a recurring FALSE warning, the one failure mode an
++    // advisory nudge must not have. The last (-o/--output) pattern is nudge-only and
++    // must NOT be added to the vetting gate.
++    const destPatterns = [
++      /(?:^|[\s;&|(])>>?\s*("([^"]+)"|'([^']+)'|([^\s;&|)]+))/g,                 // > file / >> file (redirect)
++      /\b(?:Set-Content|Add-Content|Out-File|Tee-Object)\b[^\n]*?(?:-(?:Path|FilePath|LiteralPath)\s+)?("([^"]+)"|'([^']+)'|([^\s;&|)]+))/gi, // PS content-writers
++      /\[IO\.File\]::(?:WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText)\(\s*("([^"]+)"|'([^']+)')/gi, // .NET writers
++      /(?:^|\s)(?:-o|--output)\s+("([^"]+)"|'([^']+)'|([^\s;&|)]+))/g,           // curl/wget-style -o (nudge-only)
++    ];
++    const OUTPUT_FLAG_PATTERN = 3; // index of the -o/--output pattern (see its guard below)
++    const home = normPath(path.join(HOOK_DIR, '..', '..')); // c:\users\erez
++    const cwd = (input && typeof input.cwd === 'string' && input.cwd) ? input.cwd : null;
++    for (let pi = 0; pi < destPatterns.length; pi++) {
++      const re = destPatterns[pi];
++      let t;
++      while ((t = re.exec(cmd)) !== null) {
++        // Reject a match that starts inside a quoted span: a '>' (or cmdlet name)
++        // inside a quoted string is prose, not a redirect ("fix a > b", jq '.x > 5').
++        // For the redirect pattern a span boundary cannot sit between the match start
++        // and the '>' (the char immediately before '>' must be an unquoted boundary
++        // char, and a span's last char is always a quote), so match-start is a safe
++        // proxy for the operator position.
++        if (insideSpan(t.index)) continue;
++        const wasQuoted = !!(t[2] || t[3]);
++        let tok = (t[2] || t[3] || t[4] || t[1] || '');
++        if (!tok) continue;
++        tok = tok.toLowerCase();
++        // Skip tokens that cannot be literal paths: variables/expansions, flags
++        // mis-captured by the lazy cmdlet pattern, null sinks, fd dups.
++        if (tok.indexOf('$') !== -1 || tok.indexOf('%') !== -1) continue;
++        if (tok.charAt(0) === '-') continue;
++        if (tok === 'nul' || /^\/dev\//.test(tok)) continue;
++        if (/^&\d/.test(tok)) continue;
++        // -o/--output is also a generic option flag ("set -o pipefail",
++        // "ssh -o Option=val"); require a path-shaped operand (separator or dot)
++        // before treating it as an output file.
++        if (pi === OUTPUT_FLAG_PATTERN && !/[\\/.]/.test(tok)) continue;
++        if (tok.charAt(0) === '~') {
++          // Expand only a BARE ~/x or ~\x (the Bash tool's home shorthand). A QUOTED
++          // tilde is literal in bash (no expansion happens), and ~user/... or bare ~
++          // are not literal-path shapes we can resolve -- skip those.
++          if (wasQuoted || (tok.indexOf('~/') !== 0 && tok.indexOf('~\\') !== 0)) continue;
++          tok = home + '\\' + tok.slice(2);
++        }
++        // Without a known shell cwd a RELATIVE token would resolve against the hook
++        // process's own cwd -- a path the command will not write. Absolute-only then.
++        if (!cwd && !path.isAbsolute(tok)) continue;
++        const key = normForMatch(tok, cwd);
++        const where = classifyNudgeParent(path.dirname(key), home);
++        if (where) {
++          return 'Redirect nudge (advisory only -- this call is NOT blocked): its output target "' +
++            key + '" lands directly in ' + where + ', where stray output files become junk ' +
++            '(GEN-373). For temporary output, prefer the session scratchpad: ' +
++            scratchpadHintForNudge(input) + '.';
++        }
++      }
++    }
++    return null;
++  } catch (e) {
++    return null; // advisory only -- any uncertainty means no warning, never a break
++  }
++}
++
+ // ---- main ------------------------------------------------------------------
+ 
+ let raw = '';
+@@ -1276,8 +1487,13 @@ process.stdin.on('end', () => {
+     if (shellCommandIsSafe(cmd)) return approve('Auto-approved: read-only shell command(s)');
+     // GEN-337(e): hard-block a mixed-risk chain (exits 2) or fall through to the prompt.
+     blockMixedChain(input, tool, cmd);
++    // GEN-488: advisory redirect-target nudge rides on this defer. It runs strictly
++    // AFTER every guard and approve carve-out, so it can never alter a decision;
++    // belt-and-suspenders try/catch at the call site on top of the function's own.
++    let nudge = null;
++    try { nudge = redirectNudgeContext(input, tool, cmd); } catch (e) { nudge = null; }
+     logDeferred(input);
+-    return defer();
++    return defer(nudge);
+   }
+ 
+   // GEN-223: auto-approve /check's read-only reviewer sub-agents (no prompt, no log noise).
