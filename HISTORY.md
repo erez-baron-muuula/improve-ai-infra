@@ -5,6 +5,7 @@
 2026-07-20 (2): GEN-435 shipped — automatic checkpoint-2 antivirus-survival re-check via per-change scheduled task (vet-code SKILL.md Step 8a); first design rejected by /check for over-building past the gen430 precedent; logged GEN-58 Class D; filed GEN-496 <!-- toc-session:3f565e11-60f8-470a-abac-94958fc95867 -->
 2026-07-20 (3) — **GEN-488 prevention nudge built + fully vetted (3-round /check, dual Fable 5 code review, 22/22 live-verify); concurrent GEN-485 install near-collision caught and rebased; apply paused at Erez approval with full handoff in notes/gen488/; filed GEN-498/499/500.** <!-- toc-session:e3e00658-0915-4262-a1f9-0dd412ee3cee -->
 2026-07-20 (4) — **GEN-484 signal-surfacing learning shipped as a rule + skill enforcement (new global CLAUDE.md rule + /suggest 4a citation + /check lens lines, all vetted via /vet-rule); hook deferred to GEN-501 sub-item, learning GEN-502 filed. Opus 4.8, medium→low.** <!-- toc-session:be9a9457-dc37-43c6-a6e2-ca7a1911d9d0 -->
+2026-07-20 (4) — **GEN-484 DONE: signal-surfacing learning shipped as a rule + skill enforcement (new global CLAUDE.md rule + /suggest 4a citation + /check lens lines, all vetted via /vet-rule); hook enforcer deferred to GEN-501 sub-item, learning GEN-502 filed. Opus 4.8, medium→low.** <!-- toc-session:be9a9457-dc37-43c6-a6e2-ca7a1911d9d0 -->
 - 2026-07-19 (5) — **GEN-373 report-only junk-detection sweep shipped (Zone A project-roots + Zone B home-dir, deletes nothing) via full /vet-code; GEN-373 → In Progress; filed GEN-487/488/489 for the timer, prevention nudge, and graduation-to-acting.** <!-- toc-session:4202016a-d2ba-4e5e-b123-1db8077f95fc -->
 - 2026-07-19 (6) — **GEN-218 Parts 2–4 shipped: cross-session HISTORY.md race closed at every write path (/wrap, /loghistory, project CLAUDE.md via the locked appender) + /wrap git hygiene; deploy.ps1 excluded by design. GEN-218 → Review; filed GEN-485, GEN-486.** <!-- toc-session:d04f9e41-50bf-4606-b0f1-1c7c1e581c1f -->
 - 2026-07-19 (5) — GEN-473 effort safety-net evaluated (3-lens /check); recommended don't-build, Erez kept it parked <!-- toc-session:f1d1ff36-1bce-4faf-882e-bf984e6d8c11 -->
@@ -156,7 +157,7 @@
 
 **Unresolved items filed:** GEN-501, GEN-502.
 
-**GEN-484 status:** rule + skill enforcement shipped; only the (optional) hook remains, captured in GEN-501. Status pending Erez's Done-vs-keep-open call given the hook go/no-go is still open.
+**GEN-484 status:** DONE (Erez moved it to Done at end of session). Rule + skill enforcement shipped and verified live; the optional hook enforcer lives on separately as GEN-501 (build go/no-go still open). Title/description re-checked against what shipped — still accurate, no rewrite needed.
 
 ---
 
