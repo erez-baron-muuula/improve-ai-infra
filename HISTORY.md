@@ -11,6 +11,7 @@
 2026-07-20 (5) — Silence-on-success self-audit narration ban shipped to global CLAUDE.md (3-round /check, applied via /vet-rule); enforcement deferred to GEN-507 <!-- toc-session:1479d958-a207-433e-97e5-66e7f895b6c1 -->
 2026-07-20 (5) — GEN-495 shipped: mechanical-lane hardening — in-fence whitespace edits now gated + mechanical fixes defer to confirmation instead of silent auto-approve; full /vet-code; GEN-58 Class D logged; filed GEN-509 <!-- toc-session:3f1294e4-4de3-4a01-ad17-b568ddce3184 -->
 [2026-07-20 (8)](#2026-07-20-8-three-field-priority-system-designed-for-team-tasks-importance--gain-ratio--derived-priority): Three-field priority system (Importance + Gain ratio + derived Priority) designed for Team-Tasks; GEN-512 (build) + GEN-513 (rule) filed, not yet built. <!-- toc-session:a17f632c-3e7c-475c-b1cb-0b9c030e41d7 -->
+GEN-491 duplicate check — closed as substantially addressed (core fix shipped; GEN-508 carries the remaining hard-gate branch) <!-- toc-session:10630fe6-cfe2-4a89-baf6-8eec1084bef9 -->
 - 2026-07-20 (6): /wrap learning-capture — reversal-capture rule + near-duplicate dedupe sub-step (both vetted via /check + /vet-rule); GEN-511 filed <!-- toc-session:ef5b356b-15d1-4b39-892f-67b563d5b8f1 -->
 - [2026-07-20 (7)](#2026-07-20-7-gen-501-signal-surfacing-enforcer-shipped): GEN-501 signal-surfacing enforcer shipped — two hooks (PostToolUse detector + Stop deliverer) + /wrap Step 3b, through the full /vet-code gate. <!-- toc-session:38697241-76cc-4c83-92d5-ee55cbbbf46d -->
 - 2026-07-20 (5) — **Ticket-completeness bar added to the global ticket-drafting rule** (drafted bodies must stand alone; killed a skill-homed first attempt, fixed a GEN-58-exception conflict + a line-155 hardcoded-ticket-number slip; filed GEN-508) <!-- toc-session:00aa7395-bfef-4f57-8701-de4d229807eb -->
@@ -141,6 +142,27 @@
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-07-20 (9) — GEN-491 duplicate check → closed as substantially addressed
+<!-- session:10630fe6-cfe2-4a89-baf6-8eec1084bef9 -->
+
+**Request:** "is gen 491 a duplicate?"
+
+**What was done:**
+- Looked up [GEN-491](https://app.notion.com/p/3a36e495d07c81959905d41033f341b8) ("Tickets/Claude files lack self-contained context (recurring) — design a fix") via the Credential Manager REST path, and searched Team-Tasks for same-theme tickets.
+- Found close overlap with [GEN-508](https://app.notion.com/p/3a36e495d07c81fb9a55ddc315639c7f) ("Add a structural ticket-creation gate enforcing the completeness bar"), filed later the same day. Assessment: GEN-491 is the parent problem ("design the fix, pick the enforcer"); its core question was already resolved by a later session that shipped a **completeness-bar rule** into the global CLAUDE.md (verified live at line 59), and GEN-508 carries the one remaining branch (an optional hard structural gate). Not an exact duplicate but substantially overtaken.
+- Recommended closing GEN-491; Erez approved.
+- Re-read both ticket bodies live via REST (earlier notion-fetch reads were stale snapshots per GEN-377), added a dated **"Resolution (closed 2026-07-20)"** section to GEN-491 pointing to GEN-508, and set GEN-491 Status → **Done**. Both writes verified live (body section present; Status select = "Done").
+
+**Decisions:** Close GEN-491 rather than leaving both open; keep GEN-508 as the single live follow-up on this theme.
+
+**Reversals judged non-learning:** claim-linter flagged that I stated GEN-508 had shipped the completeness-bar rule from a stale ticket-body snapshot before verifying the live global CLAUDE.md; self-corrected in-session by verifying line 59. Already covered by the existing "verify before asserting" rule (which the linter enforces and which fired) — not a new enforceable learning; no ticket.
+
+**Unresolved items filed:** none.
+
+**Follow-ups:** GEN-508 remains open (build the hard gate only if the behavioral rule proves insufficient over the next several tickets).
+
+---
+
 ## 2026-07-20 (8) — Three-field priority system designed for Team-Tasks (Importance + Gain ratio + derived Priority)
 <!-- session:a17f632c-3e7c-475c-b1cb-0b9c030e41d7 -->
 
