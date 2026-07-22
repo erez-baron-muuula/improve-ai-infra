@@ -21,6 +21,7 @@ GEN-518 -> Done: /vet-rule Step 4 evidence check repointed at the real sub-agent
 2026-07-22 — GEN-507 self-audit-narration enforcer built, vetted (Opus-A/Fable-B), shipped; GEN-540 follow-up filed, learning merged into GEN-422 <!-- toc-session:09a8d93b-b759-46ea-9048-e7eea942692b -->
 2026-07-22 — GEN-507 self-audit-narration enforcer built, vetted (Opus-A/Fable-B), shipped; GEN-540 follow-up filed, learnings into GEN-422 + notion ref <!-- toc-session:09a8d93b-b759-46ea-9048-e7eea942692b -->
 GEN-432 found already shipped (Step 4a/8a in SKILL.md, shipped 2026-07-15); stale-in-Backlog recommendation → Erez set Done; nothing built. <!-- toc-session:b7d664c5-fd57-4b39-8b34-1fda0448de34 -->
+Priority model redesigned (Gain ratio → base, Urgent bumps up floored at High; Importance→Urgency, Nice-to-have dropped); rule shipped, board changes deferred to GEN-543. <!-- toc-session:82b6a3a8-fcbb-40f8-af2d-c728e189a092 -->
 - 2026-07-22 (2) — GEN-422 verified & split (GEN-422 Blocked + GEN-535 Done); GEN-536→Wont Do; GEN-537, GEN-539 filed; wrong-folder misfiling corrected; GEN-541 filed then folded into GEN-508; priority-derivation miss recurred + fixed <!-- toc-session:df8d3cd5-3798-47a2-a2cc-e39175dcfb2e -->
 - [2026-07-21 (2)](#2026-07-21-2--priority-field-backfill-on-gen-86--priority-model-gaps--gen-254-sort-diagnosis) — GEN-86 priority backfill (72/155, 83 left, resume GEN-296 via GEN-534); GEN-520/523/532/534 filed; GEN-254 sort = parent-nesting; GEN-58 Class-D logged <!-- toc-session:f2305e83-4be2-432e-b48d-6f49b88b9591 -->
 - [2026-07-21 (2)](#2026-07-21-2--gen-520-design-planning-only-nothing-built--handoff) — GEN-520 designed to a settled decision (Option 1: a rule, not a hook; deny can't override the allow-list); nothing built; GEN-529 filed; handoff on GEN-520. <!-- toc-session:e5b95d3b-820b-4a46-ae80-c1f837d578db -->
@@ -162,6 +163,13 @@ GEN-432 found already shipped (Step 4a/8a in SKILL.md, shipped 2026-07-15); stal
 
 2026-07-22 (3) — GEN-432 (antivirus check for vet-code background-launch changes) found already shipped — no plan to make. Verified against SKILL.md (Step 4a/8a present) + git (shipped 2026-07-15 "Option A"; follow-up GEN-435 shipped 2026-07-20); all three ticket open-questions resolved in what shipped. Ticket was stale in Backlog; recommended Done, Erez set it to Done manually. Unresolved items filed: none.
 <!-- session:b7d664c5-fd57-4b39-8b34-1fda0448de34 -->
+
+---
+
+2026-07-22 (2) — **Priority model redesigned: Gain ratio → base priority, Urgent bumps up (floored at High); Importance renamed to Urgency, Nice-to-have dropped. Rule shipped; board changes deferred.** Erez first asked for a real calculated gain÷effort ratio (gain = time+tokens+risk→minutes, effort = build-time+tokens); /check killed it — all 3 lenses independently found notes/roi-triage.md, this project's own 2026-06-24 converged decision against exactly that blended dimensionally-unsound score. Logged as GEN-58 Class P recurrence (seen 2x). Erez then chose to keep the judgment-based 1–3 Gain ratio with two changes: (1) Importance→Urgency, two levels only (Urgent/Not-urgent), Nice-to-have removed + migrate; (2) Gain ratio sets base (1→High/2→Medium/3→Low), Urgent raises it with a floor of High (Urgent: Gain1→Highest else High). Rule change vetted via /vet-rule (round-2 /check converged after the urgent-floor decision; reviewers simplified the wording to a direct statement) and applied to 3 files: hooks/refs/notion.md derivation bullet, global CLAUDE.md field rename (0 "Importance" left), memory/gen86-priority-backfill.md synced. All 3 writes exit 0 + verified by hash. BOARD changes (rename column, dedupe the two mirrored Gain-ratio columns, retire Nice-to-have option, recompute open tickets Option A) deferred to GEN-543. Live schema facts captured: Priority = Highest/High/Medium/Low (no Lowest); 490 tickets total, 251 open; only 16 carry Nice-to-have; two mirrored Gain-ratio columns (0 conflicts across 177). Opus 4.8, high.
+<!-- session:82b6a3a8-fcbb-40f8-af2d-c728e189a092 -->
+Unresolved items filed: GEN-543 (apply board changes), GEN-544 (make /suggest prior-art actually search notes/), GEN-545 (disambiguate short numeric/index replies — classification uncertain)
+Reversals judged non-learning: none beyond the two filed (GEN-544/545).
 
 ---
 
