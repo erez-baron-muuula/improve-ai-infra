@@ -24,6 +24,7 @@ GEN-432 found already shipped (Step 4a/8a in SKILL.md, shipped 2026-07-15); stal
 [2026-07-22 (3)](#) — GEN-540 shipped: self-audit-nudge readout wired into /wrap as Step 3c (auto-files a detector-review ticket on the dead arm), via /vet-rule; GEN-58 Class-D logged <!-- toc-session:159e853c-5905-4d59-8785-df530306999b -->
 [2026-07-22 (4)](#2026-07-22-4--gen-537-tight-scope-claim-linter-hardening-shipped-via-vet-code): GEN-537 shipped — 4 Class B verify-miss patterns added to the claim-linter (already-filed/still-status/renders-cleanly/it's-done); "is now Done" excluded per Erez; one code-review pass short (desktop) with logged deviation; → Review. Filed GEN-542/546/547. <!-- toc-session:5aebf992-74cd-4dc3-bcae-b64cc936e46d -->
 Priority model redesigned (Gain ratio → base, Urgent bumps up floored at High; Importance→Urgency, Nice-to-have dropped); rule shipped, board deferred to GEN-543; post-wrap corrections + GEN-548/549/550 filed. <!-- toc-session:82b6a3a8-fcbb-40f8-af2d-c728e189a092 -->
+- [2026-07-23](#2026-07-23--gen-462-break-glass-reaper-kernel-free-shipped) — GEN-462 shipped: kernel-free break-glass reaper (silent on success, alarms only on a stuck sentinel); filed GEN-552/553/555. <!-- toc-session:51e49b74-c9a4-43aa-95d4-753cf59576dc -->
 - 2026-07-22 (2) — GEN-422 verified & split (GEN-422 Blocked + GEN-535 Done); GEN-536→Wont Do; GEN-537, GEN-539 filed; wrong-folder misfiling corrected; GEN-541 filed then folded into GEN-508; priority-derivation miss recurred + fixed <!-- toc-session:df8d3cd5-3798-47a2-a2cc-e39175dcfb2e -->
 - [2026-07-21 (2)](#2026-07-21-2--priority-field-backfill-on-gen-86--priority-model-gaps--gen-254-sort-diagnosis) — GEN-86 priority backfill (72/155, 83 left, resume GEN-296 via GEN-534); GEN-520/523/532/534 filed; GEN-254 sort = parent-nesting; GEN-58 Class-D logged <!-- toc-session:f2305e83-4be2-432e-b48d-6f49b88b9591 -->
 - [2026-07-21 (2)](#2026-07-21-2--gen-520-design-planning-only-nothing-built--handoff) — GEN-520 designed to a settled decision (Option 1: a rule, not a hook; deny can't override the allow-list); nothing built; GEN-529 filed; handoff on GEN-520. <!-- toc-session:e5b95d3b-820b-4a46-ae80-c1f837d578db -->
@@ -187,6 +188,27 @@ Priority model redesigned (Gain ratio → base, Urgent bumps up floored at High;
 
 Unresolved items filed: GEN-543 (apply board changes), GEN-544 (make /suggest prior-art actually search notes/), GEN-545 (disambiguate short numeric/index replies — classification uncertain), GEN-548 (signal-surface reconcile re-reports a manually-surfaced detect every wrap), GEN-549 (set priority fields on every Team-Tasks ticket at filing time), GEN-550 (route all HISTORY.md edits through the appender)
 Reversals judged non-learning: none (all post-wrap reversals became GEN-58 traces + forward tickets/ref append). Dropped learnings: none. Opus 4.8, high.
+
+---
+
+## 2026-07-23 — GEN-462: break-glass reaper (kernel-free) shipped
+<!-- session:51e49b74-c9a4-43aa-95d4-753cf59576dc -->
+
+**Shipped (GEN-462 → Done).** Built and installed a new SessionStart hook, `sessionstart-configunlock-reaper.js`, that makes the `.config-unlock` break-glass unable to *silently* persist across sessions. At each session start it reaps any `.config-unlock` sentinel not backed by a valid unexpired token in `~/.claude-staging/config-unlock-passes/`, staying **silent on success** (legitimate open, or self-healed reap) and surfacing a loud alarm **only** when an unaccountable sentinel can't be deleted. The security kernel `configUnlocked()` was left byte-for-byte unchanged (verified). Trust anchor is *location* (token in the prompt-forced `~/.claude-staging` sibling), not crypto.
+
+**Design journey (long, several reversals — see learnings).** Went through many `/check` rounds: v1 surfacer → v2 kernel-free expiry → v3 age-only (rejected: false-certainty) → v4 provenance record (rejected: forgeable + not atomic) → "option 2" unforgeable/kernel-editing (Erez chose it, then the panel + Claude found the malicious-forger threat doesn't apply to a single-user local tool) → **final kernel-free location-anchored reaper**. Erez then set the operating principle: *"you handle things on your own; when successful, silence; when there's a problem, involve me"* — which resolved the last open design question (no routine "gate open" note).
+
+**Build (via `/vet-code`):** design `/check` converged; two independent code-review passes (cold sub-agent PASS + high-effort in-session pass) — both advisories folded in (fail-toward-showing outer catch; `process.exitCode` flush idiom); live-verify 23/23 across 8 scenarios (absent / valid-token-preserved / expired / no-token / empty-dir / bad-json / numeric-expires / undeletable-alarm); regression: 3 existing SessionStart hooks untouched. Not a background-launch change → no antivirus arming. Two vetting passes minted (hook file + settings.json registration), Erez-approved; applied; install verified byte-identical; kernel confirmed unchanged.
+
+**Notion:**
+- GEN-462 → Done (verified via REST).
+- Filed GEN-552 (Urgent · Highest 🔥) — legitimate flows must write the reaper's accountability token so a real break-glass survives a session boundary; GEN-553 (Not-urgent · High) — add the reaper hook to `sync.ps1` backup set (surfaced by a BACKUP-COVERAGE warning on install). Both under GEN-86, cross-linked.
+
+**Learnings.** Unresolved items filed: GEN-555.
+Reversals judged non-learning: none (the one substantive reversal — over-engineering toward the inapplicable malicious-forger threat, and under-weighting the token-survival downside until Erez's "why isn't this urgent?" — IS filed as GEN-555, and was logged live on GEN-58).
+Dropped learnings: none.
+
+**Follow-ups open:** GEN-552 (token-survival, urgent), GEN-553 (backup the hook), GEN-555 (reasoning-pattern candidate). GEN-552's `/vet-rule` doc work + GEN-553's `sync.ps1` `/vet-code` edit are the concrete next tasks.
 
 ---
 
