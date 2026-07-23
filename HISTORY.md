@@ -26,6 +26,7 @@ GEN-432 found already shipped (Step 4a/8a in SKILL.md, shipped 2026-07-15); stal
 Priority model redesigned (Gain ratio → base, Urgent bumps up floored at High; Importance→Urgency, Nice-to-have dropped); rule shipped, board deferred to GEN-543; post-wrap corrections + GEN-548/549/550 filed. <!-- toc-session:82b6a3a8-fcbb-40f8-af2d-c728e189a092 -->
 GEN-428 shipped (both parts): sync.ps1 broadened to back up per-project memory (full /vet-code); recall-split resolved as housekeeping (3 redundant memory files retired local+Drive); filed GEN-551/554/556 <!-- toc-session:5123fe33-a533-4dc1-9bef-34adacadfaaf -->
 GEN-543 done: new priority logic applied board-wide (Importance→Urgency, Nice-to-have retired, 12 priorities recomputed) + GEN-86 open-ticket backfill complete (79 tickets set, epics excluded); GEN-203 Done, GEN-288 deleted. <!-- toc-session:25a3ad9f-7c4b-4bbb-bd51-3b3a246ae0cd -->
+2026-07-23 (3) — GEN-467 duplicate/narrated "For you" block: root-caused, four design iterations, structural fix scoped + deferred to a future session (probe-first); filed GEN-557/GEN-558; GEN-58 Class D +2. <!-- toc-session:975eedc7-d9bd-48bf-b81e-7d2b10bac9fb -->
 - [2026-07-23](#2026-07-23--gen-462-break-glass-reaper-kernel-free-shipped) — GEN-462 shipped: kernel-free break-glass reaper (silent on success, alarms only on a stuck sentinel); filed GEN-552/553/555. <!-- toc-session:51e49b74-c9a4-43aa-95d4-753cf59576dc -->
 - 2026-07-22 (2) — GEN-422 verified & split (GEN-422 Blocked + GEN-535 Done); GEN-536→Wont Do; GEN-537, GEN-539 filed; wrong-folder misfiling corrected; GEN-541 filed then folded into GEN-508; priority-derivation miss recurred + fixed <!-- toc-session:df8d3cd5-3798-47a2-a2cc-e39175dcfb2e -->
 - [2026-07-21 (2)](#2026-07-21-2--priority-field-backfill-on-gen-86--priority-model-gaps--gen-254-sort-diagnosis) — GEN-86 priority backfill (72/155, 83 left, resume GEN-296 via GEN-534); GEN-520/523/532/534 filed; GEN-254 sort = parent-nesting; GEN-58 Class-D logged <!-- toc-session:f2305e83-4be2-432e-b48d-6f49b88b9591 -->
@@ -200,6 +201,36 @@ Reversals judged non-learning: none (all post-wrap reversals became GEN-58 trace
 
 2026-07-23 (2) — **GEN-543 DONE: new priority logic applied board-wide + GEN-86 open-ticket backfill complete (Opus 4.8).** Phase 2 schema (live-verified): renamed Team-Tasks `Importance`→`Urgency` (option IDs preserved, no filter breakage); migrated all 16 Nice-to-have tickets→Not-urgent then retired the Nice-to-have option (surviving option IDs unchanged). Phase 3 walk (Option A, mechanical): recomputed Priority on the 169 open tickets with both inputs — 12 changed (11 ex-Nice-to-have up a notch + GEN-538 Low→High, a pre-existing data error the rule fixed); fresh full re-read = 0 rule mismatches; 499 pages unchanged (no data loss). GEN-543 → Review, assigned Erez (one residual: saved-view-filter check the REST API can't inspect). Then, at Erez's direction, backfilled the 88 open tickets GEN-543 skipped for missing inputs, epics excluded (7 epics stay unset — they derive from children): 79 tickets set with Gain ratio + Urgency + derived Priority across 2 approved batches (all Not-urgent; Batch1 16H/15M/8L, Batch2 17H/19M/4L), every write read-back verified exact (0 mismatches). GEN-203 → Done (Erez's call, MD-3616 review work); GEN-288 was a blank ticket → Erez deleted it. GEN-86 body + the priority-backfill memory note updated to reflect the open-ticket sweep is complete. Reversals judged non-learning: GEN-203 close-over-my-objection (surfacing the outstanding To-do before closing was correct; Erez made an informed call — no reasoning slip). Unresolved items filed: none. Dropped learnings: none. ($PID read-only-var gotcha already covered in hooks/refs/shell.md — no append.)
 <!-- session:25a3ad9f-7c4b-4bbb-bd51-3b3a246ae0cd -->
+
+---
+
+## 2026-07-23 (3)
+<!-- session:975eedc7-d9bd-48bf-b81e-7d2b10bac9fb -->
+
+**Focus:** GEN-467 (duplicate/narrated "For you" block) — root-cause investigation, four design iterations, and a scoped handoff for the structural fix (deferred to a future session per Erez).
+
+**What happened.** Erez pasted a verification-walkthrough block Claude had emitted ("...filed, verified ✓ closed... Nothing to correct") and objected that these process-narration messages "drive him nuts" — the claim-linter was meant to catch unverified claims silently, not narrate its checking. Investigated: the narration issue is what GEN-507 (Done) was built to suppress; today's leak is a coverage gap in that detector → filed **GEN-557** (widen the self-audit detector to catch enumerated "done, verified ✓ / nothing to correct" walkthroughs), Backlog, with verbatim trigger text + counter-example + vetting-lock note.
+
+Then Claude emitted **two "For you" blocks back-to-back** (a block on a reply, then a second bare-correction block on the continuation). Erez asked which ticket had been meant to fix this and why it didn't. Found **GEN-467** (Bug, was Review). Its block-after-check convention (2026-07-19) handles corrections folded into a not-yet-sent block, but has only instruction-text (no structural guard) for a correction arriving AFTER the block already went out — today's exact case. GEN-467 reopened Review → **In Progress** and its pre-agreed escalation pursued.
+
+**Four design iterations (all via /check panels, all rejected → converged understanding):**
+1. v1 (marker-keyed instruction clause) — rejected: not structural, and already present verbatim in the shipped file (a no-op); trigger mis-reasoned (block rides the stop_hook_active continuation).
+2. v2 (loop-and-hold blocking hook, cap 3) — escalated: depends on 3 unverified harness behaviors (prompt_id stability across forced re-run; whether a hook can re-block while stop_hook_active; cross-hook stacking on intermediate passes). One reviewer wrongly claimed streaming defeats the un-narrated goal; a parallel reviewer DISPROVED it with a verbatim doc quote (decision:"block" "Blocks the response from being shown").
+3. v3 (/check-style orchestration loop, Erez's pointer) — settles all 3 v2 questions by making them moot (loop lives in the model's own turn orchestration, not fragile hook re-entry), but trades away structural invisibility (compliance-dependent).
+4. v4 (tighten existing note text) — rejected: the note ALREADY says the target behavior; the gap is ACTIVATION, not wording (same conclusion as GEN-507). More instruction text on a channel already not-followed can't deliver "reliably."
+
+**Key realization (Erez's):** the check already happens pre-block (claim-linter's additionalContext lands at the start of the continuation, before the block is composed — GEN-450 Phase-0/0b record). So it was never a timing problem; the defect is composition-discipline (activation) on the continuation.
+
+**Core learning:** every prose/instruction fix is the same compliance-dependent fix-class that has failed every time on this behavior. Reliability can only come from a STRUCTURAL mechanism (hook enforces, not instructs). Told this, Erez chose to pursue the structural route in a FUTURE session, and had this whole exploration logged into GEN-467 as a cold-pickup handoff (goal, all attempts + rejections, verified platform facts, the required empirical probe of the 3 behaviors, design constraints). GEN-467 kept at **In Progress**, Priority **High** (Erez's explicit call, overriding a re-derivation toward To-Do/Medium).
+
+**Decisions/tickets:**
+- GEN-557 filed (widen self-audit detector) — Backlog, Medium, unassigned.
+- GEN-467 reopened → In Progress; full cold-pickup handoff appended + verified live via REST (97 blocks, 7 sections). Structural route deferred to a future session; probe-first required.
+- GEN-58: two Class-D recurrence traces logged (v1 no-op designed without diffing shipped code; near-relay of an unverified reviewer inference) → Vol. 5; Class D count 87→89.
+
+Unresolved items filed: GEN-558 (distinguish real vs manufactured decisions; act instead of asking — filed with an open classification question re: overlap with GEN-507).
+Reversals judged non-learning: none.
+Dropped learnings: none.
 
 ---
 
