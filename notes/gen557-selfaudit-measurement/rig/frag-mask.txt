@@ -1,0 +1,92 @@
+// A QUOTED phrase is being DISCUSSED, not asserted. This stage's own subject matter
+// makes that routine: messages about the linter quote the exact phrasings the patterns
+// match ("the flagged phrasings (\"filed\", \"I checked\") are in that already-delivered
+// block"). GEN-557 v1 fired on a message that merely quoted its own ticket's fixture
+// while explaining it -- structurally the GEN-467 failure of nudging a message for
+// TALKING about a thing rather than DOING it.
+//
+// A position is suppressed when, on its own line, it is preceded by an odd number of
+// straight double-quotes or backticks, or by an unclosed smart open-quote.
+//
+// WHY A WHOLE-MESSAGE MASK, not a per-match test: the first implementation sliced the
+// line prefix and ran .match(/"/g) over it per match. That is O(line length) per match,
+// and since a suppressed or duplicate match never increments `hits`, the call count is
+// uncapped -- a 200k single-line message went from ~17ms to ~10,100ms (a ~600x
+// regression). Nothing in-process bounds that: clearTimeout(watchdog) is the FIRST
+// statement of the stdin 'end' handler, so all scanning runs after the 5s watchdog is
+// disarmed, and settings.json registers this hook with no timeout. The mask is one
+// linear pass, then O(1) per match. The bound is structural, not merely measured: a
+// masked match short-circuits BEFORE the vicinity slice and the clearing regexes, so
+// per-match cost is never above the pre-change cost, and total cost is the pre-change
+// cost plus one linear pass. (Micro-benchmarks here proved noisy run to run -- rely on
+// that argument and the order of magnitude, not on a specific ms comparison.)
+//
+// FENCE HANDLING WAS TRIED AND REMOVED -- do not re-add it this way. A version of this
+// mask also suppressed anything inside a ``` fence, to stop a fenced EXAMPLE of a
+// pattern from firing. Code review found the cure worse than the disease: fence state is
+// parity over line-start markers, so a single unbalanced marker -- an unterminated
+// snippet, a typo, a fenced example that itself contains a fence opener -- silenced every
+// pattern for the rest of the message (measured: one stray marker masked 91% of a test
+// message), including the 10 patterns that predate GEN-557. Erez's call, 2026-08-02: drop
+// it rather than paper over it. The underlying problem is real and still open -- see
+// GEN-592, which tracks finding a mechanism that does not inherit fence-parity fragility.
+//
+// RESIDUALS -- they fail in BOTH directions, so read each one's direction before relying
+// on it. None can wedge a turn or force a redo; the self-audit path only ever injects a
+// note. Over-suppression yields a MISSED nudge; under-suppression yields a SPURIOUS one
+// (the fenced/illustrative-example case, tracked on GEN-592).
+//  - MISSED-nudge direction: cannot tell quoting-to-discuss from quoting-to-say, so
+//    scare-quoted or inline-code'd narration escapes: `It "came back clean" on both
+//    files.` The corpus evidence below bounds only shapes that HAVE occurred; it says
+//    nothing about that one, which is one keystroke away. Do not read the measurement as
+//    covering it.
+//  - SPURIOUS-nudge direction: parity is per LINE, so a multi-line quoted block is not
+//    covered, a ``` fenced block is not covered (see above), and single-quoted spans are
+//    not covered. Each of those leaves the pre-guard behaviour, which is a FIRE -- an
+//    illustrative example reads as an assertion.
+//  - Suppression is tested at the MATCH START only, so a match straddling a quoted span
+//    is judged by the side it starts on (either direction, depending on the side).
+// NOT masked, worth stating so nobody assumes otherwise: the claim-linter's own note text
+// contains the literal "no block is owed", which matches a pre-GEN-557 pattern -- a
+// standing violation of this file's guard-reason fixture. Straight-quote parity before
+// that phrase is always even, so this mask does not suppress it and the violation still
+// surfaces when the fixture runs. Pre-existing, filed separately; the mask neither caused
+// nor hid it.
+//
+// SCOPE: applies to ALL SELF_AUDIT_PATTERNS -- the six added by GEN-557 AND the 10 that
+// shipped before it. That widening changes already-vetted behaviour, so it was measured
+// first and then chosen explicitly by Erez on 2026-08-02 (the narrower per-pattern-flag
+// alternative was built and offered alongside it). Measured 2026-08-02 on 4,356 real
+// turn-final messages: against the shipped patterns in isolation it changes 6 turns and
+// fully silences 4, all 4 inspected and all 4 genuine quoted references, with no genuine
+// hit wrongly suppressed anywhere in the corpus. The full evidence and per-pattern
+// breakdown live on GEN-557 -- kept there, not restated here, so there is one place to
+// update as the corpus changes.
+// MAINTENANCE: a pattern added later is covered automatically. If one ever needs to opt
+// OUT, gate the call site on a per-pattern flag rather than weakening this test.
+//
+// Walks the text line by line -- deliberately plain, so the per-line parity stays
+// checkable by eye. Linear in text length; one byte per character (<=200KB at
+// MAX_SCAN_CHARS).
+function buildSuppressionMask(text) {
+  const n = text.length;
+  const mask = new Uint8Array(n);
+  let i = 0;
+  while (i <= n) {
+    let eol = text.indexOf('\n', i);
+    if (eol === -1) { eol = n; }
+    // Prefix parity, identical in meaning to the per-match test it replaced: state
+    // reflects only the characters strictly before k on this line.
+    let dq = 0, bt = 0, smart = 0;
+    for (let k = i; k < eol; k++) {
+      mask[k] = ((dq & 1) === 1 || (bt & 1) === 1 || smart > 0) ? 1 : 0;
+      const c = text.charCodeAt(k);
+      if (c === 34) { dq++; }
+      else if (c === 96) { bt++; }
+      else if (c === 0x201C) { smart++; }
+      else if (c === 0x201D) { smart--; }
+    }
+    i = eol + 1;
+  }
+  return mask;
+}
