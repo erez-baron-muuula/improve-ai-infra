@@ -1,0 +1,248 @@
+--- C:/Users/Erez/.claude/hooks/stop-claim-linter.js	2026-07-27 16:19:52.492348100 +0300
++++ C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/ceffe322-f532-48c2-8269-36bb80a3b590/scratchpad/working.js	2026-08-02 13:35:05.022848000 +0300
+@@ -48,10 +48,18 @@
+  * against CLAIM_PATTERNS below; if unmatched, add a pattern in the same session
+  * (per GEN-58's logging protocol). Vicinity evidence scoping and the phrase lists
+  * are deliberately conservative -- false positives are dismissible nudges, not
+- * errors. NOTE (Phase 2): a CLAIM_PATTERNS/SELF_AUDIT_PATTERNS false positive on
+- * a block-carrying message now costs one visible forced redo, not just a nudge --
+- * when adding patterns, run the guard-reason fixture (the guard's own reason
+- * strings must never match any pattern) and weigh the redo cost.
++ * errors. NOTE (Phase 2): when adding patterns, run the guard-reason fixture (the
++ * guard's own reason strings must never match any pattern).
++ * CORRECTION (GEN-557, 2026-08-02): this note used to add that a false positive on a
++ * block-carrying message "costs one visible forced redo, not just a nudge". That was
++ * true only while the Arm-2 content gate existed; GEN-467 v2.2 removed it, so a pattern
++ * false positive no longer costs a forced redo -- weigh the nudge cost, not a redo cost.
++ * (Arm 1 still emits decision:'block' once per prompt_id, but on the duplicate-block
++ * condition alone; it never consults either detector.) Do not upgrade that
++ * into "block-carrying messages are never scanned": the Phase-2 guard skips only what
++ * BLOCK_OPENER_RE RECOGNISES, which excludes the "## <pin> For you" heading form (78 of
++ * 4,356 real turns, 2026-08-02) and is bypassed entirely when session_id/prompt_id is
++ * missing. Required in-block report vocabulary can still reach a pattern by those paths.
+  *
+  * ============================================================================
+  * SELF-AUDIT STAGE (GEN-507) -- a SECOND, independent detector in this same file
+@@ -342,6 +350,68 @@
+   //    bounded lazy gap holds the same match to within one clause at ~4ms worst-case.
+   { re: /\b(?:timer|wakeup|wake-up|schedule[d]?) fired\b[^.\n]{0,200}?\bnothing (?:to do|left)\b/i },
+   { re: /\bnothing (?:to do|left to do)[,;]? (?:so )?cancel+ing\b/i },
++  // -- GEN-557: verification-walkthrough narration. The recurrence was a post-nudge
++  //    clean-audit recital addressed to Erez -- an enumerated roll-call of threads,
++  //    each "done, verified", closing with an exhaustiveness self-defense and a
++  //    "Nothing to correct". All six patterns below were measured against 4,356 real
++  //    turn-final messages (the actual last_assistant_message values this hook
++  //    receives, rebuilt from on-disk transcripts; 2,585 of them reachable by this
++  //    stage -- see the Phase-2 note). Rig + per-pattern evidence: GEN-557.
++  //    ALL FIGURES IN THIS BLOCK WERE MEASURED 2026-08-02 and are dated deliberately:
++  //    the corpus SHRINKS as Claude Code prunes transcripts (4,580 messages from 170
++  //    transcripts on 07-30; 4,356 from 157 on 08-02), so an undated count cannot be
++  //    told apart from a stale one. Re-baseline, don't compare to these.
++  //    [ \t]* not \s*: \s matches a newline, which would let a bullet ending in a bare
++  //    tick join the next line starting with "closed". (BLOCK_OPENER_RE also uses [ \t]
++  //    rather than \s, though for a different reason -- backtracking, not line-joining.)
++  //    ['’] because the file's own CLAIM_PATTERNS
++  //    handle both apostrophe forms; no curly form appears in the corpus, so this is
++  //    consistency insurance, not an observed miss.
++  { re: /✓[ \t]*closed\b/i },
++  { re: /\bthat['’]?s the complete set\b/i },
++  { re: /\bholds as written\b/i },
++  { re: /\bexhaustiveness claim\b[^.\n]{0,80}?\b(?:holds|stands|is accurate|checks out|survives)\b/i },
++  //    The dominant pattern (111 of the 113). Every one of the 125 reachable,
++  //    unquoted real instances was the target class ("...all sourced this turn.
++  //    Nothing to correct."), so it is NOT position-anchored and NOT needsClean-
++  //    gated: both were considered and measured as unnecessary, not skipped.
++  //    RESIDUAL: 125/125 describes this user's past phrasing, not a property of the
++  //    regex. It will fire on a legitimate requested result ("the panel found nothing
++  //    to fix"), as will the tick pattern on a required status line ("✓ Closed
++  //    GEN-550"). Partly -- NOT fully -- defused by the Phase-2 guard skipping messages
++  //    it recognises as block-carrying, where required reports live. Do not lean on that
++  //    further than it goes: the guard misses the "## <pin> For you" heading form (78 of
++  //    4,356 real turns, 2026-08-02) and is bypassed when session_id/prompt_id is
++  //    missing, and the ONE real message that came closest to a false fire on the
++  //    roll-call pattern below was reachable for exactly that reason. The remaining
++  //    mitigation is the nudge text itself, which says to keep a report a standing rule
++  //    requires.
++  { re: /\bnothing to (?:correct|fix)\b/i },
++  //    Ticket shape (a): the bulleted "done, verified" roll-call. Requires TWO such
++  //    lines within 400 chars -- the roll-call signature that a single REQUIRED
++  //    status line cannot produce. The one-line form was measured and REJECTED: it
++  //    fired on a legitimate "where things stand" report ("- **GEN-550 -- shipped,
++  //    verified, Done.**"). This form fires on exactly 1 of 2,585 real turns: the
++  //    recurrence this ticket was filed for. Gap is bounded and contains no nested
++  //    quantifier -- 200k adversarial near-miss input probes at ~5ms.
++  //    ACCEPTED RESIDUAL: a required status report that bullet-lists 2+ items as
++  //    "X -- shipped, verified" inside 400 chars WOULD fire (the real message above
++  //    was one comma short). Accepted because a false nudge is dismissible and the
++  //    alternative -- no coverage for shape (a) at all -- was the open finding.
++  //    ACCEPTED RESIDUAL, and the sharpest one here: a fenced or indented EXAMPLE of the
++  //    roll-call shape FIRES, and a fenced example in a message explaining this very
++  //    ticket is its most likely non-target appearance -- the same self-referential hole
++  //    the quote test exists to close.
++  //    THE CAUSE IS THIS PATTERN, NOT THE GUARD. Anchoring at a line start means there is
++  //    never same-line text before the match, so NO same-line-prefix test can ever protect
++  //    it -- buildSuppressionMask is not deficient here. Fence masking was tried as a
++  //    guard-side fix and removed (see there) because unbalanced markers silenced whole
++  //    messages. So the cheaper place to fix this is the pattern: anchor on something
++  //    other than a line start, or additionally require non-bullet context. GEN-592 tracks
++  //    it and carries that option. Meanwhile a blockquoted example
++  //    ("> - GEN-1 - done, verified") does NOT fire, since the anchor rejects "> ", and the
++  //    cost of the residual is one dismissible nudge.
++  { re: /^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b[\s\S]{0,400}?^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/im },
+ ];
+ 
+ // A CLEAN / NO-OP signal near a `needsClean` phrase confirms it is clean-result
+@@ -386,21 +456,139 @@
+   return false;
+ }
+ 
++// A QUOTED phrase is being DISCUSSED, not asserted. This stage's own subject matter
++// makes that routine: messages about the linter quote the exact phrasings the patterns
++// match ("the flagged phrasings (\"filed\", \"I checked\") are in that already-delivered
++// block"). GEN-557 v1 fired on a message that merely quoted its own ticket's fixture
++// while explaining it -- structurally the GEN-467 failure of nudging a message for
++// TALKING about a thing rather than DOING it.
++//
++// A position is suppressed when, on its own line, it is preceded by an odd number of
++// straight double-quotes or backticks, or by an unclosed smart open-quote.
++//
++// WHY A WHOLE-MESSAGE MASK, not a per-match test: the first implementation sliced the
++// line prefix and ran .match(/"/g) over it per match. That is O(line length) per match,
++// and since a suppressed or duplicate match never increments `hits`, the call count is
++// uncapped -- a 200k single-line message went from ~17ms to ~10,100ms (a ~600x
++// regression). Nothing in-process bounds that: clearTimeout(watchdog) is the FIRST
++// statement of the stdin 'end' handler, so all scanning runs after the 5s watchdog is
++// disarmed, and settings.json registers this hook with no timeout. The mask is one
++// linear pass, then O(1) per match. The bound is structural, not merely measured: a
++// masked match short-circuits BEFORE the vicinity slice and the clearing regexes, so
++// per-match cost is never above the pre-change cost, and total cost is the pre-change
++// cost plus one linear pass. (Micro-benchmarks here proved noisy run to run -- rely on
++// that argument and the order of magnitude, not on a specific ms comparison.)
++//
++// FENCE HANDLING WAS TRIED AND REMOVED -- do not re-add it this way. A version of this
++// mask also suppressed anything inside a ``` fence, to stop a fenced EXAMPLE of a
++// pattern from firing. Code review found the cure worse than the disease: fence state is
++// parity over line-start markers, so a single unbalanced marker -- an unterminated
++// snippet, a typo, a fenced example that itself contains a fence opener -- silenced every
++// pattern for the rest of the message (measured: one stray marker masked 91% of a test
++// message), including the 10 patterns that predate GEN-557. Erez's call, 2026-08-02: drop
++// it rather than paper over it. The underlying problem is real and still open -- see
++// GEN-592, which tracks finding a mechanism that does not inherit fence-parity fragility.
++//
++// RESIDUALS -- they fail in BOTH directions, so read each one's direction before relying
++// on it. None can wedge a turn or force a redo; the self-audit path only ever injects a
++// note. Over-suppression yields a MISSED nudge; under-suppression yields a SPURIOUS one
++// (the fenced/illustrative-example case, tracked on GEN-592).
++//  - MISSED-nudge direction: cannot tell quoting-to-discuss from quoting-to-say, so
++//    scare-quoted or inline-code'd narration escapes: `It "came back clean" on both
++//    files.` The corpus evidence below bounds only shapes that HAVE occurred; it says
++//    nothing about that one, which is one keystroke away. Do not read the measurement as
++//    covering it.
++//  - SPURIOUS-nudge direction: parity is per LINE, so a multi-line quoted block is not
++//    covered, a ``` fenced block is not covered (see above), and single-quoted spans are
++//    not covered. Each of those leaves the pre-guard behaviour, which is a FIRE -- an
++//    illustrative example reads as an assertion.
++//  - Suppression is tested at the MATCH START only, so a match straddling a quoted span
++//    is judged by the side it starts on (either direction, depending on the side).
++// NOT masked, worth stating so nobody assumes otherwise: the claim-linter's own note text
++// contains the literal "no block is owed", which matches a pre-GEN-557 pattern -- a
++// standing violation of this file's guard-reason fixture. Straight-quote parity before
++// that phrase is always even, so this mask does not suppress it and the violation still
++// surfaces when the fixture runs. Pre-existing, filed separately; the mask neither caused
++// nor hid it.
++//
++// SCOPE: applies to ALL SELF_AUDIT_PATTERNS -- the six added by GEN-557 AND the 10 that
++// shipped before it. That widening changes already-vetted behaviour, so it was measured
++// first and then chosen explicitly by Erez on 2026-08-02 (the narrower per-pattern-flag
++// alternative was built and offered alongside it). Measured 2026-08-02 on 4,356 real
++// turn-final messages: against the shipped patterns in isolation it changes 6 turns and
++// fully silences 4, all 4 inspected and all 4 genuine quoted references, with no genuine
++// hit wrongly suppressed anywhere in the corpus. The full evidence and per-pattern
++// breakdown live on GEN-557 -- kept there, not restated here, so there is one place to
++// update as the corpus changes.
++// MAINTENANCE: a pattern added later is covered automatically. If one ever needs to opt
++// OUT, gate the call site on a per-pattern flag rather than weakening this test.
++//
++// Walks the text line by line -- deliberately plain, so the per-line parity stays
++// checkable by eye. Linear in text length; one byte per character (<=200KB at
++// MAX_SCAN_CHARS).
++function buildSuppressionMask(text) {
++  const n = text.length;
++  const mask = new Uint8Array(n);
++  let i = 0;
++  while (i <= n) {
++    let eol = text.indexOf('\n', i);
++    if (eol === -1) { eol = n; }
++    // Prefix parity, identical in meaning to the per-match test it replaced: state
++    // reflects only the characters strictly before k on this line.
++    let dq = 0, bt = 0, smart = 0;
++    for (let k = i; k < eol; k++) {
++      mask[k] = ((dq & 1) === 1 || (bt & 1) === 1 || smart > 0) ? 1 : 0;
++      const c = text.charCodeAt(k);
++      if (c === 34) { dq++; }
++      else if (c === 96) { bt++; }
++      else if (c === 0x201C) { smart++; }
++      else if (c === 0x201D) { smart--; }
++    }
++    i = eol + 1;
++  }
++  return mask;
++}
++
+ // Find self-audit narration hits. Sentence/position-agnostic BY DESIGN: a self-
+-// audit line is flagged wherever it appears, INCLUDING inside a "For you" block --
+-// the recurrence that prompted GEN-507 was exactly a self-audit line placed inside
+-// the block, so a block-membership exemption would swallow the target case. The
++// audit line is flagged wherever it appears IN THE MESSAGES THIS STAGE SEES, with no
++// sentence- or position-membership exemption -- the recurrence that prompted GEN-507
++// was a self-audit line placed inside a "For you" block, so an exemption of that kind
++// would have swallowed the target case.
++// CORRECTION (GEN-557, 2026-08-02): this comment used to say the line is flagged
++// "INCLUDING inside a 'For you' block". That stopped being true when GEN-467 v2.2
++// removed the Arm-2 content gate: the Phase-2 guard now exits on EVERY branch before
++// Phase 1 reaches this function, so a message the guard RECOGNISES as block-carrying
++// is not scanned at all (1,771 of 4,356 real turns, 40.7%, measured 2026-08-02).
++// The stale wording itself is tracked on GEN-584.
++// Do NOT read the 40.7% as "no block-carrying message reaches here". At least three paths
++// let one through, and this list is not claimed to be exhaustive: BLOCK_OPENER_RE does not
++// recognise the markdown-heading form "## <pin> For you" (78 of those 4,356 turns, measured
++// 2026-08-02); the guard is skipped outright when session_id or prompt_id is missing; and
++// the opener test runs on stripFences(msg), so an odd number of fence markers can swallow
++// a trailing opener along with the unpaired fence. Those are NOT part of GEN-584 -- they were
++// found 2026-08-02, after it was filed -- and as of that date they have no ticket of their
++// own; they are written up in the GEN-557 rig README under "Found on the way". Confirm
++// before assuming either is tracked anywhere. The
+ // hook does NOT try to decide whether the line is a permitted correction vs a
+ // banned self-audit; that semantic call is handed to the model receiving the nudge
+ // (which has full turn context this hook lacks).
+ function findSelfAudit(text) {
+   const hits = [];
+   const seen = new Set();
++  // One linear pass, then O(1) per match. Built here rather than tested per match --
++  // the per-match form was O(line length) and uncapped. The measurement and the
++  // structural bound are stated once, at buildSuppressionMask; not repeated here.
++  const suppressed = buildSuppressionMask(text);
+   for (const pat of SELF_AUDIT_PATTERNS) {
+     const re = new RegExp(pat.re.source, pat.re.flags.includes('g') ? pat.re.flags : pat.re.flags + 'g');
+     let m;
+     while ((m = re.exec(text)) !== null) {
+       if (m.index === re.lastIndex) { re.lastIndex++; } // guard against zero-width match loop
++      // A match inside a quote or an inline code span is DISCUSSION, not narration.
++      // NOT fences -- those are deliberately uncovered; see buildSuppressionMask for
++      // the semantics, the full residual list, and why the fence attempt was dropped.
++      // Applies to ALL patterns, new and pre-GEN-557 (Erez's explicit call, 2026-08-02).
++      if (suppressed[m.index] === 1) continue;
+       const start = Math.max(0, m.index - SELF_AUDIT_CLEAR_WINDOW);
+       const end = Math.min(text.length, m.index + m[0].length + SELF_AUDIT_CLEAR_WINDOW);
+       const vicinity = text.slice(start, end);
+@@ -416,7 +604,9 @@
+         const around = text.slice(start, m.index) + ' ' + text.slice(m.index + m[0].length, end);
+         if (!hasCleanSignal(around)) continue;
+       }
+-      const hit = m[0].trim().slice(0, SELF_AUDIT_MAX_HIT); // hard cap (see const)
++      // .replace collapses whitespace FIRST: the roll-call pattern matches across two
++      // bullet lines, and a multi-line hit is echoed into the nudge and the durable log.
++      const hit = m[0].trim().replace(/\s+/g, ' ').slice(0, SELF_AUDIT_MAX_HIT); // cap
+       if (seen.has(hit)) continue;
+       seen.add(hit);
+       hits.push(hit);
