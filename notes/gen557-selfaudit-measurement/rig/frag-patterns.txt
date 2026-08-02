@@ -1,0 +1,61 @@
+  // -- GEN-557: verification-walkthrough narration. The recurrence was a post-nudge
+  //    clean-audit recital addressed to Erez -- an enumerated roll-call of threads,
+  //    each "done, verified", closing with an exhaustiveness self-defense and a
+  //    "Nothing to correct". All six patterns below were measured against 4,356 real
+  //    turn-final messages (the actual last_assistant_message values this hook
+  //    receives, rebuilt from on-disk transcripts; 2,585 of them reachable by this
+  //    stage -- see the Phase-2 note). Rig + per-pattern evidence: GEN-557.
+  //    ALL FIGURES IN THIS BLOCK WERE MEASURED 2026-08-02 and are dated deliberately:
+  //    the corpus SHRINKS as Claude Code prunes transcripts (4,580 messages from 170
+  //    transcripts on 07-30; 4,356 from 157 on 08-02), so an undated count cannot be
+  //    told apart from a stale one. Re-baseline, don't compare to these.
+  //    [ \t]* not \s*: \s matches a newline, which would let a bullet ending in a bare
+  //    tick join the next line starting with "closed" (BLOCK_OPENER_RE's comment makes
+  //    the same point for the same reason). ['’] because the file's own CLAIM_PATTERNS
+  //    handle both apostrophe forms; no curly form appears in the corpus, so this is
+  //    consistency insurance, not an observed miss.
+  { re: /✓[ \t]*closed\b/i },
+  { re: /\bthat['’]?s the complete set\b/i },
+  { re: /\bholds as written\b/i },
+  { re: /\bexhaustiveness claim\b[^.\n]{0,80}?\b(?:holds|stands|is accurate|checks out|survives)\b/i },
+  //    The dominant pattern (111 of the 113). Every one of the 125 reachable,
+  //    unquoted real instances was the target class ("...all sourced this turn.
+  //    Nothing to correct."), so it is NOT position-anchored and NOT needsClean-
+  //    gated: both were considered and measured as unnecessary, not skipped.
+  //    RESIDUAL: 125/125 describes this user's past phrasing, not a property of the
+  //    regex. It will fire on a legitimate requested result ("the panel found nothing
+  //    to fix"), as will the tick pattern on a required status line ("✓ Closed
+  //    GEN-550"). Partly -- NOT fully -- defused by the Phase-2 guard skipping messages
+  //    it recognises as block-carrying, where required reports live. Do not lean on that
+  //    further than it goes: the guard misses the "## <pin> For you" heading form (78 of
+  //    4,356 real turns, 2026-08-02) and is bypassed when session_id/prompt_id is
+  //    missing, and the ONE real message that came closest to a false fire on the
+  //    roll-call pattern below was reachable for exactly that reason. The remaining
+  //    mitigation is the nudge text itself, which says to keep a report a standing rule
+  //    requires.
+  { re: /\bnothing to (?:correct|fix)\b/i },
+  //    Ticket shape (a): the bulleted "done, verified" roll-call. Requires TWO such
+  //    lines within 400 chars -- the roll-call signature that a single REQUIRED
+  //    status line cannot produce. The one-line form was measured and REJECTED: it
+  //    fired on a legitimate "where things stand" report ("- **GEN-550 -- shipped,
+  //    verified, Done.**"). This form fires on exactly 1 of 2,585 real turns: the
+  //    recurrence this ticket was filed for. Gap is bounded and contains no nested
+  //    quantifier -- 200k adversarial near-miss input probes at ~5ms.
+  //    ACCEPTED RESIDUAL: a required status report that bullet-lists 2+ items as
+  //    "X -- shipped, verified" inside 400 chars WOULD fire (the real message above
+  //    was one comma short). Accepted because a false nudge is dismissible and the
+  //    alternative -- no coverage for shape (a) at all -- was the open finding.
+  //    ACCEPTED RESIDUAL, and the sharpest one here: a fenced or indented EXAMPLE of the
+  //    roll-call shape FIRES, and a fenced example in a message explaining this very
+  //    ticket is its most likely non-target appearance -- the same self-referential hole
+  //    the quote test exists to close.
+  //    THE CAUSE IS THIS PATTERN, NOT THE GUARD. Anchoring at a line start means there is
+  //    never same-line text before the match, so NO same-line-prefix test can ever protect
+  //    it -- buildSuppressionMask is not deficient here. Fence masking was tried as a
+  //    guard-side fix and removed (see there) because unbalanced markers silenced whole
+  //    messages. So the cheaper place to fix this is the pattern: anchor on something
+  //    other than a line start, or additionally require non-bullet context. GEN-592 tracks
+  //    it and carries that option. Meanwhile a blockquoted example
+  //    ("> - GEN-1 - done, verified") does NOT fire, since the anchor rejects "> ", and the
+  //    cost of the residual is one dismissible nudge.
+  { re: /^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b[\s\S]{0,400}?^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/im },
