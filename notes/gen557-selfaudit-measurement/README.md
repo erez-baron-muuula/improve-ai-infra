@@ -1,219 +1,207 @@
 # GEN-557 — self-audit detector widening: measurement rig & findings
 
-Banked 2026-07-30 when the session stopped mid-flow. Everything needed to resume is
-here or in GEN-557's Notion body. The live scratchpad copies (session
-`75c79316-1b51-43a4-8b25-25b6771c99ec`) are temporary — treat this file as canonical.
-
 **Ticket:** GEN-557 "Widen the GEN-507 self-audit detector to catch
 verification-walkthrough narration" — https://app.notion.com/p/3a66e495d07c8108a684e31a824b8eb3
 
 **Target file:** `~/.claude/hooks/stop-claim-linter.js` (vetting-locked → `/vet-code`).
-Baseline at time of measurement: 801 lines, 47,164 bytes, LF, 10 `SELF_AUDIT_PATTERNS`.
+Baseline when last measured: 801 lines, 47,164 bytes on disk, LF, 10 `SELF_AUDIT_PATTERNS`.
+
+**The rig now lives beside this file in `rig/`** (git-tracked, 18 files). The 2026-07-30
+session banked only this README and the scripts were lost, costing a full rebuild on
+2026-08-02 — hence banking them. Only `corpus.jsonl` (6.6 MB of real transcript text)
+and the derived dumps are excluded; regenerate with `rig/extract.js`.
 
 ---
 
-## Status when banked
+## Status (updated 2026-08-02)
 
-Design is **not** final. Steps 0–2 of `/vet-code` are done; Step 1's `/check` panel ran
-and returned **REVISE** with three findings still to address (below). Step 3 (two code
-reviews) has not run.
+`/vet-code` Steps 0–2 done. **Step 1's design panel has now CONVERGED** (2 rounds): the
+three findings the 2026-07-30 panel left open are all resolved, and the round-2 verdict
+was PASS on every lens. The working copy is built, syntax-clean, and passes acceptance
+both as a sliced detector and as a real hook process.
 
-### Blocker for Step 3
-`/code-review` is configured `disable-model-invocation` — Claude **cannot** invoke it in
-any session; only Erez can, by typing `/code-review`. `/vet-code` Step 0 fails closed
-without it. This is a sharper diagnosis than GEN-546 ("cannot run from a desktop
-session") records — it is not desktop-specific.
+**Two things stand between here and done:**
 
-### Outstanding panel findings (must fix before Step 3)
-1. **`nothing to (correct|fix)` under-validated.** It drives ~all new fires but only 4 of
-   120 hits were inspected. Sample far more, and/or anchor it to the *closing* position
-   the ticket actually describes, and/or gate it like the `needsClean` patterns.
-2. **Ticket shape (a) has no durable coverage.** The "done, verified / filed, verified"
-   roll-call lost both v1 candidates (dropped for false fires) and nothing replaced them.
-   Only `✓ closed` remains — a decorative tick that appeared just twice in 4,580 turns.
-   Suggested fix: anchor to a bulleted line, e.g.
-   `/^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/im`,
-   or require 2+ occurrences in one message (a real roll-call signature that a single
-   required status line cannot produce).
-3. **`isQuoted` scope.** As drafted it applies to all 10 pre-existing patterns, which is
-   wider than "widen the patterns". It is justified by removing 6 measured false fires,
-   but the false-NEGATIVE direction was never measured (an unrelated odd `"` or backtick
-   on a line silences a genuine hit there). Either scope it to the 5 new patterns, or get
-   Erez's explicit sign-off that changing shipped patterns is intended — and add a corpus
-   check for wrongly-suppressed hits.
+1. **One decision for Erez** — the quote guard's scope (see Finding 3 below). The working
+   copy currently takes the narrow, in-scope default. Widening is measured and available
+   but changes shipped behaviour, so it needs his explicit yes.
+2. **`/code-review` must be typed by Erez.** It is configured `disable-model-invocation`,
+   so **Claude cannot invoke it in any session** — not a desktop-only limitation, which is
+   a sharper diagnosis than **GEN-546** records. `/vet-code` Step 0 fails closed without
+   it. Remaining sequence: Erez answers the scope question → Erez types `/code-review`
+   (Pass A) → Pass B independent sub-agent → Step 4 → Step 5 attestation → mint the
+   single-use vetting pass → apply → verify.
 
 ---
 
-## Findings that are settled (do not re-derive)
+## The three 2026-07-30 findings — all resolved 2026-08-02
+
+**1. `nothing to (correct|fix)` was validated on 4 of ~120 hits. RESOLVED by full
+inspection.** Every one of the **125** reachable, unquoted instances in the corpus was
+read individually (`rig/f1.js` + `rig/f1dump.js`). **125/125 were the target class** — a
+post-nudge clean-audit recital addressed to Erez, e.g. "…all sourced this turn. Nothing to
+correct." **Zero false.** So the pattern is deliberately NOT position-anchored and NOT
+`needsClean`-gated: both were considered and measured as unnecessary, not skipped.
+
+**2. Ticket shape (a) — the "done, verified" roll-call — had no durable coverage.
+RESOLVED with a 2-line signature.** The panel's suggested one-bullet-line anchor was
+built and **measured and rejected**: it fires on 2 turns, one of which is a legitimate
+"where things stand" status report (`- **GEN-550 — shipped, verified, Done.**`, corpus
+t2553). Requiring **two** such bulleted lines within 400 chars is the roll-call signature
+a single required status line cannot produce: it fires on **exactly 1 of 2,585** reachable
+real turns — the recurrence this ticket was filed for — and passes all five fixtures.
+ReDoS probe: 200k-char adversarial near-miss input, ~5 ms (`rig/v3.js`).
+
+**3. `isQuoted` scope was wider than the ticket, and its false-negative direction was
+unmeasured. Measurement done; scope decision is Erez's.** Applied to the shipped patterns
+in isolation the guard changes 6 turns and fully silences 4 — **all 4 inspected, all 4
+genuine quoted references** (the phrase under discussion, not asserted). **No genuine hit
+is wrongly suppressed anywhere in the corpus** (`rig/f3.js`). The working copy nonetheless
+**defaults to the narrow scope**: the six new patterns carry `isNew: true` and the guard
+call is `if (pat.isNew && isQuoted(text, m.index)) continue;`, leaving the 10 shipped
+patterns exactly as they behave today. Widening to all 16 is a separate decision about
+shipped behaviour — see "Open decision" below.
+
+---
+
+## Settled facts — do not re-derive
 
 ### The corpus
-4,580 real turn-final assistant messages, rebuilt from 170 on-disk transcripts under
-`~/.claude/projects/`. These are the actual `last_assistant_message` values the Stop hook
-receives: the final assistant text block before each genuine user turn, excluding
-`isSidechain` lines and `user` lines carrying a `tool_result`. 0 unparsable lines.
-Regenerate with `extract.js` below.
+**4,356** real turn-final assistant messages rebuilt from **157** on-disk transcripts under
+`~/.claude/projects` — the actual `last_assistant_message` values the Stop hook receives
+(final assistant text block before each genuine user turn; `isSidechain` lines and `user`
+lines carrying a `tool_result` excluded; 0 unparsable). Regenerate with `rig/extract.js`.
 
-### Numbers (all from real traffic, not fixtures)
-| | naive (detector called directly) | production (Phase-2 short-circuit applied) |
-|---|---|---|
-| current patterns fire on | 161 turns (3.52%) | **77** |
-| GEN-557 v2 adds | 120 | **113** (7 phantom) |
+**The corpus shrinks over time.** 2026-07-30 measured 4,580 turns / 170 transcripts;
+2026-08-02 got 4,356 / 157, because Claude Code prunes old transcripts (158 non-subagent
+`.jsonl` files existed on 08-02). Re-baseline rather than comparing to older numbers.
 
-### The "For you" blind spot — real, but smaller than it first looks
-`stop-claim-linter.js` lines 615–678: when a message carries a "📌 For you" block opener,
-**every** branch of the Phase-2 guard `process.exit(0)`s before Phase 1 reaches
-`findSelfAudit` (line 689). So the self-audit detector never runs on **1,844 of 4,580
-turns (40.3%)**.
-- `findSelfAudit`'s own header comment (lines ~389–395) still claims it flags block-internal
-  self-audit "wherever it appears, INCLUDING inside a 'For you' block". **That is stale** —
-  it stopped being true when the Arm-2 content gate was removed (GEN-467 v2.2, 2026-07-26).
-  The comment should be corrected.
-- Cost is modest: only 87 of those 1,844 turns would have fired at all, and every sampled
-  one would have been a FALSE nudge (e.g. "I checked the actual query", "I verified in the
-  code that the retry queue has no limit" — substantive findings, correctly reported).
-- **Do not claim this blind spot explains the recurrence GEN-507/GEN-557 track.** That
-  claim was made in-session before measuring and does not hold.
+### Numbers (real traffic, production-reachable, 2026-08-02)
+| | fires |
+|---|---|
+| live hook baseline | **77** |
+| **working copy as it now stands** (guard on all 16 — Erez's choice) | **188** (+113, −2) |
+| narrow-scope alternative, built then set aside (guard on the 6 new only) | 190 (+113, −0) |
 
-### v1 was rejected — three confirmed false-fire classes (keep these as regression cases)
-v1 additionally had bare `/\bexhaustiveness claim\b/i` and
-`/\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/i` (needsClean),
-and no quote guard. 156 new fires, including:
-1. **Meta-discussion / quoting.** It fired on this session's own message to Erez purely
-   because that message quoted `done, verified ✓ closed` and `nothing to correct` while
-   *explaining the ticket*. Structurally the same failure GEN-467 shipped twice.
+Nudge rate on reachable turns: 3.0% → 7.3%. Every one of the 113 added fires was
+inspected: 111 via the fully-inspected `nothing to correct|fix`, plus t2590 and t3168 read
+individually — all the target class. **Zero false fires on real input**, which is what
+`/vet-code` Step 4's input-realism rule (GEN-566) requires.
+
+The 188-vs-190 gap reconciles like this: the guard silences 4 turns when applied to the
+shipped patterns alone, but 2 of those 4 also say "Nothing to correct" and so still fire
+on a new pattern — net 2, not 4.
+
+### The "For you" blind spot — real, but modest, and NOT the cause of the recurrence
+`stop-claim-linter.js` lines 615–678: on any message carrying a "📌 For you" block opener,
+every branch of the Phase-2 guard `process.exit(0)`s before Phase 1 reaches `findSelfAudit`
+(line 689). The detector never runs on **1,771 of 4,356 turns (40.7%)** — 40.3% when last
+measured, i.e. stable.
+- `findSelfAudit`'s header comment (~lines 389–395) still claims it flags block-internal
+  self-audit "INCLUDING inside a 'For you' block". **Stale** since the Arm-2 content gate
+  was removed (GEN-467 v2.2, 2026-07-26). Tracked on **GEN-584**, not here.
+- Measured cost is small: only 87 of those turns would have fired at all, and every sampled
+  one would have been a FALSE nudge (substantive findings, correctly reported).
+- An in-session claim that this blind spot explains the recurrence was made before
+  measuring and **does not hold**; logged on GEN-58. Don't repeat it.
+
+### v1 was rejected — keep as regression cases
+v1 also had bare `/\bexhaustiveness claim\b/i` and
+`/\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/i` (needsClean), and
+no quote guard → 156 new fires with three confirmed false-fire classes:
+1. **Meta-discussion / quoting** — fired on a message purely because it *quoted*
+   `done, verified ✓ closed` and `nothing to correct` while explaining this ticket.
+   Structurally the same failure GEN-467 shipped twice.
 2. **`applied, verified` inside a required status report** — "the line-79 fix is applied,
    verified, and synced."
 3. **`exhaustiveness claim` inside a permitted self-correction announcement** — "I'll
    tighten the wording so it can't be read as an unqualified exhaustiveness claim."
 
-### v2 acceptance (passes, but on a design that still needs the 3 fixes)
-- Ticket's verbatim must-FIRE fixture: **fires** (5 hits) where the live hook gives zero.
-- Ticket's must-STAY-SILENT counter-example: **silent**.
-- The quoting-while-explaining text: **silent**.
-- Quote guard also suppresses 6 of the 161 baseline fires — all 6 inspected, all false.
+---
+
+## The proposed change (working copy: `rig/working.js`)
+
+Six patterns appended to `SELF_AUDIT_PATTERNS`, each tagged `isNew: true`:
+
+```js
+{ re: /✓\s*closed\b/i, isNew: true },
+{ re: /\bthat'?s the complete set\b/i, isNew: true },
+{ re: /\bholds as written\b/i, isNew: true },
+{ re: /\bexhaustiveness claim\b[^.\n]{0,80}?\b(?:holds|stands|is accurate|checks out|survives)\b/i, isNew: true },
+{ re: /\bnothing to (?:correct|fix)\b/i, isNew: true },
+{ re: /^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b[\s\S]{0,400}?^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/im, isNew: true },
+```
+
+Plus `isQuoted()` (per-line quote/code-span parity), called first in `findSelfAudit`'s
+match loop, gated on `pat.isNew`. `rig/build.js` regenerates the working copy from the
+live hook deterministically and **asserts each anchor is unique** — which caught a real
+hazard: the zero-width-match guard line is **identical in `findNakedClaims` (line 293) and
+`findSelfAudit` (line 403)**, so a whole-file replace would have patched the wrong
+detector. The insertion is scoped to `findSelfAudit`'s body.
+
+### Accepted residuals (disclosed in the file's own comments)
+- A required status report that bullet-lists 2+ items as "X — shipped, verified" within
+  400 chars would fire. The nearest real message (t2553) was one comma short.
+- The roll-call pattern is line-start-anchored, so it gets **no** protection from
+  `isQuoted` by construction — a fenced or quoted *example* of the shape will fire.
+- `isQuoted` is per-line parity only: multi-line quoted blocks, ``` fences, and
+  single-quoted spans are not covered. All fail toward firing — the safe direction.
+
+### Acceptance (`rig/verify.js` sliced detector, `rig/livefire.js` real hook process)
+- Ticket's verbatim must-FIRE fixture: **fires** (5 hits) where the live hook is **silent**.
+- All four must-stay-silent fixtures: **silent**, including the quoting-while-explaining
+  text and the ticket's required-status-report counter-example.
+- Both confirmed end to end by executing `working.js` as a Stop hook over stdin. Its logs
+  are `__dirname`-relative, so running it from the rig dir cannot touch
+  `~/.claude/hooks/selfaudit-nudges.jsonl`.
 - `node --check` passes.
+
+**Harness gotcha:** the hook dedups per `(session_id, prompt_id)` in a state dir under
+`os.tmpdir()` that **persists between runs**. `rig/livefire.js` needs its per-run nonce —
+without it, a second run is silently deduped and reads as a false FAIL.
 
 ---
 
-## Scripts
+## Quote-guard scope — DECIDED 2026-08-02
 
-`build557b.js` regenerates the working copy deterministically from the live hook, so the
-working copy itself does not need banking. Run `extract.js` first (writes `corpus.jsonl`
-next to itself), then the others. All expect to sit in the same directory.
+**Erez chose "all 16": the guard covers the six new patterns AND the 10 that shipped
+before GEN-557.** He was shown both options with their measured effects and picked this
+one explicitly, so the working copy is built that way — fire count **188**, removing 4
+measured false nudges on shipped patterns (net 2), with nothing genuine suppressed
+anywhere in the corpus. The narrow `pat.isNew`-gated alternative (fire count 190) was
+built and offered alongside it; it is no longer the artifact.
 
-### extract.js — corpus builder (the part worth keeping)
-```js
-const fs = require('fs');
-const path = require('path');
-const ROOT = 'C:\\Users\\Erez\\.claude\\projects';
-const OUT = path.join(path.dirname(process.argv[1]), 'corpus.jsonl');
+---
 
-function walk(dir, acc) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name);
-    if (e.isDirectory()) { if (e.name !== 'subagents') walk(p, acc); }
-    else if (e.name.endsWith('.jsonl')) acc.push(p);
-  }
-  return acc;
-}
-function isRealUserTurn(o) {
-  if (o.type !== 'user' || o.isSidechain) return false;
-  const c = o.message && o.message.content;
-  if (typeof c === 'string') return c.length > 0;
-  if (Array.isArray(c)) return !c.some(b => b && b.type === 'tool_result');
-  return false;
-}
-function assistantText(o) {
-  const c = o.message && o.message.content;
-  if (!Array.isArray(c)) return null;
-  const parts = c.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text);
-  return parts.length ? parts.join('\n') : null;
-}
-const files = walk(ROOT, []);
-const out = fs.createWriteStream(OUT);
-let turns = 0, skipped = 0;
-for (const f of files) {
-  let lines;
-  try { lines = fs.readFileSync(f, 'utf8').split('\n'); } catch { continue; }
-  let pending = null;
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    let o;
-    try { o = JSON.parse(line); } catch { skipped++; continue; }
-    if (o.isSidechain) continue;
-    if (o.type === 'assistant') { const t = assistantText(o); if (t !== null) pending = t; }
-    else if (isRealUserTurn(o)) {
-      if (pending !== null) { out.write(JSON.stringify({ f: path.basename(f), t: pending }) + '\n'); turns++; }
-      pending = null;
-    }
-  }
-  if (pending !== null) { out.write(JSON.stringify({ f: path.basename(f), t: pending }) + '\n'); turns++; }
-}
-out.end();
-console.log('files=' + files.length + ' turns=' + turns + ' unparsable=' + skipped);
-```
+## Found on the way — both need their own ticket, neither belongs in GEN-557
 
-### Loading the live detector verbatim (used by every measuring script)
-Do **not** reimplement `findSelfAudit` — slice it out of the hook so the numbers reflect
-shipped logic:
-```js
-const START = 'const SELF_AUDIT_PATTERNS = [';
-const END = '// Durable, append-only log of self-audit detections';
-function load(file) {
-  const s = require('fs').readFileSync(file, 'utf8');
-  return new Function(s.slice(s.indexOf(START), s.indexOf(END)) + '\n; return findSelfAudit;')();
-}
-```
-`measure.js` counts fires for a hook file, with `--only-new <baselineHook>` to attribute
-new fires. `attribute.js` re-implements the per-pattern gating (window 140, `needsClean`,
-`selfAuditCleared`) to report per-pattern new-fire counts and samples. `reachability.js`
-additionally slices `BLOCK_OPENER_RE` + `stripFences` out of the hook and splits results
-into reachable vs block-carrying. `blindspot.js` counts, among block-carrying turns, how
-many the patterns would have flagged. Each is ~30–60 lines of counting; rewrite from the
-loader above if lost.
-
-### v2 candidate patterns (appended to `SELF_AUDIT_PATTERNS`)
-```js
-{ re: /\u2713\s*closed\b/i },
-{ re: /\bthat'?s the complete set\b/i },
-{ re: /\bholds as written\b/i },
-{ re: /\bexhaustiveness claim\b[^.\n]{0,80}?\b(?:holds|stands|is accurate|checks out|survives)\b/i },
-{ re: /\bnothing to (?:correct|fix)\b/i },
-```
-
-### v2 quote guard — called FIRST in `findSelfAudit`'s match loop
-`if (isQuoted(text, m.index)) continue;` inserted immediately before
-`const vicinity = ...` / `selfAuditCleared(...)`.
-```js
-function isQuoted(text, at) {
-  const lineStart = text.lastIndexOf('\n', at - 1) + 1;
-  const before = text.slice(lineStart, at);
-  const straight = (before.match(/"/g) || []).length;
-  const ticks = (before.match(/`/g) || []).length;
-  const smart = (before.match(/\u201C/g) || []).length - (before.match(/\u201D/g) || []).length;
-  return (straight % 2 === 1) || (ticks % 2 === 1) || smart > 0;
-}
-```
-Known limits (disclosed, judged acceptable): per-line parity only, so multi-line quoted
-blocks and ``` fences are not covered (the file already has a `stripFences()` helper that
-could be reused); single-quoted spans are not covered.
-
-### Acceptance fixtures — must keep passing
-- **must FIRE:** GEN-557's verbatim trigger text (the enumerated `— done, verified. ✓ closed`
-  roll-call ending `…the exhaustiveness claim holds as written. Nothing to correct.`).
-  Confirmed NOT block-carrying, so Phase 1 really reaches it.
-- **must STAY SILENT:** `GEN-537 is in Review; I set GEN-554 to Done after verifying the
-  schema change landed. Both are now reflected in the tracker.`
-- **must STAY SILENT:** any message that merely *quotes* the trigger phrases while
-  explaining them.
+1. **`BLOCK_OPENER_RE` does not recognise a markdown-heading block opener.** The regex
+   (line 469) allows only spaces/tabs and `**` before the pushpin, so `## 📌 For you` is
+   **not** seen as an opener. Measured: **78 of 4,356 real turns** carry a block the live
+   guard misses. Consequences: the GEN-467 Arm-1 duplicate-kill never arms for those turns,
+   and Phase 1 scans a block-carrying message it was meant to skip. The comment at lines
+   453–460 lists three covered forms from a 33-payload log and explicitly excludes only the
+   blockquote form — so the heading form is an undocumented gap, not a deliberate choice.
+   (This is also why corpus t2553, a genuine For-you block, was reachable at all.)
+2. **The claim-linter's own injected note trips a self-audit pattern.** The file's
+   MAINTENANCE rule (lines 47–54) says "the guard's own reason strings must never match any
+   pattern". Run for the first time on 2026-08-02: `arm1Reason()` PASSES, but the
+   claim-linter note text (lines 730–747) contains the literal phrase **"no block is
+   owed"**, which matches the pre-existing pattern `/\bno block (?:is|was) owed\b/i`
+   (line 334). **Pre-existing** — the live detector matches it too, and the note region is
+   byte-identical in the working copy (`rig/maint-attrib.js`). The risk is bounded by the
+   note's own "never quoted or restated" instruction, but it violates the file's stated
+   invariant and the fixture had never been run.
 
 ---
 
 ## Also worth knowing
-- `/vet-code` Step 4 gained an **input-realism** requirement this session (GEN-566, shipped
-  and verified): a guard/detector's live-fire must use real production traffic, report
-  counts in the Step 5 attestation, and treat any false fire on real input as a FAIL.
-  This rig is what satisfies it for GEN-557 — and it is what caught v1's false fires.
-- GEN-575 is real and hit twice here: the copy/move guard blocks any shell `cp` whose
-  command text merely mentions a `.js` file or the word `scripts`, even when the
-  destination is an ordinary project folder. Use the Write tool instead.
+- `/vet-code` Step 4 carries an **input-realism** requirement (**GEN-566**, shipped): a
+  guard/detector's live-fire must use real production traffic, report counts in the Step 5
+  attestation, and treat any false fire on real input as a FAIL. This rig satisfies it, and
+  it is what caught v1's false fires.
+- **GEN-575** is real and hit again: the copy/move guard blocks a shell `cp` whose command
+  text merely mentions a `.js` file, even between two ordinary project folders. Worked
+  around here with an extensionless node copier (`rig/` was banked that way).
+- GEN-557's **Priority reads "Highest 🔥", which its own ratings cannot produce**: Gain
+  ratio 2 + Not-urgent derives **Medium**. Must be fixed before the ticket closes.

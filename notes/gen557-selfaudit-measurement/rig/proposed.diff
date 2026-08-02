@@ -1,0 +1,96 @@
+--- C:/Users/Erez/.claude/hooks/stop-claim-linter.js	2026-07-27 16:19:52.492348100 +0300
++++ C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/ceffe322-f532-48c2-8269-36bb80a3b590/scratchpad/working.js	2026-08-02 11:51:28.379058600 +0300
+@@ -342,6 +342,39 @@
+   //    bounded lazy gap holds the same match to within one clause at ~4ms worst-case.
+   { re: /\b(?:timer|wakeup|wake-up|schedule[d]?) fired\b[^.\n]{0,200}?\bnothing (?:to do|left)\b/i },
+   { re: /\bnothing (?:to do|left to do)[,;]? (?:so )?cancel+ing\b/i },
++  // -- GEN-557: verification-walkthrough narration. The recurrence was a post-nudge
++  //    clean-audit recital addressed to Erez -- an enumerated roll-call of threads,
++  //    each "done, verified", closing with an exhaustiveness self-defense and a
++  //    "Nothing to correct". All six patterns below were measured against 4,356 real
++  //    turn-final messages (the actual last_assistant_message values this hook
++  //    receives, rebuilt from on-disk transcripts; 2,585 of them reachable by this
++  //    stage -- see the Phase-2 note). They add 113 production fires, ALL 113
++  //    inspected, 0 false. Rig + per-pattern evidence: GEN-557.
++  { re: /✓\s*closed\b/i },
++  { re: /\bthat'?s the complete set\b/i },
++  { re: /\bholds as written\b/i },
++  { re: /\bexhaustiveness claim\b[^.\n]{0,80}?\b(?:holds|stands|is accurate|checks out|survives)\b/i },
++  //    The dominant pattern (111 of the 113). Every one of the 125 reachable,
++  //    unquoted real instances was the target class ("...all sourced this turn.
++  //    Nothing to correct."), so it is NOT position-anchored and NOT needsClean-
++  //    gated: both were considered and measured as unnecessary, not skipped.
++  { re: /\bnothing to (?:correct|fix)\b/i },
++  //    Ticket shape (a): the bulleted "done, verified" roll-call. Requires TWO such
++  //    lines within 400 chars -- the roll-call signature that a single REQUIRED
++  //    status line cannot produce. The one-line form was measured and REJECTED: it
++  //    fired on a legitimate "where things stand" report ("- **GEN-550 -- shipped,
++  //    verified, Done.**"). This form fires on exactly 1 of 2,585 real turns: the
++  //    recurrence this ticket was filed for. Gap is bounded and contains no nested
++  //    quantifier -- 200k adversarial near-miss input probes at ~5ms.
++  //    ACCEPTED RESIDUAL: a required status report that bullet-lists 2+ items as
++  //    "X -- shipped, verified" inside 400 chars WOULD fire (the real message above
++  //    was one comma short). Accepted because a false nudge is dismissible and the
++  //    alternative -- no coverage for shape (a) at all -- was the open finding.
++  //    NOTE: being line-start-anchored, this pattern gets NO protection from
++  //    isQuoted() by construction -- there is never any same-line text before the
++  //    match to count quotes in. A fenced or block-quoted EXAMPLE of the roll-call
++  //    shape will therefore fire. Fail-open, consistent with this stage's stance.
++  { re: /^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b[\s\S]{0,400}?^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/im },
+ ];
+ 
+ // A CLEAN / NO-OP signal near a `needsClean` phrase confirms it is clean-result
+@@ -386,6 +419,43 @@
+   return false;
+ }
+ 
++// A QUOTED phrase is being discussed, not asserted. This stage's own subject matter
++// makes that routine: messages about the linter quote the exact phrasings the
++// patterns match ("the flagged phrasings (\"filed\", \"I checked\") are in that
++// already-delivered block"). GEN-557 v1 fired on a message that merely quoted its
++// own ticket's fixture while explaining it -- structurally the GEN-467 failure of
++// nudging a message for TALKING about a thing rather than DOING it.
++// Test: per-line quote/code-span parity. A match is skipped when an odd number of
++// straight double-quotes or backticks precedes it on its own line, or an unclosed
++// smart open-quote does.
++// LIMITS (measured and accepted, not overlooked): parity is per LINE, so a
++// multi-line quoted block or a ``` fence is not covered; single-quoted spans are
++// not covered. Both leave the pre-guard behavior (a fire) -- the safe direction.
++// SCOPE: applies to ALL SELF_AUDIT_PATTERNS -- the six added by GEN-557 AND the 10
++// that shipped before it. That widening changes already-vetted behaviour, so it was
++// NOT taken silently: it was measured first, then put to Erez, who chose it
++// explicitly on 2026-08-02 (the narrow `pat.isNew`-gated alternative was built and
++// offered alongside it).
++// What the widening does, measured on 4,356 real turn-final messages: applied to the
++// shipped patterns IN ISOLATION it changes 6 turns and fully silences 4 -- all 4
++// inspected, all 4 genuine quoted references (the phrase under discussion, e.g. 'The
++// "Nothing else was touched" line was backed by...'), with no genuine hit wrongly
++// suppressed anywhere in the corpus, so the false-negative direction is measured
++// rather than assumed. Shipped TOGETHER with the six patterns above the net is 2, not
++// 4, because 2 of those 4 messages also say "Nothing to correct" and so still fire on
++// a new pattern: 190 -> 188 fires.
++// MAINTENANCE: a pattern added later is covered by this guard automatically. If one
++// ever needs to opt OUT, gate the call site on a per-pattern flag rather than
++// weakening the test here.
++function isQuoted(text, at) {
++  const lineStart = text.lastIndexOf('\n', at - 1) + 1;
++  const before = text.slice(lineStart, at);
++  const straight = (before.match(/"/g) || []).length;
++  const ticks = (before.match(/`/g) || []).length;
++  const smart = (before.match(/“/g) || []).length - (before.match(/”/g) || []).length;
++  return (straight % 2 === 1) || (ticks % 2 === 1) || smart > 0;
++}
++
+ // Find self-audit narration hits. Sentence/position-agnostic BY DESIGN: a self-
+ // audit line is flagged wherever it appears, INCLUDING inside a "For you" block --
+ // the recurrence that prompted GEN-507 was exactly a self-audit line placed inside
+@@ -401,6 +471,9 @@
+     let m;
+     while ((m = re.exec(text)) !== null) {
+       if (m.index === re.lastIndex) { re.lastIndex++; } // guard against zero-width match loop
++      // A match inside a quote/code span is DISCUSSION, not narration (see isQuoted).
++      // Applies to ALL patterns, new and pre-GEN-557 (Erez's explicit call, 2026-08-02).
++      if (isQuoted(text, m.index)) continue;
+       const start = Math.max(0, m.index - SELF_AUDIT_CLEAR_WINDOW);
+       const end = Math.min(text.length, m.index + m[0].length + SELF_AUDIT_CLEAR_WINDOW);
+       const vicinity = text.slice(start, end);

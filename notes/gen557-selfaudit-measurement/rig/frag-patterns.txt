@@ -1,0 +1,33 @@
+  // -- GEN-557: verification-walkthrough narration. The recurrence was a post-nudge
+  //    clean-audit recital addressed to Erez -- an enumerated roll-call of threads,
+  //    each "done, verified", closing with an exhaustiveness self-defense and a
+  //    "Nothing to correct". All six patterns below were measured against 4,356 real
+  //    turn-final messages (the actual last_assistant_message values this hook
+  //    receives, rebuilt from on-disk transcripts; 2,585 of them reachable by this
+  //    stage -- see the Phase-2 note). They add 113 production fires, ALL 113
+  //    inspected, 0 false. Rig + per-pattern evidence: GEN-557.
+  { re: /✓\s*closed\b/i },
+  { re: /\bthat'?s the complete set\b/i },
+  { re: /\bholds as written\b/i },
+  { re: /\bexhaustiveness claim\b[^.\n]{0,80}?\b(?:holds|stands|is accurate|checks out|survives)\b/i },
+  //    The dominant pattern (111 of the 113). Every one of the 125 reachable,
+  //    unquoted real instances was the target class ("...all sourced this turn.
+  //    Nothing to correct."), so it is NOT position-anchored and NOT needsClean-
+  //    gated: both were considered and measured as unnecessary, not skipped.
+  { re: /\bnothing to (?:correct|fix)\b/i },
+  //    Ticket shape (a): the bulleted "done, verified" roll-call. Requires TWO such
+  //    lines within 400 chars -- the roll-call signature that a single REQUIRED
+  //    status line cannot produce. The one-line form was measured and REJECTED: it
+  //    fired on a legitimate "where things stand" report ("- **GEN-550 -- shipped,
+  //    verified, Done.**"). This form fires on exactly 1 of 2,585 real turns: the
+  //    recurrence this ticket was filed for. Gap is bounded and contains no nested
+  //    quantifier -- 200k adversarial near-miss input probes at ~5ms.
+  //    ACCEPTED RESIDUAL: a required status report that bullet-lists 2+ items as
+  //    "X -- shipped, verified" inside 400 chars WOULD fire (the real message above
+  //    was one comma short). Accepted because a false nudge is dismissible and the
+  //    alternative -- no coverage for shape (a) at all -- was the open finding.
+  //    NOTE: being line-start-anchored, this pattern gets NO protection from
+  //    isQuoted() by construction -- there is never any same-line text before the
+  //    match to count quotes in. A fenced or block-quoted EXAMPLE of the roll-call
+  //    shape will therefore fire. Fail-open, consistent with this stage's stance.
+  { re: /^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b[\s\S]{0,400}?^[ \t]*[-*]\s.*\b(?:done|filed|shipped|applied|resolved)[,;]\s*(?:and\s+)?verified\b/im },

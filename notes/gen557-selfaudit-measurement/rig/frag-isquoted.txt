@@ -1,0 +1,37 @@
+// A QUOTED phrase is being discussed, not asserted. This stage's own subject matter
+// makes that routine: messages about the linter quote the exact phrasings the
+// patterns match ("the flagged phrasings (\"filed\", \"I checked\") are in that
+// already-delivered block"). GEN-557 v1 fired on a message that merely quoted its
+// own ticket's fixture while explaining it -- structurally the GEN-467 failure of
+// nudging a message for TALKING about a thing rather than DOING it.
+// Test: per-line quote/code-span parity. A match is skipped when an odd number of
+// straight double-quotes or backticks precedes it on its own line, or an unclosed
+// smart open-quote does.
+// LIMITS (measured and accepted, not overlooked): parity is per LINE, so a
+// multi-line quoted block or a ``` fence is not covered; single-quoted spans are
+// not covered. Both leave the pre-guard behavior (a fire) -- the safe direction.
+// SCOPE: applies to ALL SELF_AUDIT_PATTERNS -- the six added by GEN-557 AND the 10
+// that shipped before it. That widening changes already-vetted behaviour, so it was
+// NOT taken silently: it was measured first, then put to Erez, who chose it
+// explicitly on 2026-08-02 (the narrow `pat.isNew`-gated alternative was built and
+// offered alongside it).
+// What the widening does, measured on 4,356 real turn-final messages: applied to the
+// shipped patterns IN ISOLATION it changes 6 turns and fully silences 4 -- all 4
+// inspected, all 4 genuine quoted references (the phrase under discussion, e.g. 'The
+// "Nothing else was touched" line was backed by...'), with no genuine hit wrongly
+// suppressed anywhere in the corpus, so the false-negative direction is measured
+// rather than assumed. Shipped TOGETHER with the six patterns above the net is 2, not
+// 4, because 2 of those 4 messages also say "Nothing to correct" and so still fire on
+// a new pattern: 190 -> 188 fires.
+// MAINTENANCE: a pattern added later is covered by this guard automatically. If one
+// ever needs to opt OUT, gate the call site on a per-pattern flag rather than
+// weakening the test here.
+function isQuoted(text, at) {
+  const lineStart = text.lastIndexOf('\n', at - 1) + 1;
+  const before = text.slice(lineStart, at);
+  const straight = (before.match(/"/g) || []).length;
+  const ticks = (before.match(/`/g) || []).length;
+  const smart = (before.match(/“/g) || []).length - (before.match(/”/g) || []).length;
+  return (straight % 2 === 1) || (ticks % 2 === 1) || smart > 0;
+}
+
