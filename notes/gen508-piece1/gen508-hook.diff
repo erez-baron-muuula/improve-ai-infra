@@ -1,0 +1,439 @@
+diff --git a/C:/Users/Erez/.claude/hooks/auto-approve.js b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/8cbc4fb1-b0c2-4841-9721-793b077e1c43/scratchpad/auto-approve.working.js
+index 389ab25..246ca59 100644
+--- a/C:/Users/Erez/.claude/hooks/auto-approve.js
++++ b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/8cbc4fb1-b0c2-4841-9721-793b077e1c43/scratchpad/auto-approve.working.js
+@@ -26,6 +26,8 @@
+ const fs = require('fs');
+ const os = require('os');
+ const path = require('path');
++const crypto = require('crypto');                              // GEN-508: ticket-pass contentHash
++const { execFileSync } = require('child_process');             // GEN-508: Team-Tasks page resolution
+ 
+ const HOOK_DIR = __dirname;
+ const LOG_FILE = path.join(HOOK_DIR, 'deferred-calls.jsonl');
+@@ -1432,6 +1434,411 @@ function findCheckPassFile(matchFn, exclude) {
+   return findPassInDir(CHECK_PASS_DIR, matchFn, exclude);
+ }
+ 
++// ---- GEN-508: ticket-quality gate for Notion Team-Tasks writes --------------
++// FOURTH sibling of the staging / vetting / check gates above, same shape: a target-anchored
++// PreToolUse guard over a single-use pass minted (only) by a skill -- here `/vet-ticket` -- into a
++// dir OUTSIDE ~/.claude, so the mint always prompts Erez and that prompt IS the human gate.
++//
++// WHY: Claude repeatedly files or edits Team-Tasks tickets that violate the ticket-quality rules --
++// most often a body that does not stand on its own, and/or missing/wrong priority-derivation fields
++// (Urgency + Gain ratio -> Priority). The behavioural self-check rule for that is skipped under
++// momentum. This makes an INDEPENDENT review a precondition of the write instead of a reminder.
++//
++// UNLIKE the file-target siblings, a Notion CREATE can be gated pre-hoc: the create payload names
++// its own parent data source, so there is no "must exist on disk first" anchor problem. (GEN-508's
++// original design assumed otherwise by analogy to new-FILE creation and chose review-after; that
++// premise is false here -- notion-schema-guard.js has gated creates at PreToolUse in production
++// since GEN-375.) So every arm below gates BEFORE the write, creates included. "Airtight" is claimed
++// only for the MCP tools enumerated here: raw REST/curl Notion writes and all Jira writes are OUT of
++// scope for this arm (they are `ask`-gated by notion-schema-guard / staging-gated, but not held to
++// the ticket bar) -- a named gap, not coverage.
++//
++// SCOPE (evaluation order matters -- see ticketVettingTargets):
++//   A1 create        notion-create-pages   parent = Team-Tasks              -> gated (in-payload)
++//   A2 property edit notion-update-page    update_properties, substance key -> gated (needs resolve)
++//   A3 body edit     notion-update-page    any other command except
++//                                          update_verification              -> gated (needs resolve)
++//   A4 duplicate     notion-duplicate-page source page in Team-Tasks        -> gated (needs resolve)
++//   A5 move          notion-move-pages     new_parent = Team-Tasks (move IN,
++//                                          in-payload) OR any moved page is
++//                                          a Team-Tasks row (move OUT, needs
++//                                          resolve -- de-listing a row DROPS
++//                                          every database property)         -> gated
++// The CHEAP in-payload tests run BEFORE any network resolution, so a housekeeping-only property
++// edit (Status/Assignee/...) never touches the resolver and can never be blocked by it.
++//
++// SUBSTANCE is a DENY-list, not an allow-list: anything not in TICKET_HOUSEKEEPING_PROPS counts.
++// An allow-list would silently UN-gate a field the moment a Team-Tasks property is renamed; the
++// deny-list rotates the safe way (an unknown key becomes substance -> gated). It also catches
++// `Children`, the inverse-of-parent relation whose write silently re-parents pages and which
++// notion-schema-guard's `(Parent item)`-suffix matcher does not match by name.
++//
++// UNRESOLVED PAGE -> HARD-BLOCK, not defer. Erez's explicit call (2026-08-02): if the gate cannot
++// tell whether a page is a work ticket, it stops. A defer() is silently auto-approved under
++// bypass-permissions mode (the GEN-562 leak), so defer would not be "stops". This is proportionate
++// because `/vet-ticket` needs NO Notion access to mint -- a Notion outage costs one review + one
++// mint, never the global break-glass.
++//
++// CONTENT HASH: the pass binds target + contentHash (deliberately STRONGER than the siblings, which
++// bind target only at the hook layer). The hash is `sha256Hex(stableStringify(tool_input))` -- the
++// WHOLE payload, every arm, no exceptions. Defined ONCE here and cited by /vet-ticket; the two must
++// agree or no pass ever matches. It is deliberately NOT a hand-picked projection: an allow-list of
++// "the fields that matter" leaves everything else unbound, and the fields it missed were not
++// cosmetic (`apply_template` hashed to a constant; `allow_deleting_content` permits deleting child
++// pages). Whole-payload hashing fails CLOSED -- the cost is a re-mint when any field changes.
++//
++// MAINTENANCE: the Notion MCP server UUID below, the Team-Tasks ids, the GEN-58 page id and the
++// housekeeping property names are all hardcoded -- the same latent-rotation risk the sibling Notion
++// hooks document. If ticket writes ever stop being gated, re-check these first.
++const TICKET_PASS_DIR = path.join(STAGING_DIR, 'ticket-passes');
++const TICKET_EVENTS_LOG = path.join(STAGING_DIR, 'ticket-gate-events.jsonl');
++const PAGE_PARENT_CACHE = path.join(STAGING_DIR, 'notion-page-parents.json');
++const NOTION_MCP_PREFIX = 'mcp__46ff9446-421e-4358-809c-6b8b01e661b2__';
++const NOTION_CREATE_TOOL = NOTION_MCP_PREFIX + 'notion-create-pages';
++const NOTION_UPDATE_TOOL = NOTION_MCP_PREFIX + 'notion-update-page';
++const NOTION_DUPLICATE_TOOL = NOTION_MCP_PREFIX + 'notion-duplicate-page';
++const NOTION_MOVE_TOOL = NOTION_MCP_PREFIX + 'notion-move-pages';
++// Team-Tasks: REST database id + MCP collection (data source) id, dashless lowercase.
++const TEAM_TASKS_IDS = new Set(['fe198002661848d7ae0456f8cee479f3', 'bd2cd17bf58f49938b95468e881272fa']);
++// GEN-58 (QA Layer 5) -- append-only log writes here are exempt (see ticketVettingTargets).
++const GEN58_PAGE_ID = '36d6e495d07c816e9e0cce265d694ab3';
++const TICKET_APPEND_COMMANDS = new Set(['insert_content', 'insert_content_after']);
++// Live Team-Tasks property set (GET /v1/databases/<id>, 2026-08-02): Priority, Status, Urgency,
++// Date Created, Assignee, Reason, Parent item, Attachment, Project, Type, Text, Children,
++// Gain ratio, Remind me (days before), Due Date, ID, Name. Housekeeping = pure workflow metadata.
++const TICKET_HOUSEKEEPING_PROPS = new Set([
++  'status', 'assignee', 'project', 'type', 'reason', 'due date',
++  'remind me (days before)', 'date created', 'id', 'parent item'
++]);
++// POSITIVES ONLY, and only as a speed-up. An earlier draft also cached negatives for 24h; that was a
++// silent fail-open on an ordinary workflow -- a page edited while it was an ordinary page caches
++// false, Erez then drags it into Team-Tasks IN THE NOTION UI (no notion-move-pages call, so no
++// seeding), and for the next 24h every edit to that live ticket is waved through with no pass and no
++// resolver call. A stale-known-negative must not be treated better than an unknown, which this gate
++// hard-blocks. So a miss ALWAYS re-resolves; only a fresh positive short-circuits.
++const TICKET_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;          // a ticket stays a ticket
++
++function sha256Hex(s) {
++  return crypto.createHash('sha256').update(String(s), 'utf8').digest('hex');
++}
++
++// Dashless lowercase 32-hex, or '' if the value is not a Notion id.
++function normNotionId(v) {
++  const s = String(v == null ? '' : v).replace(/-/g, '').trim().toLowerCase();
++  return /^[0-9a-f]{32}$/.test(s) ? s : '';
++}
++
++// Strip the qualifier forms notion-update-page uses for some property types
++// (`date:Due Date:start`, `userDefined:ID`, `place:X:latitude`) down to the bare property name.
++function ticketPropName(key) {
++  let k = String(key == null ? '' : key);
++  k = k.replace(/^(?:date|place|userDefined):/i, '');
++  k = k.replace(/:(?:start|end|is_datetime|name|address|latitude|longitude|google_place_id)$/i, '');
++  return k.trim().toLowerCase();
++}
++
++function ticketPropIsSubstance(key) {
++  const n = ticketPropName(key);
++  if (!n) return false;
++  return !TICKET_HOUSEKEEPING_PROPS.has(n);
++}
++
++// ---- page-parent cache (lives OUTSIDE ~/.claude on purpose) -----------------
++// settings.json allow-lists Write(C:\Users\Erez\.claude\*), so a cache inside that tree could be
++// silently rewritten by a tool call to mark a real ticket out-of-scope with NO prompt. The hook's
++// own fs writes are unaffected by the allow-list, so nothing is lost by keeping it in
++// ~/.claude-staging alongside the pass dirs.
++function readPageParentCache() {
++  try {
++    const j = JSON.parse(fs.readFileSync(PAGE_PARENT_CACHE, 'utf8').replace(/^\uFEFF/, ''));
++    return (j && typeof j === 'object') ? j : {};
++  } catch (e) { return {}; }
++}
++
++// Record a CONFIRMED Team-Tasks page, pruning expired entries on the way so the file stays bounded
++// at roughly the live working set instead of growing for every page ever touched.
++function cachePageParent(id) {
++  try {
++    const c = readPageParentCache();
++    const now = Date.now();
++    for (const k of Object.keys(c)) {
++      const e = c[k];
++      if (!e || e.tt !== true || typeof e.ts !== 'number' || now - e.ts > TICKET_CACHE_TTL_MS) delete c[k];
++    }
++    c[id] = { tt: true, ts: now };
++    fs.mkdirSync(STAGING_DIR, { recursive: true });
++    fs.writeFileSync(PAGE_PARENT_CACHE, JSON.stringify(c));
++  } catch (e) { /* cache is an optimization; never let it break the gate */ }
++}
++
++// true (fresh confirmed ticket) or null (unknown -- caller must resolve). Never returns false: see
++// the TICKET_CACHE_TTL_MS comment for why a cached negative is not trustworthy.
++function cachedPageParent(id) {
++  try {
++    const e = readPageParentCache()[id];
++    if (!e || e.tt !== true || typeof e.ts !== 'number') return null;
++    if (Date.now() - e.ts > TICKET_CACHE_TTL_MS) return null;
++    return true;
++  } catch (e) { return null; }
++}
++
++// true / false / null(unknown). The catch is TOTAL by design -- no token, network error, non-JSON,
++// unexpected shape, timeout, AND any bug in this function's own code all become null, so a resolver
++// fault can never escape into enforceTicketVetting's "internal error -> defer" path and silently
++// disable the gate. Same PowerShell-credential + curl pattern as notion-fetch-staleness.js.
++function isTeamTasksPage(pageId) {
++  try {
++    const id = normNotionId(pageId);
++    if (!id) return null;
++    if (cachedPageParent(id) === true) return true;   // positives short-circuit; a miss re-resolves
++    const ps =
++      "$v=[Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]::new();" +
++      "$c=$v.Retrieve('claude-notion-token','claude-notion-token');$c.RetrievePassword();$c.Password";
++    const tok = String(execFileSync('powershell.exe',
++      ['-NoProfile', '-NonInteractive', '-Command', ps],
++      { encoding: 'utf8', timeout: 8000 }) || '').trim();
++    if (!tok) return null;
++    const out = execFileSync('curl.exe',
++      ['-sk', 'https://api.notion.com/v1/pages/' + id,
++       '-H', 'Authorization: Bearer ' + tok,
++       '-H', 'Notion-Version: 2022-06-28'],
++      { encoding: 'utf8', timeout: 8000 });
++    const obj = JSON.parse(out);
++    const par = obj && obj.parent;
++    if (!par || typeof par !== 'object' || typeof par.type !== 'string') return null;
++    const parentId = normNotionId(par.data_source_id || par.database_id || '');
++    // A page parented to another page / the workspace is legitimately NOT a ticket -> cache false.
++    const tt = parentId !== '' && TEAM_TASKS_IDS.has(parentId);
++    if (tt) cachePageParent(id);
++    return tt;
++  } catch (e) {
++    return null;
++  }
++}
++
++function logTicketGateEvent(entry) {
++  try {
++    fs.mkdirSync(STAGING_DIR, { recursive: true });
++    fs.appendFileSync(TICKET_EVENTS_LOG, JSON.stringify(Object.assign({ ts: new Date().toISOString() }, entry)) + '\n');
++  } catch (e) { /* logging must never break a tool call */ }
++}
++
++// The in-scope target(s) of this call: [{target, hash, unresolved}]. [] means "not our concern".
++//
++// ORDERING IS LOAD-BEARING: every cheap in-payload test happens before isTeamTasksPage() is called,
++// so a housekeeping-only property edit never touches the resolver and can never be blocked by it.
++//
++// PURE: this function must not mutate anything. Its caller wraps it in a catch, so a side effect
++// that throws would take the whole gate down with it; cache seeding therefore happens in
++// enforceTicketVetting AFTER a pass matches (an earlier draft seeded here, which meant a BLOCKED
++// move still poisoned the cache with 30-day false positives for pages it never moved).
++//
++// HASH: the whole tool_input, via stableStringify. Complete by construction -- an earlier draft
++// hashed a hand-picked allow-list of fields, which left every other field unbound: `apply_template`
++// hashed to a CONSTANT (a pass reviewed for template A authorised template B on the same ticket),
++// and `position`, `template_id` and `allow_deleting_content` (which permits deleting child pages)
++// all rode along unreviewed. Hashing everything costs only that an unrelated field change forces a
++// re-mint -- and it fails CLOSED, which the allow-list did not.
++function ticketVettingTargets(tool, ti) {
++  const hash = sha256Hex(stableStringify(ti === undefined ? null : ti));
++  // A gated tool whose payload is not even an object is not provably out of scope -> gate it.
++  if (!ti || typeof ti !== 'object') return [{ target: tool + ':no-payload', hash: hash, unresolved: true }];
++
++  // A1 -- create. Parent is in the payload; no resolution needed.
++  if (tool === NOTION_CREATE_TOOL) {
++    const par = ti.parent;
++    const pid = (par && typeof par === 'object') ? normNotionId(par.data_source_id || par.database_id || '') : '';
++    if (!pid || !TEAM_TASKS_IDS.has(pid)) return [];   // a create elsewhere in Notion is not a ticket
++    const pages = Array.isArray(ti.pages) ? ti.pages : [];
++    if (pages.length === 0) return [];
++    return [{ target: 'create:' + pid, hash: hash, unresolved: false }];
++  }
++
++  // A5 -- move. Move IN (destination is Team-Tasks) is a create path. Move OUT is equally in scope:
++  // moving a row to a non-database parent de-lists it and DROPS EVERY DATABASE PROPERTY (body kept)
++  // -- the most destructive ticket write reachable through these tools, and it would otherwise pass
++  // silently under defaultMode "auto".
++  if (tool === NOTION_MOVE_TOOL) {
++    const par = ti.new_parent;
++    const dest = (par && typeof par === 'object') ? normNotionId(par.data_source_id || par.database_id || '') : '';
++    const raw = Array.isArray(ti.page_or_database_ids) ? ti.page_or_database_ids : [];
++    const ids = raw.map(normNotionId).filter(Boolean).sort();
++    if (ids.length === 0) return raw.length === 0 ? [] : [{ target: 'move:unparsable', hash: hash, unresolved: true }];
++    if (ids.length !== raw.length) return [{ target: 'move:unparsable', hash: hash, unresolved: true }];
++    if (dest && TEAM_TASKS_IDS.has(dest)) return [{ target: 'move:' + dest, hash: hash, unresolved: false }];
++    let anyTicket = false, anyUnknown = false;
++    for (const id of ids) {
++      const tt = isTeamTasksPage(id);
++      if (tt === true) anyTicket = true;
++      else if (tt === null) anyUnknown = true;
++    }
++    if (!anyTicket && !anyUnknown) return [];          // moving non-tickets around Notion: not ours
++    return [{ target: 'move-out:' + ids.join('+'), hash: hash, unresolved: !anyTicket }];
++  }
++
++  // A4 -- duplicate. Needs resolution of the SOURCE page (a copy of a ticket is a live ticket).
++  if (tool === NOTION_DUPLICATE_TOOL) {
++    const src = normNotionId(ti.page_id);
++    if (!src) return [{ target: 'duplicate:unparsable', hash: hash, unresolved: true }];
++    const tt = isTeamTasksPage(src);
++    if (tt === false) return [];
++    return [{ target: 'duplicate:' + src, hash: hash, unresolved: tt === null }];
++  }
++
++  // A2 / A3 -- update. Cheap tests first, resolution last.
++  if (tool === NOTION_UPDATE_TOOL) {
++    const pid = normNotionId(ti.page_id);
++    // An id we cannot parse is NOT evidence of being out of scope (the design's own stance is
++    // unknown -> block); the MCP rejecting the URL form today is an external invariant, not ours.
++    if (!pid) return [{ target: 'update:unparsable', hash: hash, unresolved: true }];
++    const cmd = String(ti.command == null ? '' : ti.command);
++    if (cmd === 'update_verification') return [];        // page metadata, not ticket substance
++    if (cmd === 'update_properties') {
++      const props = (ti.properties && typeof ti.properties === 'object') ? ti.properties : null;
++      if (!props) return [];
++      if (Object.keys(props).filter(ticketPropIsSubstance).length === 0) return []; // housekeeping only
++    }
++    // Every other command (incl. any future one -- the enum is open: insert_content_after is live
++    // but unpublished) is treated as content-bearing.
++    //
++    // GEN-58 carve-out, BEFORE the resolver (its page id is known). A standing rule requires
++    // reasoning-failure log writes to happen immediately and explicitly exempts them from the
++    // draft-for-approval pause -- a mint prompt is exactly that pause. Append-only; a rewrite of
++    // that page is still gated.
++    if (pid === GEN58_PAGE_ID && TICKET_APPEND_COMMANDS.has(cmd)) return [];
++    const tt = isTeamTasksPage(pid);
++    if (tt === false) return [];
++    return [{ target: pid, hash: hash, unresolved: tt === null }];
++  }
++
++  return [];
++}
++
++// Reads the ticket-passes dir. Separate dir keeps ticket passes from cross-matching staging /
++// vetting / check passes. Named wrapper over findPassInDir, per the family convention (and
++// /vet-ticket's Step-0 gate-integrity grep looks for this name).
++function findTicketPassFile(matchFn, exclude) {
++  return findPassInDir(TICKET_PASS_DIR, matchFn, exclude);
++}
++
++// A pass covers one target, or -- for a batch approval -- several. Erez approves a card LIST in one
++// action, so one mint must cover N tickets; minting N files would raise N prompts and defeat that.
++// Compare targets on a normalized form, so a pass minted with a dashed or upper-case id still
++// matches (it would otherwise fail closed with a refusal naming a target the operator can plainly
++// see in the pass file -- a confusing dead end costing a re-mint).
++function normTicketTarget(v) {
++  const s = String(v == null ? '' : v).trim().toLowerCase();
++  const m = s.match(/^(create|duplicate|move|move-out):(.+)$/);
++  if (!m) return normNotionId(s) || s;
++  return m[1] + ':' + m[2].split('+').map(x => normNotionId(x) || x.replace(/-/g, '')).join('+');
++}
++
++function ticketPassMatches(pass, t) {
++  if (!pass || pass.kind !== 'ticket') return false;
++  const entries = Array.isArray(pass.targets)
++    ? pass.targets
++    : [{ target: pass.target, contentHash: pass.contentHash }];
++  const want = normTicketTarget(t.target);
++  return entries.some(e => e && normTicketTarget(e.target) === want && String(e.contentHash) === t.hash);
++}
++
++// Single-use is per TARGET, not per file: consuming one entry of a batch pass rewrites the file
++// without it, and the file is renamed to *.consumed.<ts> only when its last entry goes. A
++// single-target pass keeps the siblings' plain rename.
++function consumeTicketPassTarget(file, target) {
++  try {
++    const pass = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
++    if (!Array.isArray(pass.targets)) return consumePassFile(file);
++    const want = normTicketTarget(target);
++    const rest = pass.targets.filter(e => !(e && normTicketTarget(e.target) === want));
++    if (rest.length === 0) return consumePassFile(file);
++    pass.targets = rest;
++    fs.writeFileSync(file, JSON.stringify(pass));
++    return true;
++  } catch (e) { return false; }
++}
++
++function blockTicketVetting(t) {
++  process.stderr.write(
++    'Refused (ticket-quality gate): no ticket pass for ' + t.target + '.' +
++    (t.unresolved
++      ? ' This page could not be resolved against the Team-Tasks database (no token / Notion unreachable /' +
++        ' unexpected response / unparsable id), so it is treated as in scope rather than waved through.' +
++        ' If it is NOT a ticket, most of /vet-ticket\'s checklist does not apply -- say so at the card and' +
++        ' mint on that basis, or use break-glass if Notion is down for the whole session.'
++      : '') +
++    ' A Team-Tasks create, duplicate, move-in, body edit, or substance-property edit must go through' +
++    ' the /vet-ticket flow: an independent reviewer passes the draft against the ticket bar, Erez' +
++    ' approves the summary card, and that mints a single-use pass. NOT gated: housekeeping-only' +
++    ' property edits (status, assignee, project, type, reason, due date, reminder, parent item) and' +
++    ' append-only GEN-58 log writes.\n'
++  );
++  process.exit(2);
++}
++
++// Ticket-quality guard. Hard-blocks (exit 2) an in-scope Team-Tasks write with no matching pass;
++// consumes the matching pass(es) and approves; returns (falls through) for everything else. Honors
++// break-glass. Mirrors enforceCheckDue's all-or-nothing resolution: every target must have a pass
++// BEFORE any is consumed. No `exclude` list is needed here (unlike the siblings): targets within a
++// call are de-duplicated and matching is by target string, so two targets can never claim one entry.
++function enforceTicketVetting(tool, ti) {
++  // Tool test FIRST and OUTSIDE the try: it cannot throw, so a bug anywhere below can never make a
++  // non-Notion call take the block path -- and, more importantly, the catch below can fail CLOSED
++  // without risking every other tool call in the session.
++  if (tool !== NOTION_CREATE_TOOL && tool !== NOTION_UPDATE_TOOL &&
++      tool !== NOTION_DUPLICATE_TOOL && tool !== NOTION_MOVE_TOOL) return;
++  if (configUnlocked()) return;                 // break-glass: skip the gate entirely
++  let targets;
++  try {
++    targets = ticketVettingTargets(tool, ti);
++  } catch (e) {
++    // A throw in our own scoping is NOT a reason to let a Notion write through. defaultMode is
++    // "auto", so returning here would be a SILENT APPROVE of an unreviewed ticket write, not a
++    // prompt -- the exact "silently disable the gate" path the resolver's total-catch exists to
++    // prevent. Fail closed instead; break-glass is the escape.
++    logTicketGateEvent({ event: 'block', tool: tool, target: '<scope-error>', reason: 'scope-error' });
++    return blockTicketVetting({ target: '<scope-error>', unresolved: true });
++  }
++  if (!targets || targets.length === 0) return;
++  const seen = new Set();
++  targets = targets.filter(t => (seen.has(t.target) ? false : (seen.add(t.target), true)));
++
++  const files = [];
++  for (const t of targets) {
++    const file = findTicketPassFile(p => ticketPassMatches(p, t));
++    if (!file) {
++      logTicketGateEvent({
++        event: 'block', tool: tool, target: t.target,
++        reason: t.unresolved ? 'unresolved' : 'no-pass'
++      });
++      return blockTicketVetting(t);
++    }
++    files.push(file);
++  }
++  for (let i = 0; i < targets.length; i++) {
++    if (!consumeTicketPassTarget(files[i], targets[i].target)) {
++      // The rewrite path is not atomic the way the siblings' rename is, so a failure here leaves a
++      // replayable pass. Log it loudly; /vet-ticket's post-write check is what retires it.
++      logTicketGateEvent({ event: 'consume-failed', tool: tool, target: targets[i].target });
++    }
++  }
++  // Seed the cache only now that the write is authorised: pages moved INTO Team-Tasks become
++  // tickets, so their first edit needs no round-trip. Best-effort; never blocks the approve.
++  try {
++    if (tool === NOTION_MOVE_TOOL && ti && ti.new_parent && typeof ti.new_parent === 'object') {
++      const dest = normNotionId(ti.new_parent.data_source_id || ti.new_parent.database_id || '');
++      if (dest && TEAM_TASKS_IDS.has(dest) && Array.isArray(ti.page_or_database_ids)) {
++        for (const rawId of ti.page_or_database_ids) {
++          const id = normNotionId(rawId);
++          if (id) cachePageParent(id);
++        }
++      }
++    }
++  } catch (e) { /* seeding is an optimization */ }
++  logTicketGateEvent({ event: 'approve', tool: tool, targets: targets.map(t => t.target) });
++  return approve('Auto-approved: ticket pass consumed (' + targets.map(t => t.target).join(', ') + ').');
++}
++
+ // ---- GEN-488: advisory redirect-target nudge (prevention, NOT a safety mechanism) ----
+ // Fires a one-line additionalContext warning when a shell command's redirect target
+ // LITERALLY resolves to a junk-prone directory (GEN-373 evidence: top-level strays):
+@@ -1660,6 +2067,13 @@ process.stdin.on('end', () => {
+   // through. Target-anchored (fail-safe), same as enforceVetting.
+   enforceCheckDue(tool, input.tool_input, input.tool_input && input.tool_input.command, input.cwd);
+ 
++  // GEN-508: ticket-quality gate for Notion Team-Tasks writes. Runs before the allow-list so an
++  // allow entry cannot bypass it; consumes a one-time ticket pass on match (approve), hard-blocks
++  // (exit 2) on an in-scope write with no pass, falls through otherwise. Payload-anchored: a create
++  // and a move-in carry their own Team-Tasks target, an edit/duplicate resolves the page (unknown ->
++  // block, per GEN-508; a defer would be silently approved under bypass-permissions).
++  enforceTicketVetting(tool, input.tool_input);
++
+   // Already allow-listed by settings (bare names) => no action, no log.
+   if (bareAllowList().has(tool)) return defer();
+ 
