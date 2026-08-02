@@ -59,6 +59,11 @@
 #   a TOC line lacking the '- ' prefix is invisible to Test-IsTocBullet, so the reconcile
 #   inserts a SECOND bullet rather than updating the existing one. Both were live drift
 #   sources in GEN-443; the callers now mandate the shape and this script enforces it.
+#   SCOPE LIMIT, stated so the guarantee is not read as wider than it is: this guard inspects
+#   only the entry being handed in THIS run. The same phantom-entry corruption is still possible
+#   from a column-0 '## <date>' line already sitting in an ALREADY-WRITTEN entry in the target
+#   (written before this guard shipped, or by any other tool), because the in-lock block-end scan
+#   reads the whole file. Cleaning pre-existing entries is GEN-443's Step 1, not this guard.
 #
 # EXIT CODES
 #   0 = success (prepended or replaced)
@@ -70,10 +75,13 @@
 #       after the lock was taken (this session's own TOC bullet lost post-edit, TOC anchor lost
 #       post-edit, insert point landing inside the new body, the >50% shrink guard tripping, or
 #       the atomic write/replace failing). FAIL LOUD: target untouched, composed entry written to
-#       a recovery file. HONEST GAP: the callers currently describe exit 3 to Erez as "structure
-#       not recognized" only, so a disk-full or permission failure is reported with the wrong
-#       CAUSE -- the ACTION they take (blocked wrap, keep the recovery file, no push) is correct
-#       either way. Splitting internal/write failure into its own code is a tracked follow-up.
+#       a recovery file. HONEST GAP: ONE code still covers TWO causes, so the exit code alone
+#       cannot say which occurred -- only the message can. The ACTION either cause demands
+#       (blocked wrap, keep the recovery file, no push) is the same, which is why they share a
+#       code today. Splitting internal/write failure into its own code is a tracked follow-up.
+#       Deliberately NOT restated here: what the caller documents say about exit 3. That claim
+#       was written here once, rotted when the callers were rewritten, and had to be corrected
+#       -- the same copy-drifts-from-source failure this whole change exists to remove.
 #   4 = INPUT CONTRACT VIOLATED -- the CALLER's own composed text is malformed: the EntryFile's
 #       literal first line is not a '## <date>' heading, the body carries a second column-0
 #       '## <date>' heading, -TocLine does not start with '- <date>', or -TocLine spans more than
@@ -119,11 +127,29 @@ function Write-Recovery([string]$targetPath, [string]$sessionKey, [string]$entry
     try {
         $dir = Split-Path -Parent $targetPath
         if (-not $dir) { $dir = "." }
-        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        # Milliseconds, not seconds: exit 4 is a RETRYABLE path, so a caller that is told to fix
+        # its text and retry can produce two recovery writes for the SAME session inside one
+        # second. At second resolution the second WriteAllText silently overwrote the first, and
+        # the RECOVERY FILE WRITTEN path printed for the first run then named the second run's
+        # content. (Found by GEN-443 Step 3 code review, Pass A.)
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
         # Sanitize the session key for a filename (it is normally hex/uuid, but be safe).
         $safeKey = ($sessionKey -replace '[^A-Za-z0-9_-]', '_')
         $recovery = Join-Path $dir "HISTORY.pending-$safeKey-$stamp.md"
-        $body = "# Unwritten HISTORY entry -- $why`n# Target: $targetPath`n# Session: $sessionKey`n# Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n#`n# Add this entry to the target by hand, or re-run once the blocker clears.`n`n$entryText"
+        # The standing "add it by hand" instruction is WRONG for a contract violation, and
+        # actively dangerous. That path is RETRYABLE: the caller is told to correct its text and
+        # call again, so by the time anyone reads this file the CORRECTED entry may already be in
+        # the target. Worse, the text below is the REJECTED text -- by construction it still
+        # carries the malformed shape (e.g. the stray column-0 '## <date>' line), so appending it
+        # by hand plants exactly the phantom-entry corruption this guard exists to prevent, plus a
+        # duplicate session marker that breaks the REPLACE path's marker-uniqueness assumption.
+        # (Found by GEN-443 Step 3 code review, Pass B round 2.)
+        $advice = if ($why -like "input contract violated*") {
+            "# CAUTION -- do NOT simply append this. The run was REJECTED for a FIXABLE input error and`n# the caller was told to correct its text and retry, so a corrected entry MAY ALREADY BE in the`n# target. Check the target for this session's entry BEFORE adding anything. The text below is the`n# REJECTED text: it still contains the malformed shape named above."
+        } else {
+            "# Add this entry to the target by hand, or re-run once the blocker clears."
+        }
+        $body = "# Unwritten HISTORY entry -- $why`n# Target: $targetPath`n# Session: $sessionKey`n# Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`n#`n$advice`n`n$entryText"
         [IO.File]::WriteAllText($recovery, $body, (New-Object System.Text.UTF8Encoding $false))
         Write-Output "RECOVERY FILE WRITTEN: $recovery"
     } catch {
@@ -152,7 +178,11 @@ function Write-Recovery([string]$targetPath, [string]$sessionKey, [string]$entry
 # A TOC bullet is a top-level '- ' list item whose text begins with a date token (a 4-digit
 # year appears in the first ~40 chars).
 function Test-IsTocBullet([string]$line) {
-    if (-not $line.StartsWith("- ")) { return $false }
+    # Ordinal, not the culture-sensitive default: this is a markdown SHAPE test, and under a
+    # culture comparison an ignorable/zero-width character before the dash still satisfies
+    # StartsWith -- so the guard would pass a bullet whose literal first two characters are not
+    # '- '. (Found by GEN-443 Step 3 code review, Pass A.)
+    if (-not $line.StartsWith("- ", [StringComparison]::Ordinal)) { return $false }
     $head = $line.Substring(2)
     if ($head.Length -gt 40) { $head = $head.Substring(0, 40) }
     return ($head -match '\b(19|20)\d{2}\b')
@@ -211,42 +241,68 @@ if ([string]::IsNullOrWhiteSpace($TocLine)) {
 # later run (see INPUT CONTRACT in the header for the two mechanisms). This runs BEFORE the
 # lock is acquired, so on this path the target is never opened at all -- "touch nothing" is
 # literal, not merely "not rewritten". ----
-# The LITERAL first line, NOT the first non-blank line: the marker is inserted at index 1 and
-# only TRAILING blanks are trimmed, so a leading blank line would pass a non-blank test and
-# still misplace the marker. $entryText was normalized to LF above, so splitting on LF here uses
-# the same line model the writer uses.
-$nlIdx = $entryText.IndexOf("`n")
-$entryFirstLine = if ($nlIdx -ge 0) { $entryText.Substring(0, $nlIdx) } else { $entryText }
-if (-not (Test-IsEntryHeading $entryFirstLine)) {
-    # Truncated only for the message, and only on this failure path.
-    $shownFirstLine = if ($entryFirstLine.Length -gt 120) { $entryFirstLine.Substring(0, 120) + "..." } else { $entryFirstLine }
-    # Recovery FIRST -- Write-Error terminates under $ErrorActionPreference='Stop'.
-    Write-Recovery $absPath $SessionKey $entryText "entry contract violated: first line is not a '## <date>' heading"
-    Write-Error "Entry contract violated: the EntryFile's LITERAL first line must be a '## <date>' heading, with nothing above it (not even a blank line). Got: '$shownFirstLine'. Target untouched; entry preserved in the recovery file." -ErrorAction Continue
-    exit 4
-}
-# Exactly ONE '## <date>' heading, and it must be the FIRST line. A column-0 '## <date>' line
-# anywhere in the BODY is read by the reconcile as the start of a DIFFERENT entry: the block-end
-# scan further down stops at the next heading of any kind, so on a later same-session run the
-# REPLACE keeps everything from that body line onward and re-emits it after a fresh '---'. The
-# result is a phantom entry of stale text carrying no TOC bullet and no session marker, produced
-# at exit 0 with a "Replaced existing entry" message, growing on every further run, and invisible
-# to the >50% shrink guard because the file GROWS. Easy to produce by accident: quoting the
-# mandated '## <date> -- <title>' heading shape in prose. Indent such a line, or use '###'.
-# (Found by GEN-443 Step 3 code review, Pass B.)
+# ALL violations are collected and reported in ONE message -- the guard does NOT exit on the
+# first one. The callers permit exactly ONE retry (a second exit 4 is a BLOCKED wrap: no commit,
+# no push, compact gate held) and are deliberately told to work from THIS message alone rather
+# than from any rule list. An exit-on-first-violation guard would therefore turn any entry that
+# breaks TWO rules into a DETERMINISTIC blocked wrap: the caller can only fix what it was told
+# about, and its single retry then trips the next check. That is not an exotic input -- the
+# INPUT CONTRACT header records the leading-blank-line and de-bulleted-TOC shapes as BOTH live
+# drift sources, and an entry quoting the mandated heading shape more than once is ordinary.
+# (Found by GEN-443 Step 3 code review, Pass B round 2.)
+#
+# THE HEADING RULES ARE ONE CHECK, NOT TWO -- this is load-bearing, do not split them again.
+# "The first line must be a heading" and "there must be no other heading" are not independent
+# questions: they are two readings of ONE fact, the position and count of the entry's column-0
+# '## <date>' lines. Evaluated as two independent checks that both report, a leading-blank entry
+# produced BOTH "line 1 must be a '## <date>' heading" AND "you have an extra heading at line 2,
+# demote it to '###'" -- the "extra" being the entry's own displaced heading. A caller obeying
+# that message deletes its only heading and is rejected a second time: the blocked wrap the
+# accumulate-all change existed to prevent, on the COMMONEST violation. Scanning once and
+# branching on (count, index of first) makes every combination reportable in one message with a
+# remedy that is correct in all of them. (Found by GEN-443 Step 3 code review, Pass B round 3;
+# the two-independent-checks shape was itself the fix for round 2, so this is the second time
+# this area failed by treating dependent things as independent -- hence one scan, one truth.)
+$violations = [System.Collections.Generic.List[string]]::new()
+$whys       = [System.Collections.Generic.List[string]]::new()
+
+# $entryText was normalized to LF above, so splitting on LF here uses the same line model the
+# writer uses. A column-0 '## <date>' line anywhere but line 1 is what corrupts: the reconcile
+# reads it as the start of a DIFFERENT entry, so the block-end scan stops there and a later
+# same-session run re-emits the tail as a phantom entry -- at exit 0, growing every run, and
+# invisible to the >50% shrink guard because the file GROWS. LITERAL line 1, not first non-blank:
+# the session marker is inserted at index 1 and only TRAILING blanks are trimmed, so a leading
+# blank line would pass a non-blank test and still place the marker outside the scanned block.
 $guardLines = $entryText -split "`n", -1
-for ($gi = 1; $gi -lt $guardLines.Count; $gi++) {
-    if (Test-IsEntryHeading $guardLines[$gi]) {
-        $shownDup = if ($guardLines[$gi].Length -gt 120) { $guardLines[$gi].Substring(0, 120) + "..." } else { $guardLines[$gi] }
-        Write-Recovery $absPath $SessionKey $entryText "entry contract violated: a second '## <date>' heading at entry line $($gi + 1)"
-        Write-Error "Entry contract violated: the entry must contain exactly ONE '## <date>' heading -- its own FIRST line. Found another at entry line $($gi + 1): '$shownDup'. Indent it or use '###' so the reconcile cannot read it as a separate entry. Target untouched; entry preserved in the recovery file." -ErrorAction Continue
-        exit 4
+$headIdxs = [System.Collections.Generic.List[int]]::new()
+for ($gi = 0; $gi -lt $guardLines.Count; $gi++) {
+    if (Test-IsEntryHeading $guardLines[$gi]) { [void]$headIdxs.Add($gi) }
+}
+# Truncated only for the message, and only on a failure path.
+$shownFirstLine = if ($guardLines[0].Length -gt 120) { $guardLines[0].Substring(0, 120) + "..." } else { $guardLines[0] }
+if ($headIdxs.Count -eq 0) {
+    [void]$violations.Add("* The entry contains no '## <date>' heading at all, and its LITERAL first line must be one -- with nothing above it, not even a blank line. Line 1 is currently: '$shownFirstLine'. Add the heading as the entry's first line")
+    [void]$whys.Add("no '## <date>' heading anywhere in the entry")
+} else {
+    $firstHead = $headIdxs[0]
+    if ($firstHead -ne 0) {
+        # NOTE the remedy: delete what is ABOVE the heading. Never "demote this heading" -- it is
+        # the entry's own heading, and demoting it leaves the entry with none.
+        [void]$violations.Add("* Your '## <date>' heading is at entry line $($firstHead + 1), but it must be the LITERAL first line -- nothing above it, not even a blank line. Delete the $firstHead line(s) above it. Do NOT demote or indent THIS heading: it is the entry's own heading. Line 1 is currently: '$shownFirstLine'")
+        [void]$whys.Add("entry heading displaced to line $($firstHead + 1), with $firstHead line(s) above it")
+    }
+    if ($headIdxs.Count -gt 1) {
+        $extraNos = [System.Collections.Generic.List[int]]::new()
+        for ($hi = 1; $hi -lt $headIdxs.Count; $hi++) { [void]$extraNos.Add($headIdxs[$hi] + 1) }
+        $firstExtra = $guardLines[$headIdxs[1]]
+        $shownExtra = if ($firstExtra.Length -gt 120) { $firstExtra.Substring(0, 120) + "..." } else { $firstExtra }
+        [void]$violations.Add("* The entry must contain exactly ONE '## <date>' heading -- its own first line. Found $($extraNos.Count) extra, at entry line(s) $($extraNos -join ', '). First extra: '$shownExtra'. Change EVERY extra to '###', or indent it, so the reconcile cannot read it as a separate entry. Easy to hit by quoting the mandated heading shape in prose")
+        [void]$whys.Add("$($extraNos.Count) extra '## <date>' heading(s) at line(s) $($extraNos -join ', ')")
     }
 }
 if (-not (Test-IsTocBullet $TocLine)) {
-    Write-Recovery $absPath $SessionKey $entryText "TOC contract violated: TocLine does not start with '- <date>'"
-    Write-Error "TocLine contract violated: -TocLine must start with '- ' followed by a date. Got: '$TocLine'. Target untouched; entry preserved in the recovery file." -ErrorAction Continue
-    exit 4
+    [void]$violations.Add("* -TocLine must start with '- ' followed by a date. Got: '$TocLine'")
+    [void]$whys.Add("TocLine does not start with '- <date>'")
 }
 # A TOC line must also be ONE physical line. A multi-line -TocLine passes the shape test above
 # (which only inspects the start of the string) but the session marker is appended to the END of
@@ -254,8 +310,19 @@ if (-not (Test-IsTocBullet $TocLine)) {
 # same-session run cannot find this bullet and INSERTS A SECOND one: the very failure the shape
 # check exists to prevent. (Found by GEN-443 Step 3 code review.)
 if ($TocLine.IndexOfAny([char[]]@([char]13, [char]10)) -ge 0) {
-    Write-Recovery $absPath $SessionKey $entryText "TOC contract violated: TocLine spans more than one line"
-    Write-Error "TocLine contract violated: -TocLine must be a SINGLE line (it contains a CR or LF). Target untouched; entry preserved in the recovery file." -ErrorAction Continue
+    [void]$violations.Add("* -TocLine must be a SINGLE line (it contains a CR or LF)")
+    [void]$whys.Add("TocLine spans more than one line")
+}
+
+if ($violations.Count -gt 0) {
+    # Recovery FIRST: the recovery file must exist before anything on the way out can fail. The
+    # -ErrorAction Continue on the Write-Error below is what keeps this path non-terminating
+    # under $ErrorActionPreference='Stop' -- do not remove it, and do not reorder these two on
+    # the assumption that the ordering was only ever about termination.
+    # The 'input contract violated' prefix is load-bearing: Write-Recovery keys the caution
+    # wording in the recovery file off it, because this rejection is RETRYABLE.
+    Write-Recovery $absPath $SessionKey $entryText ("input contract violated: " + ($whys -join "; "))
+    Write-Error ("Input contract violated -- $($violations.Count) problem(s) with the text YOU composed, ALL of them listed below. Fix EVERY one before calling again: you get a single retry, and a second rejection is a blocked wrap.`n" + ($violations -join "`n") + "`nTarget untouched (never opened); entry preserved in the recovery file.") -ErrorAction Continue
     exit 4
 }
 
@@ -348,7 +415,8 @@ try {
 
     $tocFirstIdx = Find-TocRunHead $lines
     if ($tocFirstIdx -lt 0) {
-        # Recovery FIRST -- Write-Error terminates under $ErrorActionPreference='Stop'.
+        # Recovery FIRST: the recovery file must exist before anything on the way out can fail.
+        # The -ErrorAction Continue below is what keeps this path non-terminating.
         Write-Recovery $absPath $SessionKey $entryText "TOC anchor not found"
         Write-Error "TOC anchor not found (no '- <date>' bullet run) in $absPath. Structure not recognized; file untouched." -ErrorAction Continue
         exit 3
