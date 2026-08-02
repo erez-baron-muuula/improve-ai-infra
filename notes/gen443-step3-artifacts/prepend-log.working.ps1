@@ -59,6 +59,11 @@
 #   a TOC line lacking the '- ' prefix is invisible to Test-IsTocBullet, so the reconcile
 #   inserts a SECOND bullet rather than updating the existing one. Both were live drift
 #   sources in GEN-443; the callers now mandate the shape and this script enforces it.
+#   SCOPE LIMIT, stated so the guarantee is not read as wider than it is: this guard inspects
+#   only the entry being handed in THIS run. The same phantom-entry corruption is still possible
+#   from a column-0 '## <date>' line already sitting in an ALREADY-WRITTEN entry in the target
+#   (written before this guard shipped, or by any other tool), because the in-lock block-end scan
+#   reads the whole file. Cleaning pre-existing entries is GEN-443's Step 1, not this guard.
 #
 # EXIT CODES
 #   0 = success (prepended or replaced)
@@ -70,10 +75,13 @@
 #       after the lock was taken (this session's own TOC bullet lost post-edit, TOC anchor lost
 #       post-edit, insert point landing inside the new body, the >50% shrink guard tripping, or
 #       the atomic write/replace failing). FAIL LOUD: target untouched, composed entry written to
-#       a recovery file. HONEST GAP: the callers currently describe exit 3 to Erez as "structure
-#       not recognized" only, so a disk-full or permission failure is reported with the wrong
-#       CAUSE -- the ACTION they take (blocked wrap, keep the recovery file, no push) is correct
-#       either way. Splitting internal/write failure into its own code is a tracked follow-up.
+#       a recovery file. HONEST GAP: ONE code still covers TWO causes, so the exit code alone
+#       cannot say which occurred -- only the message can. The ACTION either cause demands
+#       (blocked wrap, keep the recovery file, no push) is the same, which is why they share a
+#       code today. Splitting internal/write failure into its own code is a tracked follow-up.
+#       Deliberately NOT restated here: what the caller documents say about exit 3. That claim
+#       was written here once, rotted when the callers were rewritten, and had to be corrected
+#       -- the same copy-drifts-from-source failure this whole change exists to remove.
 #   4 = INPUT CONTRACT VIOLATED -- the CALLER's own composed text is malformed: the EntryFile's
 #       literal first line is not a '## <date>' heading, the body carries a second column-0
 #       '## <date>' heading, -TocLine does not start with '- <date>', or -TocLine spans more than
@@ -119,7 +127,12 @@ function Write-Recovery([string]$targetPath, [string]$sessionKey, [string]$entry
     try {
         $dir = Split-Path -Parent $targetPath
         if (-not $dir) { $dir = "." }
-        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        # Milliseconds, not seconds: exit 4 is a RETRYABLE path, so a caller that is told to fix
+        # its text and retry can produce two recovery writes for the SAME session inside one
+        # second. At second resolution the second WriteAllText silently overwrote the first, and
+        # the RECOVERY FILE WRITTEN path printed for the first run then named the second run's
+        # content. (Found by GEN-443 Step 3 code review, Pass A.)
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmssfff'
         # Sanitize the session key for a filename (it is normally hex/uuid, but be safe).
         $safeKey = ($sessionKey -replace '[^A-Za-z0-9_-]', '_')
         $recovery = Join-Path $dir "HISTORY.pending-$safeKey-$stamp.md"
@@ -152,7 +165,11 @@ function Write-Recovery([string]$targetPath, [string]$sessionKey, [string]$entry
 # A TOC bullet is a top-level '- ' list item whose text begins with a date token (a 4-digit
 # year appears in the first ~40 chars).
 function Test-IsTocBullet([string]$line) {
-    if (-not $line.StartsWith("- ")) { return $false }
+    # Ordinal, not the culture-sensitive default: this is a markdown SHAPE test, and under a
+    # culture comparison an ignorable/zero-width character before the dash still satisfies
+    # StartsWith -- so the guard would pass a bullet whose literal first two characters are not
+    # '- '. (Found by GEN-443 Step 3 code review, Pass A.)
+    if (-not $line.StartsWith("- ", [StringComparison]::Ordinal)) { return $false }
     $head = $line.Substring(2)
     if ($head.Length -gt 40) { $head = $head.Substring(0, 40) }
     return ($head -match '\b(19|20)\d{2}\b')
@@ -220,7 +237,10 @@ $entryFirstLine = if ($nlIdx -ge 0) { $entryText.Substring(0, $nlIdx) } else { $
 if (-not (Test-IsEntryHeading $entryFirstLine)) {
     # Truncated only for the message, and only on this failure path.
     $shownFirstLine = if ($entryFirstLine.Length -gt 120) { $entryFirstLine.Substring(0, 120) + "..." } else { $entryFirstLine }
-    # Recovery FIRST -- Write-Error terminates under $ErrorActionPreference='Stop'.
+    # Recovery FIRST: the recovery file must exist before anything on the way out can fail. The
+    # -ErrorAction Continue on the Write-Error below is what keeps this path non-terminating
+    # under $ErrorActionPreference='Stop' -- do not remove it, and do not reorder these two on
+    # the assumption that the ordering was only ever about termination.
     Write-Recovery $absPath $SessionKey $entryText "entry contract violated: first line is not a '## <date>' heading"
     Write-Error "Entry contract violated: the EntryFile's LITERAL first line must be a '## <date>' heading, with nothing above it (not even a blank line). Got: '$shownFirstLine'. Target untouched; entry preserved in the recovery file." -ErrorAction Continue
     exit 4
@@ -348,7 +368,8 @@ try {
 
     $tocFirstIdx = Find-TocRunHead $lines
     if ($tocFirstIdx -lt 0) {
-        # Recovery FIRST -- Write-Error terminates under $ErrorActionPreference='Stop'.
+        # Recovery FIRST: the recovery file must exist before anything on the way out can fail.
+        # The -ErrorAction Continue below is what keeps this path non-terminating.
         Write-Recovery $absPath $SessionKey $entryText "TOC anchor not found"
         Write-Error "TOC anchor not found (no '- <date>' bullet run) in $absPath. Structure not recognized; file untouched." -ErrorAction Continue
         exit 3

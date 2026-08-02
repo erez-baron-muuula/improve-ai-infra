@@ -154,6 +154,17 @@ Test-Accept "(f) valid entry with CRLF endings" "## 2026-07-19 (CG) crlf entry`r
 # (g) Plain valid LF entry + valid TOC line.
 Test-Accept "(g) valid LF entry and TOC line" $validEntryLf $validToc
 
+# (o) and (p) EXERCISE THE REMEDY THE REJECTION MESSAGE ADVISES. Case (n) rejects a second
+# column-0 '## <date>' heading and tells the caller to "Indent it or use '###'". Nothing proved
+# that either remedy actually passes, so a later loosening of Test-IsEntryHeading (e.g. tolerating
+# leading whitespace) would silently make the advice wrong: the caller would follow the message,
+# retry, be rejected a second time, and the callers route a SECOND exit 4 to the blocked-wrap
+# branch -- no commit, no push, compact gate held. These two cases pin the advice to behaviour.
+# (Found by GEN-443 Step 3 code review, Pass A / Pass B independently.)
+Test-Accept "(o) remedy: indented '## <date>' in the body is accepted" "## 2026-07-19 (CG) indent remedy`n`nquoting the shape below:`n  ## 2026-07-19 (CG) quoted heading`n" $validToc
+
+Test-Accept "(p) remedy: '### <date>' in the body is accepted" "## 2026-07-19 (CG) h3 remedy`n`nquoting the shape below:`n### 2026-07-19 (CG) quoted heading`n" $validToc
+
 # (i) LONE-CR (classic Mac) entry. Accepted, and the marker must land on the line IMMEDIATELY
 # after the heading -- the whole point of normalizing all endings to LF before the guard. Without
 # that normalization the entry stays ONE line for the writer and the marker lands after the whole
