@@ -145,6 +145,39 @@ Test-Reject "(n) second '## <date>' heading in the body" "## 2026-07-19 (CG) out
 # same-session run inserts a SECOND bullet.
 Test-Reject "(h) multi-line TocLine" $validEntryLf "- 2026-07-19 (CG) first line`nsecond line" $msgTocLines
 
+# (q) TWO violations in one input: a leading blank line before the heading AND a de-bulleted TOC
+# line. The callers permit exactly ONE retry, so a guard that reported only the FIRST violation
+# would make this a DETERMINISTIC blocked wrap -- the caller fixes what it was told, retries, and
+# trips the second check, and a second exit 4 means no commit, no push, compact gate held. Assert
+# both are named in ONE message and that only ONE recovery file is written.
+# (GEN-443 Step 3 code review, Pass B round 2.)
+$beforeQ = Reset-Target
+New-EntryFile "`n## 2026-07-19 (CG) two violations at once`n`nbody.`n"
+$global:LASTEXITCODE = 0
+$outQ = (& powershell.exe -NoProfile -File $helper -Path $copy -SessionKey "cgsess" -EntryFile $e -TocLine "2026-07-19 (CG) de-bulleted toc line" 2>&1 | Out-String -Width 4096)
+$rcQ = $LASTEXITCODE
+$afterQ = (Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash
+$recQ = Count-Recovery
+$bothQ = $outQ.Contains($msgEntry) -and $outQ.Contains($msgTocShape)
+Report "(q) two violations named in ONE message" (($rcQ -eq 4) -and ($beforeQ -eq $afterQ) -and ($recQ -eq 1) -and $bothQ) "rc=$rcQ (want 4) untouched=$($beforeQ -eq $afterQ) recoveryFiles=$recQ (want 1) bothNamed=$bothQ"
+
+# (r) The recovery file written for a CONTRACT violation must NOT carry the unconditional "add
+# this entry to the target by hand" instruction. That path is RETRYABLE, so by the time anyone
+# reads the file the corrected entry may already be in the target -- and the text it holds is the
+# REJECTED text, which still carries the malformed shape. Following the old instruction would
+# plant the very corruption the guard exists to prevent, plus a duplicate session marker.
+# (GEN-443 Step 3 code review, Pass B round 2.)
+[void](Reset-Target)
+New-EntryFile "## 2026-07-19 (CG) recovery advice`n`nThe mandated shape is:`n## 2026-07-19 (2) -- quoted example`n"
+$global:LASTEXITCODE = 0
+& powershell.exe -NoProfile -File $helper -Path $copy -SessionKey "cgsess" -EntryFile $e -TocLine $validToc 2>&1 | Out-Null
+$rcR = $LASTEXITCODE
+$recFileR = Get-ChildItem $dir -Filter "HISTORY.pending-*" -ErrorAction SilentlyContinue | Select-Object -First 1
+$bodyR = if ($recFileR) { [IO.File]::ReadAllText($recFileR.FullName) } else { "" }
+$hasCaution = $bodyR.Contains("CAUTION")
+$noBlindAppend = -not $bodyR.Contains("# Add this entry to the target by hand")
+Report "(r) contract-violation recovery file warns instead of saying append-by-hand" (($rcR -eq 4) -and $hasCaution -and $noBlindAppend) "rc=$rcR (want 4) caution=$hasCaution noBlindAppendInstruction=$noBlindAppend"
+
 # ---- exit 0: legitimate input must NOT be rejected ----
 
 # (f) CRLF-terminated but otherwise VALID entry: the guard must not mistake a trailing CR for
@@ -153,6 +186,17 @@ Test-Accept "(f) valid entry with CRLF endings" "## 2026-07-19 (CG) crlf entry`r
 
 # (g) Plain valid LF entry + valid TOC line.
 Test-Accept "(g) valid LF entry and TOC line" $validEntryLf $validToc
+
+# (o) and (p) EXERCISE THE REMEDY THE REJECTION MESSAGE ADVISES. Case (n) rejects a second
+# column-0 '## <date>' heading and tells the caller to "Indent it or use '###'". Nothing proved
+# that either remedy actually passes, so a later loosening of Test-IsEntryHeading (e.g. tolerating
+# leading whitespace) would silently make the advice wrong: the caller would follow the message,
+# retry, be rejected a second time, and the callers route a SECOND exit 4 to the blocked-wrap
+# branch -- no commit, no push, compact gate held. These two cases pin the advice to behaviour.
+# (Found by GEN-443 Step 3 code review, Pass A / Pass B independently.)
+Test-Accept "(o) remedy: indented '## <date>' in the body is accepted" "## 2026-07-19 (CG) indent remedy`n`nquoting the shape below:`n  ## 2026-07-19 (CG) quoted heading`n" $validToc
+
+Test-Accept "(p) remedy: '### <date>' in the body is accepted" "## 2026-07-19 (CG) h3 remedy`n`nquoting the shape below:`n### 2026-07-19 (CG) quoted heading`n" $validToc
 
 # (i) LONE-CR (classic Mac) entry. Accepted, and the marker must land on the line IMMEDIATELY
 # after the heading -- the whole point of normalizing all endings to LF before the guard. Without
