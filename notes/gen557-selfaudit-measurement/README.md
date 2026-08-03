@@ -4,17 +4,43 @@
 verification-walkthrough narration" — https://app.notion.com/p/3a66e495d07c8108a684e31a824b8eb3
 
 **Target file:** `~/.claude/hooks/stop-claim-linter.js` (vetting-locked → `/vet-code`).
-Baseline when last measured: 801 lines, 47,164 bytes on disk, LF, 10 `SELF_AUDIT_PATTERNS`.
 
-**The rig now lives beside this file in `rig/`** — committed alongside this README (as of
-2026-08-02 it is still untracked in the working tree, pending the session's commit). The 2026-07-30
+> **GEN-557 SHIPPED on 2026-08-02 — this file's older sections describe the pre-install
+> world and are kept as dated history, not as current state.** Corrected 2026-08-03 under
+> **GEN-616**; every statement below that survived is either dated or re-verified. Measured
+> against the live hook 2026-08-03: **990 lines, 60,977 bytes, LF, 16 `SELF_AUDIT_PATTERNS`**
+> (the ten pre-GEN-557 ones at lines 337-352, the six new ones at 370-414). The
+> pre-install baseline — 801 lines, 47,164 bytes, 10 patterns — is the 2026-07-30/08-02
+> figure and is retained only for reading the older sections in context.
+
+**The rig lives beside this file in `rig/` and is git-tracked** (verified 2026-08-03 via
+`git ls-files`: 25 files including `lib.js`, `working.js` and `proposed.diff`). The 2026-07-30
 session banked only this README and the scripts were lost, costing a full rebuild on
 2026-08-02 — hence banking them. Only `corpus.jsonl` (6.6 MB of real transcript text)
 and the derived dumps are excluded; regenerate with `rig/extract.js`.
 
+**Re-baseline, never diff against a printed number.** `extract.js` rebuilds the corpus from
+on-disk transcripts and it SHRINKS as Claude Code prunes them, so figures from different
+dates are not comparable. The 2026-08-03 corpus was `files=164 turns=4464 unparsable=0`;
+earlier sections quote a 4,356- and a 4,580-turn corpus. Always re-run before quoting.
+
 ---
 
-## Status (updated 2026-08-02)
+## Status — INSTALLED (2026-08-02); section below is the pre-install record
+
+**Current state, verified 2026-08-03 (GEN-616):** the change is LIVE. The live hook carries
+all 16 patterns, `buildSuppressionMask`, and both `CORRECTION (GEN-557, 2026-08-02)` comment
+blocks. `/code-review` was typed by Erez and the full `/vet-code` gate completed, so the
+sequence described in this section as "remaining" is DONE. What is genuinely still open lives
+on its own tickets, not here: **GEN-592** (fenced/roll-call quote gap — one attempt built,
+measured at a 91% blast radius, and removed; Wont Do is a legitimate outcome), **GEN-597**
+(the claim-linter note matches one of this file's own patterns), **GEN-601** (`BLOCK_OPENER_RE`
+misses the `## 📌 For you` heading form), **GEN-602** (the 5-hit cap's log representativeness),
+and **GEN-584** (the guard exits before the self-audit stage). Per **GEN-618**, decided
+2026-08-03, GEN-584/597/601/602 ship together in ONE `/vet-code` pass — do not open a pass for
+one of them alone.
+
+### The pre-install record (as written 2026-08-02 — kept for provenance)
 
 `/vet-code` Steps 0–2 done. **Step 1's design panel has now CONVERGED** (2 rounds): the
 three findings the 2026-07-30 panel left open are all resolved, and the round-2 verdict
@@ -32,11 +58,29 @@ a desktop-only limitation, which is a sharper diagnosis than **GEN-546** records
 (Pass A) → Pass B independent sub-agent → Step 4 → Step 5 attestation → mint the
 single-use vetting pass → apply → verify.
 
+> **DONE — that whole sequence completed on 2026-08-02 and the change is installed.** The
+> `/code-review` constraint itself still holds and is still worth knowing: Claude cannot
+> invoke it in any session, so every future pass on this file needs Erez to type it. That
+> is what makes each pass cost his time and is the reason GEN-618 batches four tickets into
+> one pass. (Re-confirmed 2026-08-03: `/code-review` is absent from the session's invocable
+> skills, and `/vet-code` Step 0 fails closed without it.)
+
 **What Pass A should be pointed at.** `~/.claude/hooks/` is NOT a git repo, so there is no
 working-tree diff for the live hook. The reviewable delta is banked as
 `rig/proposed.diff` (96 lines, live → working), with the full proposed file at
 `rig/working.js`. Both sit untracked in the Improve AI Infra tree, so a working-diff
 review can see them.
+
+> **Superseded 2026-08-03 (GEN-616):** both files are now git-TRACKED (`git ls-files`), so
+> they no longer appear as a working-tree diff. They are also now a record of what WAS
+> proposed, not a pending proposal: `rig/working.js` is **byte-identical to the live hook**
+> — both sha256 `f5b2d25046dbc5be93a20e3916af21277668faa9961938531e566de07e1593e4`, 60,977
+> bytes, LF-normalized, verified 2026-08-03 — so diffing it against the live hook yields
+> nothing and is no longer the reviewable delta for anything. That identity is also the
+> cheapest available check that the file shipped unmodified; if it ever stops holding, the
+> live hook has drifted since install and that is worth investigating before trusting any
+> figure here. A future pass on this file builds its own working copy; see the note atop
+> `rig/build.js` for why that script cannot be reused.
 
 ---
 
@@ -72,6 +116,31 @@ replaced it with `buildSuppressionMask` for performance.)
 ---
 
 ## Settled facts — do not re-derive
+
+### Post-install probes banked 2026-08-03 (GEN-616)
+Three scripts written on 2026-08-03 existed only in a session scratchpad and would have been
+lost with it — the same mistake the 2026-07-30 session made, which cost a full rebuild. Banked
+under `rig/` so a re-baseline is a re-run, not a rebuild. All three slice the LIVE detector out
+of the hook via `lib.js`, so they measure shipped logic. Run `node extract.js` first.
+
+| script | question it answers | figure on the 2026-08-03 corpus (`files=164 turns=4464`) |
+|---|---|---|
+| `capfill.js` | with all 16 patterns live, how often does the 5-hit cap fill? | reachable 2,623; fire 190; `{1:172, 2:14, 3:2, 4:1, 5:1}`; **1** message at the cap, all five hits GEN-557 phrases |
+| `oldonly.js` | how close do the ten pre-GEN-557 patterns alone come to the cap? | fire 75; `{1:69, 2:4, 3:1, 4:1}`; max **4** of 5 |
+| `crowdout.js` | true crowd-out proximity — old hits filling the budget AND a new hit starved | 11 messages carry both kinds; combined `{2:10, 3:1}`; worst **3** of 5; the 4-hit old-only message has ZERO new hits |
+
+**Read `crowdout.js` before quoting `oldonly.js`.** `oldonly.js` measures one of the two
+conjuncts a crowd-out needs, so its "within 1 of the cap" line is not a near-miss; treating it
+as one flipped a recommendation on 2026-08-03 (GEN-58,
+`[proxy-metric-not-operationalizing-the-claim-it-settles]`). Each script's header carries this
+warning too, so it survives being read in isolation.
+
+Also fixed under GEN-616: `lib.js`'s `build()` threw `array close anchor not found` against the
+installed hook, because its anchor pinned the source of the pre-GEN-557 *last* pattern and the
+six new ones were appended above the close. It now locates the array close structurally, so it
+survives the next pattern addition. And `rig/build.js` — the install-time regeneration script —
+is marked HISTORICAL: three of its anchors are gone from the live hook precisely because its own
+edits shipped, so it throws rather than double-applying. Do not re-anchor it; use `build()`.
 
 ### The corpus
 **4,356** real turn-final assistant messages rebuilt from **157** on-disk transcripts under
@@ -283,6 +352,28 @@ match (≈4 ms worst case, microseconds typically) — a lazy build would make t
 **Remaining before install:** `/vet-code` Step 4 (live-fire attestation — already satisfied by
 `rig/livefire.js` + the corpus runs) and Step 5 (write the attestation, mint the single-use
 vetting pass, apply, verify). Nothing is installed; the live hook is untouched.
+
+> **NO LONGER TRUE — corrected 2026-08-03 (GEN-616).** Steps 4 and 5 completed on 2026-08-02
+> and the change IS installed: the live hook carries all 16 patterns, `buildSuppressionMask`,
+> and both `CORRECTION (GEN-557, 2026-08-02)` comment blocks, and `rig/working.js` is
+> byte-identical to it. The sentence "Nothing is installed; the live hook is untouched" was
+> the single most misleading line in this file — a session opening it to get oriented was
+> told the work had never shipped. It is left in place, struck by this note, because this
+> file's convention is to date and supersede rather than silently rewrite; and because it is
+> itself an instance of the failure mode recorded two paragraphs above — a false statement
+> in prose written moments before, on a file whose prose is load-bearing.
+>
+> **The one measured claim in "Knowingly skipped" (a) was later shown to be misleading, and
+> the misreading is instructive.** It says a message already yielding five old-pattern hits
+> never reaches the six new patterns. True as written, but its apparent significance was
+> then overstated on 2026-08-03: old-pattern-only hits reach a maximum of 4 of the 5-slot
+> budget (`rig/oldonly.js`), which was read as "within one hit of a crowd-out" and used to
+> flip a recommendation. It is not. A crowd-out needs old hits filling the budget AND a new
+> pattern hit to starve; measured properly (`rig/crowdout.js`), 11 messages carry both kinds,
+> their worst combined total is 3 of 5, and the single 4-hit old-only message carries ZERO
+> new-pattern hits. Logged on GEN-58 as
+> `[proxy-metric-not-operationalizing-the-claim-it-settles]`. GEN-602 tracks the reorder;
+> read `rig/crowdout.js`'s header before quoting either script.
 
 ---
 

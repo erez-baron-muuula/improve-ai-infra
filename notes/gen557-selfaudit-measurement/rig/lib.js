@@ -18,7 +18,22 @@ function compile(slice) {
 }
 
 // --- variant builders -------------------------------------------------------
-const ARRAY_CLOSE = '  { re: /\\bnothing (?:to do|left to do)[,;]? (?:so )?cancel+ing\\b/i },\n];';
+// Locate SELF_AUDIT_PATTERNS' closing bracket STRUCTURALLY, not by pinning whichever
+// pattern happens to be last. The original anchor was the literal source of the
+// pre-GEN-557 final pattern followed by "\n];", and it went dead the moment the six
+// GEN-557 patterns were appended above the close on install -- build() then threw
+// 'array close anchor not found' for every caller (GEN-616, fixed 2026-08-03).
+// hookSource() slices from the array's declaration to the log-const comment, and the
+// FIRST "\n];" inside that slice is this array's close: verified 2026-08-03 that the
+// slice holds three such sequences (the two later ones close SELF_AUDIT_CLEAN_MARKERS
+// and SELF_AUDIT_CLEAR_MARKERS) and that the first is preceded by the roll-call pattern,
+// i.e. the last element of SELF_AUDIT_PATTERNS. Being count-independent, this survives
+// the next pattern addition -- which is the property the old anchor lacked.
+function arrayCloseIndex(s) {
+  const i = s.indexOf('\n];');
+  if (i === -1) throw new Error('array close anchor not found');
+  return i;
+}
 const LOOP_ANCHOR = '      if (m.index === re.lastIndex) { re.lastIndex++; } // guard against zero-width match loop';
 
 const IS_QUOTED_FN = `
@@ -37,8 +52,8 @@ function isQuoted(text, at) {
 function build(addPatterns, quoteGuard) {
   let s = hookSource();
   if (addPatterns && addPatterns.length) {
-    if (s.indexOf(ARRAY_CLOSE) === -1) throw new Error('array close anchor not found');
-    s = s.replace(ARRAY_CLOSE, ARRAY_CLOSE.replace('\n];', '\n') + addPatterns.join('\n') + '\n];');
+    const at = arrayCloseIndex(s);
+    s = s.slice(0, at) + '\n' + addPatterns.join('\n') + s.slice(at);
   }
   if (quoteGuard && quoteGuard !== 'none') {
     if (s.indexOf(LOOP_ANCHOR) === -1) throw new Error('loop anchor not found');

@@ -1,5 +1,18 @@
-// Deterministically regenerate the GEN-557 working copy from the LIVE hook.
-// Every anchor is asserted to occur exactly once (in its intended scope), so a
+// HISTORICAL — DOES NOT RUN AGAINST THE CURRENT HOOK, AND MUST NOT BE MADE TO.
+// This regenerated the GEN-557 working copy from the PRE-INSTALL live hook. GEN-557
+// shipped on 2026-08-02, so the edits below are now IN the live hook and three of this
+// file's anchors no longer exist there. Verified against the live hook 2026-08-03
+// (GEN-616): A_ARRAY_CLOSE, A_STALE_HEADER and A_STALE_MAINT are all ABSENT, while the
+// replacements they produced ("CORRECTION (GEN-557, 2026-08-02)" in both the findSelfAudit
+// header and the MAINTENANCE note) plus buildSuppressionMask are PRESENT. Running it now
+// throws at the first once() assertion — the safe direction, and the reason it was left
+// as-is rather than re-anchored: re-anchoring would make it re-append the six patterns to
+// a hook that already carries them. Keep it as the record of exactly what the install did.
+// For testing a pattern VARIANT against the current hook, use lib.js build() instead —
+// that one was re-anchored structurally and works post-install.
+//
+// Original purpose: deterministically regenerate the GEN-557 working copy from the LIVE
+// hook. Every anchor is asserted to occur exactly once (in its intended scope), so a
 // drifted hook fails loud instead of silently patching the wrong place.
 const fs = require('fs');
 const path = require('path');
