@@ -4,17 +4,43 @@
 verification-walkthrough narration" — https://app.notion.com/p/3a66e495d07c8108a684e31a824b8eb3
 
 **Target file:** `~/.claude/hooks/stop-claim-linter.js` (vetting-locked → `/vet-code`).
-Baseline when last measured: 801 lines, 47,164 bytes on disk, LF, 10 `SELF_AUDIT_PATTERNS`.
 
-**The rig now lives beside this file in `rig/`** — committed alongside this README (as of
-2026-08-02 it is still untracked in the working tree, pending the session's commit). The 2026-07-30
+> **GEN-557 SHIPPED on 2026-08-02 — this file's older sections describe the pre-install
+> world and are kept as dated history, not as current state.** Corrected 2026-08-03 under
+> **GEN-616**; every statement below that survived is either dated or re-verified. Measured
+> against the live hook 2026-08-03: **990 lines, 60,977 bytes, LF, 16 `SELF_AUDIT_PATTERNS`**
+> (the ten pre-GEN-557 ones at lines 337-352, the six new ones at 370-414). The
+> pre-install baseline — 801 lines, 47,164 bytes, 10 patterns — is the 2026-07-30/08-02
+> figure and is retained only for reading the older sections in context.
+
+**The rig lives beside this file in `rig/` and is git-tracked** (verified 2026-08-03 via
+`git ls-files`: 25 files including `lib.js`, `working.js` and `proposed.diff`). The 2026-07-30
 session banked only this README and the scripts were lost, costing a full rebuild on
 2026-08-02 — hence banking them. Only `corpus.jsonl` (6.6 MB of real transcript text)
 and the derived dumps are excluded; regenerate with `rig/extract.js`.
 
+**Re-baseline, never diff against a printed number.** `extract.js` rebuilds the corpus from
+on-disk transcripts and it SHRINKS as Claude Code prunes them, so figures from different
+dates are not comparable. The 2026-08-03 corpus was `files=164 turns=4464 unparsable=0`;
+earlier sections quote a 4,356- and a 4,580-turn corpus. Always re-run before quoting.
+
 ---
 
-## Status (updated 2026-08-02)
+## Status — INSTALLED (2026-08-02); section below is the pre-install record
+
+**Current state, verified 2026-08-03 (GEN-616):** the change is LIVE. The live hook carries
+all 16 patterns, `buildSuppressionMask`, and both `CORRECTION (GEN-557, 2026-08-02)` comment
+blocks. `/code-review` was typed by Erez and the full `/vet-code` gate completed, so the
+sequence described in this section as "remaining" is DONE. What is genuinely still open lives
+on its own tickets, not here: **GEN-592** (fenced/roll-call quote gap — one attempt built,
+measured at a 91% blast radius, and removed; Wont Do is a legitimate outcome), **GEN-597**
+(the claim-linter note matches one of this file's own patterns), **GEN-601** (`BLOCK_OPENER_RE`
+misses the `## 📌 For you` heading form), **GEN-602** (the 5-hit cap's log representativeness),
+and **GEN-584** (the guard exits before the self-audit stage). Per **GEN-618**, decided
+2026-08-03, GEN-584/597/601/602 ship together in ONE `/vet-code` pass — do not open a pass for
+one of them alone.
+
+### The pre-install record (as written 2026-08-02 — kept for provenance)
 
 `/vet-code` Steps 0–2 done. **Step 1's design panel has now CONVERGED** (2 rounds): the
 three findings the 2026-07-30 panel left open are all resolved, and the round-2 verdict
