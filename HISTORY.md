@@ -37,7 +37,7 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-08-04 (2) — GEN-615 + GEN-620 paired into one concurrent-session warning hook: design converged over six /check rounds (three of which each caught a would-have-shipped-inert defect), built with two design assertions falsified by measurement, then TWO full code-review rounds — 9 defects fixed, 5 still open; nothing installed, resume from STATUS-resume-here.md; filed GEN-629/630/631. <!-- toc-session:bd0001a6-26bf-477d-8189-caeb0b4b2de5 -->
 - 2026-08-04 — Paired GEN-576 with GEN-600, cut four failed review rounds down to a minimal three-hunk edit to /vet-code Step 4 + Step 7, got five successive wrong answers about the permission layer (settled by this repo's own measured notes), then installed and byte-verified it; both tickets Done, atomicity split to GEN-622, five more filed (GEN-623-627), eight learnings merged; /wrap hit two of its own defects. <!-- toc-session:36f12be8-dff4-4aa2-aa66-757e362bb9ed -->
 - 2026-08-03 — GEN-443 Step 3 INSTALLED + verified (19/19 fixture, legacy suite unchanged from a pre-change baseline), atomicity residual left open on GEN-600; GEN-607 unblocked; the over-block guard's real trigger measured and GEN-575 corrected; three GEN-58 entries (E/K/I); filed GEN-619 <!-- toc-session:c249e422-6519-4008-b4f5-4f16a38c8093 -->
-- 2026-08-03 (2) — GEN-508 piece 1: premise killed, design reviewed to a standstill, COLLAPSED by two of Erez's questions into a hook with no network call, then REWRITTEN as one document and reviewed to a standstill again (6 rounds, 18 reviews); four new measurements reshaped it, including that ~15% of Notion write traffic bypasses the gate entirely; the adjudication mechanism deleted and re-derived after three failed attempts; one decision open for Erez; nothing installed <!-- toc-session:f00041c7-a3bc-4560-8919-615f3ea67d68 -->
+- 2026-08-03 (2) — GEN-508 piece 1: premise killed, design reviewed to a standstill, COLLAPSED by two of Erez's questions into a hook with no network call, then REWRITTEN as one document and reviewed to a standstill again (6 rounds, 18 reviews); four new measurements reshaped it, including that ~15% of Notion write traffic bypasses the gate entirely; adjudication deleted and re-derived after three failed attempts; the Notion token leaked into the transcript at wrap (GEN-638 rotation); one decision open for Erez; nothing installed <!-- toc-session:f00041c7-a3bc-4560-8919-615f3ea67d68 -->
 - 2026-08-03 (8) — GEN-602/592 merge answered; /wrap Step 4b push-first rewrite vetted, INSTALLED and confirmed in this wrap; GEN-620 filed for folder-awareness; GEN-618 batching decided (four tickets, one pass) and closed; GEN-616 rig/README refreshed; GEN-621 filed <!-- toc-session:13a207fe-fa0b-4680-91a1-8be5af6883ac -->
 - 2026-08-02 (7) — GEN-508 piece 1 designed (3 /check rounds), built as an uninstalled draft and reviewed over two full code-review rounds; stopped for a scoping rebuild after two real captured payload shapes defeated the create and update arms; handoff written to GEN-508 and artifacts relocated to notes/gen508-piece1/; filed GEN-613/614, merged into GEN-546; nothing installed <!-- toc-session:8cbc4fb1-b0c2-4841-9721-793b077e1c43 -->
 - 2026-08-02 (6) — GEN-443 vetting run voided by a concurrent session editing the artifact mid-flow; filed GEN-612 (freeze the artifact under review) + GEN-615 (check for a concurrent session first); four findings routed to GEN-586/607/297/572 and an atomic-swap note into GEN-443's resume block; two stale vetting records deleted; nothing installed <!-- toc-session:3a1d5252-3202-4cb3-8f46-e44670d1b0a1 -->
@@ -582,6 +582,31 @@ forbids). The content-*adding*-only GEN-58 carve-out (5% coverage of real writes
 was void). v4's absolute network invariant (unachievable as stated — the collapse delivered it by deleting
 the round-trip instead). Three attempts at making the hook honour an overturned adjudication directly.
 Recommending Option C for the raw-REST hole on page-target-overlap evidence.
+
+**SECURITY INCIDENT at wrap: the Notion integration token was written into this session's transcript in
+plaintext.** A wrap helper script passed the token to `curl.exe` as a command-line argument inside an
+`Authorization: Bearer` header. A Notion request timed out, Node threw an unhandled `ETIMEDOUT`, and
+**Node's crash dump prints `spawnargs`** — so the whole token landed in the transcript. The script had
+already suppressed the child's stderr (`stdio: ['ignore','pipe','ignore']`) specifically to avoid leaking
+the header, and that protection was irrelevant: the leak came from Node's own error object, not from
+curl. Two consequences: the credential needs rotating (**GEN-638**, assigned to Erez — it needs the Notion
+UI and a vault write, which Claude cannot do), and the pattern needs removing from every caller
+(**GEN-639**) — `notion-fetch-staleness.js` and the locked `notion-ticket-lookup.ps1` both build an auth
+header into a command invocation today. The fix used for the rest of this wrap: put the header in a
+`curl --config` file deleted in a `finally`, and never let a spawn error propagate with its arg list
+attached. Worth noting for the class: the guarding intent was present and correct, and it protected the
+one channel I had enumerated while the actual leak path was one nobody had.
+
+**Unresolved items filed: GEN-634, GEN-635, GEN-636, GEN-637, GEN-638, GEN-639.** GEN-634 rewrite
+GEN-508's stale build spec; GEN-635 piece 2 (Jira + raw REST arms, carrying the 15% measurement);
+GEN-636 piece 3 (aggregate signal readers + the escalation log); GEN-637 the enforcing-layer learning as
+a candidate rule/skill step; GEN-638 token rotation (Erez); GEN-639 stop passing tokens in argv. One
+learning was **merged into GEN-450** (the claim-linter ticket) rather than filed separately: a fabricated
+citation is a claim that linter should catch, and it is a distinct shape from the capability/config claims
+already listed there. A **Class C recurrence trace** also went onto GEN-58 Vol. 7 — three sightings in one
+session of presenting a narrow option set as complete, twice *after* being corrected on it the same day,
+and the third time the missed option was a mechanism already installed on this machine that I had opened
+the file for earlier in the session.
 
 **Noted.** A concurrent session (`bd0001a6`) worked in this repo throughout, writing
 `notes/gen615-gen620-design/` (design-v1..v7, `concurrent-session-warn.js` + test, `STATUS-resume-here.md`).
