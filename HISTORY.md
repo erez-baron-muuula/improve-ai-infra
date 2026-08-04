@@ -34,8 +34,10 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-08-04 (2) — GEN-615 paired with GEN-620 and designed over six /check rounds (which removed seven pieces of logic, three of them defects that would have installed inert), then built — where measurement falsified the design's own "vanishingly narrow" concurrency claim (2 of 6 registrations survived) — then reviewed twice for nine more defects, the blind pass finding a prune that deleted live sessions' registrations; NOT installed, /vet-code paused mid-Step-3 awaiting a second /code-review <!-- toc-session:bd0001a6-26bf-477d-8189-caeb0b4b2de5 -->
+- 2026-08-04 — GEN-576 + GEN-600 paired and cut to a minimal three-hunk edit after four review rounds traced every defect to an exclusivity claim neither ticket needed; final three-lens panel PASSed clean; five successive wrong answers about the permission layer settled by this repo's own measured note and logged to GEN-58 (Class D now 100x); nothing installed, pass retired, apply channel is the open resume decision <!-- toc-session:36f12be8-dff4-4aa2-aa66-757e362bb9ed -->
 - 2026-08-03 — GEN-443 Step 3 INSTALLED + verified (19/19 fixture, legacy suite unchanged from a pre-change baseline), atomicity residual left open on GEN-600; GEN-607 unblocked; the over-block guard's real trigger measured and GEN-575 corrected; three GEN-58 entries (E/K/I); filed GEN-619 <!-- toc-session:c249e422-6519-4008-b4f5-4f16a38c8093 -->
-- 2026-08-03 (2) — GEN-508 piece 1 built (939 lines, additive) and then found unsound at the premise: bypass-permissions means the pass mint never prompts, so all four gates can self-certify; /code-review found 27 defects; STOP-AND-RETHINK before fixing. <!-- toc-session:f00041c7-a3bc-4560-8919-615f3ea67d68 -->
+- 2026-08-03 (2) — GEN-508 piece 1: premise killed, then the design reviewed to a standstill (3 rounds, 9 reviews, all REVISE, escalated at the cap), then COLLAPSED by two of Erez's questions into a design with no network call anywhere — anchored by a real measurement (318 distinct edit targets, 307 are tickets, 1 genuine non-ticket page); v5 now stale against the collapse; nothing installed <!-- toc-session:f00041c7-a3bc-4560-8919-615f3ea67d68 -->
 - 2026-08-03 (8) — GEN-602/592 merge answered; /wrap Step 4b push-first rewrite vetted, INSTALLED and confirmed in this wrap; GEN-620 filed for folder-awareness; GEN-618 batching decided (four tickets, one pass) and closed; GEN-616 rig/README refreshed; GEN-621 filed <!-- toc-session:13a207fe-fa0b-4680-91a1-8be5af6883ac -->
 - 2026-08-02 (7) — GEN-508 piece 1 designed (3 /check rounds), built as an uninstalled draft and reviewed over two full code-review rounds; stopped for a scoping rebuild after two real captured payload shapes defeated the create and update arms; handoff written to GEN-508 and artifacts relocated to notes/gen508-piece1/; filed GEN-613/614, merged into GEN-546; nothing installed <!-- toc-session:8cbc4fb1-b0c2-4841-9721-793b077e1c43 -->
 - 2026-08-02 (6) — GEN-443 vetting run voided by a concurrent session editing the artifact mid-flow; filed GEN-612 (freeze the artifact under review) + GEN-615 (check for a concurrent session first); four findings routed to GEN-586/607/297/572 and an atomic-swap note into GEN-443's resume block; two stale vetting records deleted; nothing installed <!-- toc-session:3a1d5252-3202-4cb3-8f46-e44670d1b0a1 -->
@@ -184,6 +186,140 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-08-04 (2) — GEN-615 + GEN-620 paired: designed over six /check rounds, built, nine review defects fixed; NOT installed, paused for a second /code-review
+<!-- session:bd0001a6-26bf-477d-8189-caeb0b4b2de5 -->
+
+**Ask.** Work GEN-615, find whether another ticket should be done with it, and if so propose a path for both. Session started at medium effort, raised to xhigh for the design and high for the build at Erez's instruction.
+
+### Pairing decision
+GEN-615 (two sessions on the same **ticket**) paired with **GEN-620** (two sessions in the same **folder**). Both tickets say not to *merge* them and that still holds — but they are the same machine underneath: same source of truth (the auto-approve edit log), same unresolved id-correlation question, same trigger/staleness design, same awkward two-session test rig. Doing them apart means solving all of that twice. GEN-620 had also already done the measurement work GEN-615 lacked.
+
+GEN-621/GEN-152 were **explicitly not touched**: session 13a207fe was live on them at the time (a real instance of GEN-615's own failure, caught by looking).
+
+### The blocker both tickets named turned out to be a non-issue
+GEN-615 said the two id spaces don't line up so any check stays heuristic. True of `list_sessions` (measured: **0 of 200** of its ids intersect the 171 ids in the edit log, and no hook can call an MCP tool anyway) — and irrelevant, because `~/.claude/sessions/<pid>.json` shares the edit log's id space exactly. That is an exact join plus a real pid liveness check, which is also what answers the objection that killed advisory locks in GEN-218.
+
+### Design — `notes/gen615-gen620-design/design-v7.md`, six /check rounds
+One hook, two events, one liveness reader, two keys. `UserPromptSubmit` → ticket key (self-registering presence map, so no transcript parsing); `PreToolUse` → folder key (the edit log already *is* the folder signal). Awareness only, never blocking, and no CLAUDE.md growth — the "stop and ask" instruction rides inside the injected text.
+
+Six rounds **removed** seven pieces of logic and added self-diagnosis. What each round killed:
+- **R1:** a 120-minute folder window (unjustified by its own cited evidence, and a fixed cutoff reintroduced the very TTL-vs-idle-gap mismatch GEN-218 used to reject locking).
+- **R2:** a `cwd` filter on the ticket half (GEN ids are global across all three projects, and pruning through a folder-filtered set could delete another project's live registration); a 24-hour map expiry (the same TTL mistake, second instance).
+- **R3:** the `procStart` requirement — **measured present in only 1 of 7 live session files**, so requiring it read six of seven live sessions as dead and the hook would have installed clean and done nothing forever. Also removed self-exclusion from the liveness set (each session would have deleted its own registration every prompt).
+- **R4:** `procStart` dropped entirely rather than made optional; self-presence became a hard gate; a **lower** monitoring bar added (zero ticket-half firings in three weeks is *suspect*, not reassuring).
+- **R5:** `agent_id` added to the dedupe keys — sub-agents carry the parent's `session_id`, so a sub-agent's read was consuming the parent's one-per-folder warning slot and silencing the parent's own read, with no re-arm in the case the design calls the one that matters. This review's own panel was an instance.
+- **R6:** a false coverage claim (§7 cited a §6 test the restructure had dropped).
+
+Three of six rounds each caught a defect that would have shipped inert. The design's *shape* never changed after R1.
+
+### Build — `concurrent-session-warn.js` + `test-concurrent-session-warn.js`, 50 tests
+Building it falsified two things the reviewed design asserted:
+1. **The "vanishingly narrow" lost-update window is not narrow.** Six concurrent writers → **only two of six registrations survived**. Replaced with a lock whose holder pid is checked for liveness before it can be broken; 6/6 now survive. This is a deviation from design-v7.md §3b step 4 and has NOT been through the six rounds.
+2. A cap-binding note consumed its once-per-session marker and then discarded its text whenever a real warning coincided, so it would never have been seen.
+Also measured: bare `node` startup is **485 ms per hook invocation on this machine**; the hook's own work was 224 ms of that (per-row `path.resolve` over the log) and is now ~40 ms.
+
+### Code review — nine defects, and the blind pass found the ones that mattered
+- **Pass A** (Erez's `/code-review`, 6 findings, all fixed): null `lastFile` crash swallowing a whole warning; cap-note comparing against all live sessions including other projects; two containment roots ANDed; `MultiEdit` missing from the trigger set though the log records it; ignored `readSync` return value; an unreachable pid branch misreporting the failure.
+- **Pass B** (independent, cold, opus — 3 material, all in the post-design lock/write path it correctly identified as least-reviewed): an unreadable session file treated as **proof of absence**, so pruning deleted a live session's registrations — Claude Code rewrites those files mid-session and a write truncates first, so the window is real; **every** dropped-registration path completely silent, leaving the three-week review unable to tell "no collisions" from "nothing ever registered"; and a stale-lock breaker that broke on age alone, letting a stalled holder's live lock be stolen and its release then unlink the new holder's lock. Plus six adopted advisories (relative-path base divergence from the log writer, warning-loss ordering, filename sanitising before injection, stdin encoding, temp-file leak, incomplete note text).
+
+### Status
+- **Done + verified:** design converged (six rounds, two lenses PASS in each of the last two); implementation written; 50/50 tests pass including concurrency, both cap cases, the sub-agent case and seven new regression cases.
+- **Still open:** nothing is installed. `/vet-code` is paused mid-Step-3 — the fixes were non-trivial, so **both** review passes must re-run, and Pass A needs Erez to type `/code-review` (it is `disable-model-invocation`, same wall hit on 2026-07-30 (6)). Then: a `/check` on the three build deviations, the Step-1b vetting record, the Step-4 pass-consumption assertion, phase B's two-session cases, mint, apply, verify.
+- **Deliberately not done:** GEN-621/GEN-152 (another live session owned them); GEN-620 was moved Backlog → In Progress since one build closes both.
+- **Dead ends not worth retrying:** `list_sessions` for this purpose (wrong id space, unreachable from a hook); mtimes or git for folder presence (neither carries *which session* wrote, which is the whole point); any fixed time window anywhere in this mechanism.
+
+### Two unknowns that could not be settled from stored artifacts
+Whether a **resumed session keeps its `sessionId`** (if not, a long-running session's registration is pruned on resume and never re-created — GEN-615's own incident, silently), and whether **every session `kind` writes a registry file** (all 8 live records read `kind: "interactive"`, which is itself evidence other kinds exist). Both are assigned to build-time checks in design-v7.md §6, and phase B has a resume case.
+
+### Follow-ups
+- **Erez:** type `/code-review` to restart Pass A.
+- **Claude, at install:** the `settings.json` matcher must read `Read|Edit|Write|MultiEdit|NotebookEdit` — copying the sibling `inject-edit-refs.js` entry verbatim makes the MultiEdit fix inert. Register both events. Apply single-line via `update-config.ps1` (two targets, so two passes).
+- **Claude, at install:** file the noise-review ticket with a three-week self-trigger carrying **both** bars and the calibration caveat (GEN-620's figures came from a 30-minute window; the shipped design uses a liveness bound, so a modestly higher early rate is expected).
+
+Resume point and full flow state: `notes/gen615-gen620-design/STATUS-resume-here.md`.
+
+---
+
+## 2026-08-04 — GEN-576 + GEN-600 paired; four review rounds collapsed to a minimal edit; five wrong answers about the permission layer; nothing installed
+<!-- session:36f12be8-dff4-4aa2-aa66-757e362bb9ed -->
+
+**Pairing decision.** GEN-576 (port GEN-511's one-write apply rule into `/vet-code` Step 7) and
+[GEN-600](https://app.notion.com/p/3b06e495d07c8144911ce0282e3f6492) (name the sanctioned apply channel
+for a non-locked hook) edit the same passage from opposite ends. Doing GEN-576 alone would have installed
+its own candidate wording — "apply the entire working copy as ONE full-file `Write`" — which GEN-600's
+recorded evidence contradicts: two real installs (61k-char `stop-claim-linter.js`, 44,145-byte
+`prepend-log.ps1`) deviated to `update-config.ps1 -Op write-file` precisely to avoid re-typing, and one
+vetted install sat uninstalled a day over that ambiguity. Surveyed all 244 open AI-project tickets (three
+REST pages, `has_more` exhausted): GEN-600 is the only ticket that had to move with GEN-576.
+[GEN-587](https://app.notion.com/p/3b06e495d07c8182ba9ddd89d9303a37) (enforcement) and
+[GEN-612](https://app.notion.com/p/3b06e495d07c81b3842eef9107e029a5) (freeze the reviewed bytes) stay
+separate by design. GEN-576 → In Progress.
+
+**Four review rounds, and what they were really finding.** Rounds 1-3 on progressively larger drafts each
+returned a material finding, and every one traced to a single choice neither ticket required: declaring
+the byte-exact command the *exclusive* apply path. Exclusivity broke new-file creation (the script aborts
+before its op switch on a missing target), which forced a carve-out, whose safety claim then had to be
+rewritten three times. Round 4 additionally found that extending whole-file overwrite from 3 files to
+every hook/script is unsafe in a way the flow cannot see: `update-config.ps1` pulls from Drive *before*
+writing, so a concurrent change to the target is silently reverted and Step 8's byte-compare against the
+working copy still reports PASS. Conclusion recorded: the widening was the defect, not the wording.
+
+**The permission-layer saga — five successive wrong answers, settled by our own notes.** Whether creating
+a new hook file reaches a human prompt was answered wrongly five times in one session: auto-approved by
+the allow-list → prompted → prompted-in-default-mode → routed-to-a-classifier → and finally the measured
+truth. The settled answer was already written down in this repo at
+`notes/gen508-piece1/design-converged.md:63-70`, in a file already modified in the working tree when the
+session began: "**[v3] FALSE — this was the load-bearing error** … Measured 2026-08-03: every user turn
+runs under `bypassPermissions`, where a fall-through is silently allowed (178 deferred calls in one
+session, none prompted)." That note records the same inference being retracted here twice before. Docs
+agree once the right row is read: `.claude` is a protected path, `permissions.allow` never pre-approves
+protected-path writes, and the per-mode outcome under `bypassPermissions` is *Allowed*. Logged to GEN-58
+as a new Class D element, then corrected twice on the same page as better evidence arrived; the surviving
+lesson is **check this project's own measured notes before re-deriving harness behaviour from code or
+vendor docs**, with the secondary **verifying a citation is not verifying the claim it is cited for** (the
+round-2 fix was accepted on a true-but-irrelevant citation plus reviewer authority). Class D now "seen
+100x"; Vol. 6 at 11 write-ups.
+
+**What was built.** Erez chose the minimal edit. Final scope is three hunks in
+`~/.claude/skills/vet-code/SKILL.md`: a Step 4 clarification (the fixture-before-apply consumption
+assertion is required; a post-apply real-path check is not a substitute — GEN-600's second acceptance
+clause), and in Step 7 a one-write-per-target mandate with the never-a-sequence-of-`Edit`s reasoning
+(GEN-576), a `-ContentFile`-over-re-typed-`Write` preference for any full-file apply, and a partial-write
+recovery bullet (GEN-576). Deliberately NOT included: exclusivity, any `settings.json` `text-replace`
+steering, all Step 8 changes, all changes to the raw-shell-copy paragraph, and any statement about the
+permission layer or new-file creation.
+
+**Verification state.** Final round: three lenses (pre-mortem, soundness+grounding, rule-check) on Opus,
+all **PASS, zero material findings**; soundness verified all 8 load-bearing claims against live code.
+Their converged advisories were then adopted — including one sentence of mine all three showed was
+factually false ("cannot be applied with `Edit` at all"; `MultiEdit` is in `EDIT_TOOLS` at
+`auto-approve.js:154` and consumes exactly one pass, and `/vet-rule` Step 5 explicitly permits it) — so
+the exact final bytes were not read verbatim by the panel. That is disclosed inside the check-record.
+
+**Stopped here deliberately; nothing installed.** Check-record at
+`~/.claude-staging/check-passes/gen576-gen600-vet-code-record.json` (contentHash
+`6d9571bfccb3823538a069f24b60e21d603b715f55ba4ccab1070deca312f44d`, 43,697 bytes normalized). Working copy
+at `<scratchpad>/vet-code-SKILL.minimal.md` — regenerate by re-splicing if the scratchpad is gone. A check
+pass was minted and then **retired unconsumed** rather than left live across a compaction.
+
+**Resume point — the one open decision.** Erez chose option 1: apply via the byte-exact
+`update-config.ps1 -File "<literal abs path>" -Op write-file -ContentFile "<working copy>"`. Unresolved
+tension to settle before acting: `/vet-rule` Step 5 prescribes a full-file **Write** tool call for a skill
+file, so option 1 is an undocumented deviation — the exact class of deviation this session's own subject
+matter is about. Re-mint a fresh pass first (the old one is retired).
+
+**Follow-ups identified, drafted for approval but NOT yet filed:** (1) the silent-revert hazard in the
+existing apply channel — pre-existing, affects the three locked config files today; (2)
+`defaultMode: "auto"` sits at `settings.json:263` as a sibling of `"theme"` rather than inside
+`"permissions"`, so it may be silently ignored; (3) the `/vet-rule` sibling needs the same one-write port
+and carries a mirror-image step-number bug plus a Step 7 claim about `/vet-code`'s new-hook path that
+contradicts `/vet-code`'s own Scope; (4) a reviewer's proposal to have the hook compare a `Write`'s
+content against the record's `contentHash`, catching drift before the pass is spent instead of after.
+Also noticed: [GEN-547](https://app.notion.com/p/3a56e495d07c814c9ec5d802c9c0509f)'s skill-text half looks
+already satisfied by wording now in Step 7 — wants a verify-and-close, not work.
+
+---
+
 ## 2026-08-03 — GEN-443 Step 3 INSTALLED and verified (the deferred write, done); GEN-607 unblocked; the copy/move guard's real trigger measured; three GEN-58 entries
 <!-- session:c249e422-6519-4008-b4f5-4f16a38c8093 -->
 
@@ -216,26 +352,135 @@ Dropped learnings: none.
 
 ---
 
-## 2026-08-03 (2) — GEN-508 piece 1: scoping layer redesigned, built, and then found unsound at the premise — bypass-permissions means the pass mint never prompts, so the gate can self-certify. Code review found 27 defects. STOP-AND-RETHINK, not a fix list.
+## 2026-08-03 (2) — GEN-508 piece 1: premise killed, then the design REVIEWED TO A STANDSTILL over 3 rounds, then COLLAPSED to something much smaller by two of Erez's questions; a real measurement now anchors it; nothing installed
 <!-- session:f00041c7-a3bc-4560-8919-615f3ea67d68 -->
 
-**Read this first if you are picking GEN-508 back up.** The code is written and it is not the problem. The problem is that the design's human gate does not exist in the mode Erez actually works in. Do not start fixing the 27 review defects until the premise question below is settled — fixing them is wasted work if the approval step they protect is a formality.
+Long session, ran into 2026-08-04. Three distinct phases: the premise correction (logged in the
+earlier version of this entry), a `/check` panel that escalated without converging, and a collapse
+triggered by Erez that deleted most of the machinery the panel had been arguing about.
 
-**The premise failure, discovered 2026-08-03 at the very end of the session.** Every `enforceX` gate in `auto-approve.js` (staging GEN-281, vetting GEN-376, check-due GEN-485, and the new ticket arm) rests on the same claim, written verbatim in each header: a single-use pass is minted into a dir OUTSIDE `~/.claude`, so *the mint write always prompts Erez, and that prompt IS the human gate*. Measured this session: `~/.claude/settings.json` has `defaultMode: "auto"`, `permissions.deny` is EMPTY, and NO allow entry covers `.claude-staging` (nearest are `Write/Edit(C:\Users\Erez\.claude\*)`, a different tree). A mint is therefore a fall-through: not in `PROTECTED_FILES`, not a protected code target, and `isAutoApprovableEdit` needs a `PROJECT_ROOTS` prefix it lacks — so main reaches `logDeferred(input); return defer()`. Then, decisively: **every user turn in this session's transcript carries `permissionMode: "bypassPermissions"`**, and the hook logged **178 deferred calls** in the session, all silently allowed. So in bypass mode the mint raises nothing. Claude drafts a ticket, spawns its own reviewer, writes its own pass, and consumes it. Under `auto` mode the answer is still genuinely unverified — that remains open.
+**Phase 1 — the premise (unchanged from the earlier entry, summarised).** Proven live that a
+PreToolUse hook's `permissionDecision:"ask"` is silently discarded under `bypassPermissions`, so
+`confirm-send.js` and `notion-schema-guard.js` are inert in the mode Erez works in, and 9 gated
+destructive ops already ran unguarded. Erez killed the human-approval premise on the merits ("508 is
+about you adhering to rules, not me") and chose adjudication over strict-or-override. Design v3
+written on that basis.
 
-**A probe that could not answer its own question.** I wrote `~/.claude-staging/permission-probe.txt` and asked Erez whether he saw a prompt. Invalid by construction: in bypass mode nothing prompts regardless of path, so the probe tested nothing. Check the session's `permissionMode` BEFORE designing any prompt-dependent experiment. The transcript records no permission-prompt or tap events at all (`type` values are only queue-operation / attachment / user / last-prompt / custom-title / assistant / system), so "did the user get asked?" is not answerable after the fact from the log — only the mode is.
+**Phase 2 — `/check` on v3: 3 rounds, 9 reviews, ALL THREE LENSES REVISE EVERY ROUND. Escalated at
+the cap rather than claiming convergence.** Round 3 ran on Opus per the skill's cap rule.
+- Round 1, 8 material findings. The four that mattered: the hook **never checked the review verdict
+  at all**, so a `REVISE` record would have been approved (same bug the design had already fixed at
+  the skill layer and never carried to the hook); the GEN-58 carve-out silently **reversed a decision
+  Erez had settled the same day** in `design-scoping-v3.md` §6 ("I choose A"), and this document never
+  once cited the companion that supersedes four of its sections; `/wrap` Steps 1 and 3c file tickets
+  directly and would **hard-block on the first run after install**, with no consult path because they
+  are designed never to pause; and "`exit 2` beats every mode" — the one sentence the whole design
+  rests on — carried **no provenance at all** while lesser claims carried live test output.
+- Round 2: v4's verdict-token fix was **defeatable with no forgery** — a flat substring search of
+  `agent-<id>.jsonl` cannot separate the reviewer's reply from the prompt Claude wrote, reproduced on
+  a real transcript (line 1 `type:"user"` carries `STATUS: PASS` from the bare template, line 42
+  `type:"assistant"` carries the real `STATUS: REVISE`). Also: v4's headline network invariant was
+  written into `design-converged.md` while the normative algorithm it constrains sits in
+  `design-scoping-v3.md`, untouched.
+- Round 3: still REVISE, but all three lenses converged on one **diagnosis**: the two-document split
+  is the defect, not the care taken. Corrected rules were right where stated and stale where a builder
+  would actually read them (Enforcement-flow step 6, the skill's steps, "Behaviour on unknown", a
+  latency ceiling written in the losing document and therefore void by the design's own precedence
+  rule). Recommended: merge the two documents; and two of three recommended splitting the install.
 
-**What still works, and is the basis for any fix.** The *refusing* half of every gate is unaffected: a hook that writes stderr and `process.exit(2)` overrides bypass mode and the allow-list both — that is precisely why these gates block by exit 2 rather than by defer. Only the "ask the human" half evaporates. So the research question for the next session is narrow: **can a mint be made un-bypassable?** Candidate directions, none yet investigated — a `permissions.deny` entry on the pass dir (does deny beat bypassPermissions? unverified); a hook that exit-2s the mint unless a human-verifiable artifact exists (risks circularity); moving approval capture off the tool channel entirely. If none holds, GEN-508 needs rethinking from the premise up, and the same finding lands on GEN-281 / GEN-376 / GEN-485, which are already installed and in production. Erez's instruction at session end: settle this before touching the code defects.
+**v4 and v5 written; both introduced new self-contradictions while fixing old ones.** Eight instances
+now catalogued in the document, **three of them self-inflicted by the revisions whose purpose was
+cataloguing the first five**. The mechanical rule recorded ("before editing any section carrying a
+supersession pointer, read the superseding section first") would not have caught two of them, because
+neither edit site carried a pointer — which is why the panel's merge recommendation is the real fix.
 
-**The code that does exist.** `notes/gen508-piece1/auto-approve.working.js` now carries the rebuilt scoping layer per `design-scoping-v3.md`. Purely additive against the live hook: 5 hunks, 939 lines added, 0 removed, `node --check` clean. Four stages — `ticketNormalise` (walk + parse embedded JSON + hoist single-key envelopes under budgets; `ok === false` hard-blocks and is the fail-closed anchor), a closed-shape housekeeping exemption, a free whole-payload Team-Tasks marker scan, then bounded resolution. Pass matching moved to `contentHash` alone over the NORMALISED HOISTED root, so plain and `{data:"..."}` forms hash identically. Two build decisions beyond the design text: a shared `--ticket-hash <file>` CLI mode on the hook (so `/vet-ticket` cannot drift from a ~100-line normaliser it would otherwise have to reproduce), auto-approved via `isSafeTicketHash` pinned to `__filename`; and the finding that create/duplicate cache seeding is *impossible* rather than unimplemented (Notion assigns the id server-side), which corrects `design-converged.md`'s "Seeding" paragraph. `vet-ticket-SKILL.md` was updated to call the CLI and to drop target-string matching.
+**Worst error of the session, mine: fabricated provenance.** v4 and v5 both cited "~700–1000 ms
+typical **measured in** `design-scoping-v3.md`". That document contains **no latency measurement at
+all** (only "50 ms apart" for pass-dir retries), and `design-converged.md` itself said four hundred
+lines away that the estimate "had no measurement behind it". Asserted twice, inside the revisions
+whose entire subject was this failure class. Two lenses caught it by grepping.
 
-**Code review (`/code-review`, 10 finder angles + verify + sweep, all Opus): 27 real defects, 15 in the report, 12 in `scratchpad/review-overflow.md`.** Four-plus angles converged independently on the worst ones. Fail-opens: the pass-scan half of `enforceTicketVetting` sits OUTSIDE its own fail-closed try/catch, so a pass file containing literal `null` throws in `findPassInDir`'s unguarded `Date.parse(pass.expires)` and the hook exits with NO decision (executed: uncaught TypeError; `[]`/`"str"`/`123` all correctly exit 2); the GEN-58 carve-out lost its command test when it was re-keyed to the subtree, so `replace_content` + `allow_deleting_content` on GEN-58 is exempt with 0 network calls; `ticketIsContentOnly` keys on the literal lowercase `properties`, so `Properties`/`props` widens that exemption; `gen58Subtree` checks the 30-day `g58` flag before `tt`, making it a stale NEGATIVE; `consumeTicketPass` returns true without verifying it removed a matching entry (and the legacy single-target branch never compares the hash at all); a malformed target id accompanied by any valid id is silently dropped instead of blocking. False blocks: the 2 s stage-1 CPU deadline is spent by the carve-out's two subprocesses before `ticketMarkerScan` consults it (measured: flips to an unrecoverable `cpu-deadline` block at 1100 ms/subprocess, with `hash:''` so no pass can ever match, on the 1,043-of-1,313 highest-volume shape); every `scope:'block'` short-circuits before the pass dir is read, so `unresolved` cannot be cleared by a mint even though the refusal text and the skill both promise exactly that; a 404 from the internal integration token (narrower share scope than the MCP's OAuth) blocks ordinary non-ticket edits workspace-wide; the GEN-58 rollover *create* hard-blocks. Reviewer agent ids for a future `/vet-code` Step 1b record — finders `a8ba802e6f032b513`, `a3639fc8b1a12ea14`, `aaf71af160ac61d9c`, `a96f121dec2dcfd46`, `ab3d3840895cc0d79`; sweep `a664d87fc3bd8928d`.
+**Retracted, not patched:** v4's absolute invariant "no code path that ends in a block may depend on a
+network round-trip" is **unachievable** given a positives-only cache — with no negative cached,
+"block fast on cold cache" blocks every non-ticket page edit permanently rather than once, and the
+out-of-band warmer it assumed does not exist. A round-3 lens tried to break the unachievability
+argument and could not.
 
-**My "97/97 tests passing, zero fail-opens across 1,313 payloads" claim is withdrawn.** `notes/gen508-piece1/test-gen508.js` exists and does run, but its corpus sweep — the fail-open detector, the whole justification for the rebuild — cannot detect the bug class it was built for: all three of its "this one is a legitimate exemption" buckets are computed by calling the very functions whose fail-open they exist to catch, and `[].every()` returning true files any zero-id update as a GEN-58 exemption. Its prototype-pollution test also tests nothing (`__proto__:` in an object literal is a setter, so the key never becomes an own property and `walk` never sees it). Corpus is `scratchpad/build-corpus.js` output, regenerate rather than commit.
+**Phase 3 — Erez collapsed the design with two questions.**
 
-**Also this session.** GEN-453 extended (a write that lands correctly while destroying adjacent content) and raised to Urgent / Highest, verified live via REST including unchanged option sets; Erez's instruction stands that it runs immediately after GEN-508. Erez chose Option A for the GEN-58 carve-out (exempt content writes in the subtree, keep row property edits gated) — that decision is intact, but note the review shows the implementation over-delivered it into destructive commands. Corrected twice for telling Erez `/code-review` must be run "twice": only Pass A is the slash command; Pass B is a blind reviewer sub-agent Claude spawns itself (`/vet-code` Step 3).
+*"Can We treat notion pages as tickets?"* — the option my enumeration had missed and a round-3
+reviewer had flagged as missing. Measured rather than argued. New durable artifact:
+`notes/gen508-piece1/measurement-edit-targets.md` (method, scripts, raw output, limits).
+- 1,817 transcript files; 1,093 unique `notion-update-page`/`notion-duplicate-page` payloads; **318
+  distinct target pages; 307 are live Team-Tasks rows.**
+- Of the 11 non-rows: **4 GEN-58 log volumes** (116 refs, 10.7%), **3 Team-Tasks rows the DB query
+  missed** because a Notion database query omits archived rows and templates (a bias caught only by
+  identifying all 11 individually — without that step the non-ticket share was overstated ~3x),
+  **3 corrupted/deleted ids** (one a digit-transposition of a real ticket id — a live instance of the
+  malformed-target case), and **1 genuine non-ticket page** (1 ref, 0.09%).
+- **All four volumes are `archived=false`** — live and writable; "(archived)" is title text only. An
+  earlier claim in-session that three were unwritable was wrong.
+- Independently confirms `design-scoping-v3.md` §3 finding 5: all four volumes have
+  `parent.type = page_id` → GEN-58, so they are not Team-Tasks rows.
+- Limits, stated: unit is distinct-*payload* id references, not calls; the `/id/i` walk can collect a
+  relation-nested `{relation:[{id}]}` value that is not the write's target; and **it covers edits
+  only — the 269 `notion-create-pages` payloads are outside it.**
 
-**Four-state status.** *Done + verified:* the v3 design (3 `/check` rounds); the code written and syntax-clean; the diff and README regenerated; GEN-453's edit and priority; the code review and its 27 findings; the bypass-permissions measurement. *Still open:* the premise question above (do this first); then the 27 defects; then two review passes; then `/vet-code` 4-8; the `/vet-ticket` skill is still an uninstalled working copy, and every refusal message points at it, so hook and skill must install together; pieces 2 and 3 unfiled. *Deliberately not done:* nothing installed, live `auto-approve.js` untouched (sha prefix `a102adb5b87f7149`, unchanged all session); GEN-508 body not yet updated to reflect any of this. *Open question not chased:* GEN-508's Priority reads Highest while its Urgency/Gain inputs derive High.
+*"why not upon every run where you create a ticket, you update the list?"* — aimed at a proposal to
+batch-refresh a local ticket-id list at session start. Following it through collapsed the design:
+- **A local ticket list does no work and is deleted.** If unknown pages are gated by default, then
+  knowing a page IS a ticket changes no branch — only gating-**removing** facts matter. Verified by
+  tracing all four arms, then attacked by a pre-mortem lens, which confirmed it for the edit arms.
+- What remains is a small local **exemption** list: GEN-58's own page id (hardcoded) plus the volume
+  ids. Result: **no network call anywhere in the hook**, so the slow-hook race, the resolver, the
+  cache, both TTLs, the positives-only question, the latency budget, the "unknown" stance and the
+  decision escalated to Erez all dissolve; `review-findings.md` findings 6, 9, 10, 11 and 16 go with
+  the resolver.
+- **Genuine counterexample the reviewer found:** the create arm's parent container id is *in the
+  payload*, so container identity is a locally-available gating-removing fact. Creates keep their
+  local test — free, and deleting it would have been a real loss.
+
+**Open findings on the collapse — all must be handled in the rewrite, none yet written into the
+design doc:**
+- The log volumes come **into** scope for the first time, so the document's "this gate never
+  protected them" reasoning is void. The exemption must be a **closed shape** that refuses to exempt
+  a destructive write (`allow_deleting_content`, or a `new_str` that empties the body). Zero measured
+  cost: of 159 GEN-58 writes, `update_content` 150 / `insert_content` 8 / `update_properties` 1 and
+  **no** `replace_content`.
+- **Nothing appends a new volume id.** PreToolUse cannot see a tool response; a PostToolUse appender
+  was explicitly out of scope and must come back in as a named deliverable. "Claude remembers to add
+  it" is the exact omission failure the gate exists to remove. Use `O_APPEND` line-per-id, not
+  read-modify-write (two sessions can run concurrently). Unhandled adjacents: a volume created by
+  duplicate returns a not-yet-populated id; one created by hand produces no response at all.
+- `/vet-ticket` has **no non-ticket branch**, so every over-gated write terminates on Erez —
+  reversing the goal of removing him from the loop, and it is the escape path three other findings
+  lean on.
+- The exemption file **reverses the design's own cache-integrity principle** (it is a
+  gating-decreasing fact held on disk); state the reversal and bound the file so an entry can only
+  exempt content-command writes, never a property edit.
+- Deliverable 8's caller-enumeration grep cannot see write obligations that live in the global
+  `CLAUDE.md` or memory files, yet claims completeness.
+
+**Dead ends, not worth retrying:** batch session-start refresh of a full ticket-id list (superseded
+by the collapse); "block fast on cold cache, warm out of band" (assumed a cached negative that
+positives-only forbids); the content-*adding*-only GEN-58 carve-out (5% coverage of 159 real writes,
+and its protection rationale was void); v4's absolute network invariant.
+
+**Status.** Nothing installed; the live `auto-approve.js` was not written to at any point this
+session. `design-converged.md` is at v5 and is **stale against the collapse** — the next action is to
+rewrite it around the collapsed design (merging in `design-scoping-v3.md`, per the panel) and
+re-review. Erez approved that direction and asked to compact first.
+
+**Owed, with owner.** Claude: GEN-58 entries for the fabricated-provenance error, for introducing
+contradictions inside the revisions that were fixing them, and for the structural lesson that two
+normative documents guarantee propagation failure — deferred twice this session, still owed. Claude:
+22 open defects in `review-findings.md` plus CARRY #7; the test-oracle rebuild; `/wrap` Steps 1+3c
+rewrite (a piece-1 ship blocker); the caller enumeration; pieces 2 and 3 still unfiled as sub-tickets.
+Erez: the two global `CLAUDE.md` edits (summary-card amendment + bar-prose move) need his
+confirmation after `/check`, and the net-neutrality of that pair is asserted, not measured.
+
+**Noted:** a concurrent session `bd0001a6` wrote `notes/gen615-gen620-design/design-v{1,2,3}.md` into
+this repo while this session ran, timestamps interleaved. Nothing of this session's was touched.
 
 ---
 
