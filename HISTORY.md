@@ -35,7 +35,7 @@ GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history v
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
 - 2026-08-04 (2) — GEN-615 + GEN-620 paired into one concurrent-session warning hook: design converged over six /check rounds (three of which each caught a would-have-shipped-inert defect), built with two design assertions falsified by measurement, then TWO full code-review rounds — 9 defects fixed, 5 still open; nothing installed, resume from STATUS-resume-here.md; filed GEN-629/630/631. <!-- toc-session:bd0001a6-26bf-477d-8189-caeb0b4b2de5 -->
-- 2026-08-04 — Paired GEN-576 with GEN-600, cut four failed review rounds down to a minimal three-hunk edit to /vet-code Step 4 + Step 7, got five successive wrong answers about the permission layer (settled by this repo's own measured notes), then installed and byte-verified it; both tickets Done, atomicity split to GEN-622, five more filed (GEN-623-627) and six learnings merged; /wrap hit two of its own defects. <!-- toc-session:36f12be8-dff4-4aa2-aa66-757e362bb9ed -->
+- 2026-08-04 — Paired GEN-576 with GEN-600, cut four failed review rounds down to a minimal three-hunk edit to /vet-code Step 4 + Step 7, got five successive wrong answers about the permission layer (settled by this repo's own measured notes), then installed and byte-verified it; both tickets Done, atomicity split to GEN-622, five more filed (GEN-623-627), eight learnings merged; /wrap hit two of its own defects. <!-- toc-session:36f12be8-dff4-4aa2-aa66-757e362bb9ed -->
 - 2026-08-03 — GEN-443 Step 3 INSTALLED + verified (19/19 fixture, legacy suite unchanged from a pre-change baseline), atomicity residual left open on GEN-600; GEN-607 unblocked; the over-block guard's real trigger measured and GEN-575 corrected; three GEN-58 entries (E/K/I); filed GEN-619 <!-- toc-session:c249e422-6519-4008-b4f5-4f16a38c8093 -->
 - 2026-08-03 (2) — GEN-508 piece 1: premise killed, design reviewed to a standstill, COLLAPSED by two of Erez's questions into a hook with no network call, then REWRITTEN as one document and reviewed to a standstill again (6 rounds, 18 reviews); four new measurements reshaped it, including that ~15% of Notion write traffic bypasses the gate entirely; the adjudication mechanism deleted and re-derived after three failed attempts; one decision open for Erez; nothing installed <!-- toc-session:f00041c7-a3bc-4560-8919-615f3ea67d68 -->
 - 2026-08-03 (8) — GEN-602/592 merge answered; /wrap Step 4b push-first rewrite vetted, INSTALLED and confirmed in this wrap; GEN-620 filed for folder-awareness; GEN-618 batching decided (four tickets, one pass) and closed; GEN-616 rig/README refreshed; GEN-621 filed <!-- toc-session:13a207fe-fa0b-4680-91a1-8be5af6883ac -->
@@ -356,8 +356,9 @@ where `/vet-code` now prefers `-ContentFile`, plus a mirror-image step-number sp
 contradicting `/vet-code`'s Scope. GEN-626 the behavioural learning below. GEN-627 `/wrap`'s own filing
 step is impossible as written (see below).
 
-**Six learnings merged into existing tickets rather than filed as near-duplicates** (the dedupe swept all
-299 open tickets, filtering on Status only so rows with an unset `Project` could not be missed):
+**Eight learnings merged into existing tickets rather than filed as near-duplicates** (the dedupe swept
+all 299 open tickets, filtering on Status only so rows with an unset `Project` could not be missed) —
+GEN-222 and GEN-363 are covered in the `/wrap`-defects and auto-approval sections below; the other six:
 GEN-612 ← the reviewer's proposal to have the gate compare a `Write`'s content against the record's
 `contentHash`, catching drift before the pass is spent instead of after. GEN-547 ← its skill-text half now
 looks satisfied by wording in Step 7; wants a verify-and-close. GEN-544 ← the measured-notes lesson.
@@ -371,10 +372,14 @@ template applied AND a self-contained body; the Notion API rejects both together
 ("Cannot specify both 'content' and 'template_id'"), so the documented call cannot succeed and the
 GEN-145 conditional-fallback clause describes a symptom that cannot occur — filed as GEN-627. (b) The
 auto-mode classifier blocked the Step 3 `update-config.ps1 -Op add-allow` call outright, and then blocked
-a read-only Notion REST lookup that had already succeeded several times earlier in the same session —
-the "misfires on benign follow-up actions after an unrelated block" pattern. No workaround was attempted.
-So the one allow-list addition this wrap identified (`mcp__scheduled-tasks__list_scheduled_tasks`,
-9 deferrals spread 2026-06-24 → 2026-07-30, unambiguously read-only) was NOT applied and needs re-running.
+a read-only Notion REST lookup that had already succeeded four times earlier in the same session — the
+"misfires on benign follow-up actions after an unrelated block" pattern. No workaround was attempted;
+both were retried unchanged later in the session and both then succeeded, so the denial was transient
+classifier state rather than any property of the commands. Net effect: the allow-list addition this wrap
+identified (`mcp__scheduled-tasks__list_scheduled_tasks` — 9 deferrals spread 2026-06-24 → 2026-07-30,
+unambiguously read-only) IS applied and verified present (allow-list now 58 entries). Appended to
+GEN-363, which also notes that a hard deny of a documented step is the no-graceful-degradation failure
+GEN-423 names, so a fix there may cover it.
 
 **Auto-approval scan finding worth keeping (GEN-222).** Every recurring read-only candidate in
 `deferred-calls.jsonl` is already in the allow-list. Checking timestamps rather than assuming: for
@@ -383,8 +388,9 @@ already-allowed tools the newest deferral is old (`getJiraIssue` 2026-06-15, `sl
 (`notion-fetch`, `Read`, `Grep`) have ZERO deferrals across the log's whole 2026-05-31 → 2026-08-04 span.
 That pattern says deferrals stop once a tool is allowed, so GEN-222's premise — already-allowed tools
 still being deferred — is not supported: the entries pre-date their allow-list additions and the log is
-cumulative. GEN-222 looks closable on that basis; the append recording this could not be written because
-of the classifier block above, so it is captured here instead.
+cumulative. The real residual is in the READER (a wrap-time scan that groups the cumulative log by tool
+name will keep re-proposing already-allowed tools), not in the hook or the log. Appended to GEN-222, which
+now either closes or narrows to that reader fix — verify the six-tool sample against the full set first.
 
 **Dropped, with the judgment recorded rather than silently binned:** four unconsumed long-expired check
 passes sitting in `~/.claude-staging/check-passes/`. Not filed — expired passes are inert by design
