@@ -34,6 +34,8 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-08-04 (4) — GEN-576 confirmed already Done and its ticket page corrected to what actually shipped; Erez's ticket-status taxonomy vetted (2 rounds, both round-1 findings real) and INSTALLED in the global CLAUDE.md + /wrap; installing it proved all three auto-approve gates stand down on a multi-line command and silently allow the write, filed as GEN-641 <!-- toc-session:268f3c56-7931-4e01-be37-bd9f507e72d9 -->
+- 2026-08-04 (3) — GEN-508 piece 1 v7: Erez chose to cover raw REST/curl writes now; the delta went into the one normative design doc with three cuts (adjudicator role, PostToolUse appender, wrap summary card), three /check rounds ESCALATED at the cap after the same body-unbound class recurred in three shapes, fixed by a shape-whitelist that is itself unreviewed; GEN-58 logged (new Class E element + Class A recurrence); nothing installed, no code written. <!-- toc-session:9320ec4f-6c26-472f-bdbe-95b5332bc717 -->
 - 2026-08-04 (2) — GEN-615 + GEN-620 paired into one concurrent-session warning hook: design converged over six /check rounds (three of which each caught a would-have-shipped-inert defect), built with two design assertions falsified by measurement, then TWO full code-review rounds — 9 defects fixed, 5 still open; nothing installed, resume from STATUS-resume-here.md; filed GEN-629/630/631. <!-- toc-session:bd0001a6-26bf-477d-8189-caeb0b4b2de5 -->
 - 2026-08-04 — Paired GEN-576 with GEN-600, cut four failed review rounds down to a minimal three-hunk edit to /vet-code Step 4 + Step 7, got five successive wrong answers about the permission layer (settled by this repo's own measured notes), then installed and byte-verified it; both tickets Done, atomicity split to GEN-622, five more filed (GEN-623-627), eight learnings merged; /wrap hit two of its own defects. <!-- toc-session:36f12be8-dff4-4aa2-aa66-757e362bb9ed -->
 - 2026-08-03 — GEN-443 Step 3 INSTALLED + verified (19/19 fixture, legacy suite unchanged from a pre-change baseline), atomicity residual left open on GEN-600; GEN-607 unblocked; the over-block guard's real trigger measured and GEN-575 corrected; three GEN-58 entries (E/K/I); filed GEN-619 <!-- toc-session:c249e422-6519-4008-b4f5-4f16a38c8093 -->
@@ -186,6 +188,106 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-08-04 (4) — GEN-576's page corrected to what shipped; Erez's ticket-status taxonomy vetted and INSTALLED in two files; the install exposed a live newline hole in all three gates → GEN-641
+<!-- session:268f3c56-7931-4e01-be37-bd9f507e72d9 -->
+
+**Session shape.** Started as "continue GEN-576", which turned out to be already Done (installed and
+byte-verified in session `36f12be8`, see the 2026-08-04 entry). Re-verified the install live this session:
+`~/.claude/skills/vet-code/SKILL.md` is 43,697 bytes, sha256 `6D9571BF…A312F44D` — still byte-identical
+to the reviewed copy. Correction to that earlier entry's record: it states 584 lines; the file is **489**
+lines. Bytes and hash match, so the file is right and only the line count in the old note was wrong.
+
+**GEN-576's ticket page corrected (it had never been brought to reality).** Its `last_edited_time` was
+2026-08-02 — i.e. before the 2026-08-04 install — so the standing "re-read title and description against
+what was actually built before Done" step had not run. Its *Candidate fix* still prescribed "apply the
+entire working copy as ONE full-file `Write`", the approach GEN-600's evidence had killed; its
+classification question still read as open. Appended via `notion-update-page`: a **SUPERSEDED** note on the
+candidate fix (naming the `-ContentFile` preference that actually shipped and why re-typing 43k chars is
+the drift risk), an **ANSWERED** note on the gate question (`/vet-rule` is correct, and `auto-approve.js`
+`checkDueTargets` Case 2 makes the `update-config.ps1` route consume a check pass exactly as a `Write`
+would), and a **What shipped (2026-08-04)** section listing the three hunks, the byte verification, what
+was deliberately excluded after four review rounds, and the three residual tickets. Verified by a live
+REST re-read: 24 blocks, all original content intact. Status left Done.
+
+**Erez's ticket-status taxonomy — the real work of the session.** He asked why GEN-622/623/625 were all in
+Backlog. Answer: `/wrap` hardcoded it — `skills/wrap/SKILL.md` sub-step 7 read "status Backlog" with no
+judgment step, and line 59 (the Step 3c detector-review auto-file) did too. He then gave the intended
+semantics (Backlog = waiting on something; To Do = ready; Blocked; In Progress; Done = documenting
+finished work; Review; Wont Do) and approved turning it into a rule.
+
+**Two targets, one `/check` panel, converged in 2 rounds — both round-1 findings were real:**
+- **Rule-check (REVISE):** the draft was *unscoped* and read as authorizing Claude to set status
+  unilaterally on every creation, contradicting three live rules in the same file (the "**Ticket status
+  (Notion, Jira, etc.).**" paragraph, "Before creating or materially changing a ticket in a tracker", and
+  the clause reserving "ticket status" for Erez). Fixed by adding *"This supplies the value, not the
+  authority"* — outside a flow already exempt from the draft-for-approval step, the status is part of the
+  proposal Erez approves. **This is the finding that mattered**: without it the rule would have quietly
+  widened Claude's authority while looking like a formatting improvement.
+- **Pre-mortem (REVISE):** the wrap-side parenthetical offered only To Do / Backlog, but wrap files an
+  "Unsure which branch applies" category needing joint classification with Erez — a **Blocked** case. Added.
+- Holistic and Soundness passed round 1. Advisories accepted, not acted on: the seven branches can collide
+  (begun *and* blocked) with no stated precedence — inherited from Erez's own wording, not introduced;
+  and the "fallback, not override" sentence has no live referent among the two hunks (it exists for
+  un-surveyed procedures).
+
+**Installed and verified.** Global `CLAUDE.md` → sha256 `2DD9B3B6…40FE3891` (47,704 chars / 48,030 bytes);
+`skills/wrap/SKILL.md` → sha256 `A94CA379…FE772A89` (41,480 bytes). Both LF, no BOM, arrows intact, zero
+residual `status Backlog`, the rule referenced twice by quoted opening words. Both `update-config.ps1
+-Op write-file -ContentFile` calls exited 0 and pushed to Drive. Deliberate channel choice: the paragraph
+contains U+2192 arrows, and PS 5.1 mangles non-ASCII passed as a native-exe argument, so the `text-replace`
+form `/vet-rule` Step 5 names was unsafe here — a file-sourced byte-exact write was the only route that
+cannot corrupt the text. Disclosed to Erez before approval and recorded in the check-record.
+
+**The install exposed a live gate hole → [GEN-641](https://app.notion.com/p/3b26e495d07c81728335c39adba06341)
+(To Do, High, Urgent/Gain 2, unassigned).** Neither check pass was consumed. Cause, read from live code:
+all three installed gates — `enforceStaging` (676), `enforceVetting` (965), `enforceCheckDue` (1384) —
+classify any command containing a newline as `AMBIGUOUS` and `return`, and my install command had a second
+line capturing the exit status. Target detection worked fine; the stand-down is downstream of it. The
+comments call that "falls through to prompt", but under `bypassPermissions` a fall-through is a **silent
+allow** — already measured 2026-08-03 and written up in `notes/gen508-piece1/design-converged.md`, which
+*names this exact divergence for `enforceCheckDue`* and whose new arm hard-blocks instead of returning.
+So the corrected stance had precedent and was simply never ported. Both unconsumed passes were deleted, so
+no live pass was stranded. **Honest reading of this session's own chain:** the review was real and Erez's
+"go ahead" was real, but nothing *forced* either — the enforcement was absent, not satisfied.
+Not merged into **GEN-505** (comment audit — same file, same misconception, but its outcome is corrected
+comments, not corrected behaviour); GEN-641's body says to check **GEN-624** first, since if `defaultMode`
+is genuinely being ignored, fixing it could change whether a stand-down prompts at all.
+
+**Status.** GEN-576 Done (re-verified). GEN-641 filed, To Do, unassigned. GEN-622/623/625 — Erez moved all
+three from Backlog to To Do manually this session, after the rule made the mis-status visible. Nothing
+else installed. First real use of the new rule was GEN-641 itself, filed To Do on the merits.
+
+**Follow-ups.** *Erez:* nothing. *Claude, next session:* GEN-641 (the fix is a `/vet-code` change to
+`auto-approve.js`; check GEN-624 first, and note the fix must not break the break-glass OPEN/CLOSE
+sequences, which are deliberately multi-line so they reach a prompt rather than the chain-guard).
+Not done deliberately: no sweep for hardcoded creation statuses outside `skills/` and `commands/` (both
+reviewers flagged it as advisory; `hooks/*.js` was checked and has none).
+
+---
+
+## 2026-08-04 (3) — GEN-508 piece 1 v7: raw-REST arm covered on Erez's call, three cuts, panel escalated at the cap with the shape-whitelist unreviewed
+<!-- session:9320ec4f-6c26-472f-bdbe-95b5332bc717 -->
+
+**Decision (Erez).** Shown the design's §12.1 three-way scope choice in plain language, he chose **"cover it now"** (Option A) over the standing recommendation (Option B, ship-and-defer): raw REST/curl Notion writes are IN piece 1. He also asked for the simplest design that delivers it, reusing what the project already has — naming the `/check` skill and the verification hook.
+
+**v7 applied as a delta to the single normative document** (`notes/gen508-piece1/design-converged.md`), not a new file — the two-document split was the previous session's round-3 diagnosis, and a second document would have repeated it. Four changes: new §4.5 (the raw REST/curl arm); the **adjudicator role deleted** (§9 reduced to a stub, §6.2 rewritten — the hook already ignored it, and v6.3's Claude-side residue had been reviewed by nobody); the **PostToolUse volume-id appender cut** (was deliverable 4 — the skill's GEN-58 lane maintains the list reactively and autonomously anyway); and deliverable 10's fork resolved — `/wrap`'s two filing steps stay **unattended**, no summary card, with the cost stated.
+
+**§4.5's shape, and what it reuses rather than rebuilds:** `notion-schema-guard.js`'s existing write-detector (`isNotionMutatingHttp` plus its read allow-list) copied into the locked hook under a superset fixture assertion; the existing `check-reviewer` agent type as the reviewer (one reviewer, one lens — deliberately not a `/check` panel); GEN-518's transcript+sidecar evidence path; the shared `findPassInDir` / `consumePassFile` plumbing; `enforceCheckDue`'s chain-guard precedent. The record binds `{shell, bodies}` — command text plus every referenced body file — because this project's own convention writes the body to a temp file, so a command-only hash would leave the ticket text unbound. Destructive raw calls (`DELETE /v1/blocks`, `DELETE /v1/pages`, the three `/v1/databases` writes) become gated for the first time.
+
+**`/check`: three rounds, eight reviews, ESCALATED at the cap** — the document records that rather than claiming convergence. Round 1 (Sonnet): holistic PASS, pre-mortem REVISE (5), soundness REVISE (2), all seven fixed. Round 2: soundness cleared both of its findings and raised one NEW-FROM-REVISION (the `source` event field had no writer); pre-mortem cleared four of five. Round 3 (Opus, cap round): soundness PASS; pre-mortem tagged a **RECURRENCE**. Reviewer ids for a future `/vet-code` Step 1b record: `a7ee238379a4af562`, `aae03ca6224426b82`, `aaa68b8f281947130` (r1), `a99475dd331c499ee`, `acd5e88a491e4a4f0` (r2), `a5cc3ab1a784bee78`, `aee729e4666c6470b` (r3).
+
+**The class that recurred three times, which is the useful finding.** Each round found a different way a raw write reaches Notion with a body the record's hash does not cover: a PowerShell sub-expression (r1), an unexpanded variable inside an otherwise well-formed argument (r2 — a residual of r1's own fix), and a body piped into the client with no body argument at all (r3; `scanChain` treats a single `|` as non-chaining, `auto-approve.js:409`-`412`). Every fix answered "did I recognise this body channel?", so the next unlisted channel was the next defect. **§4.5 now states a whitelist of readable command shapes ("gate 1")** instead — the from-scratch re-derivation the third-fix rule demands. **Gate 1 is itself unreviewed** (written after the cap closed); a round-4 `/check` on it alone is the named next step, and Erez chose to run it.
+
+**Three of my own claims were killed by reviewers reading the code I had cited in the same sentence:** that dropping the HTTP-client-name gate would newly catch an inline `node -e` / `python -c` write (false — the write-signal regexes are CLI-flag-only; withdrawn and replaced with two patterns that do match, plus a measured zero-instance count over both hook logs); "Deliverables 14 → 13" against a table that still had 14 rows; and "the two `/v1/databases` writes" (there are three). Round-3 advisories also folded in: §7.1's escape table given rows for the four shell block reasons, §7 step 4's "every block carries a hash" scoped to the MCP path, `--ticket-hash-shell` given its extra non-zero-exit condition, body-file paths resolved against the payload `cwd`, the bare-unquoted-token argument form added, the `/wrap`-slice bar restated as "no REVISE on first review" (not `reReviewed`), §11 required to carry a `source` tag per dispositioned caller, and the "a hook cannot know which routine is running" justification corrected to a choice (a session-marker idiom already exists at `auto-approve.js:351`-`362`).
+
+**GEN-58 written and verified** (Vol. 7 plus the index): a new Class E element `[GEN-508 v7 body-binding enumerate-vs-whitelist]` with a full write-up (E header 25x→26x, volume count 4→5), and a Class A recurrence on `[catch-up invId/scope doc claim]` (A header 32x→33x, element 2x→3x). Verified by re-fetch with a byte-level check that no stale value remained. The GEN-227 promote-trigger was scanned and does **not** fire — its condition is a Class E instance on a turn with no full `/check` review.
+
+**State: nothing installed, nothing committed, no code written this session.** The live `~/.claude/hooks/auto-approve.js` is untouched and no `/vet-ticket` skill exists. `auto-approve.working.js` is still the pre-collapse build carrying 14 `FIX` defects + 1 `CARRY`. Piece 1 remains 14 deliverable rows, three of them rule or skill edits needing Erez's confirmation; splitting the install is still open, and two of three round-3 reviewers had recommended it.
+
+**Honest residual carried forward.** Coverage after v7 is "every Notion create/edit through the four MCP write tools **or named in a shell command**" — a write whose URL lives only inside a script file the command merely runs stays invisible, and widening the matcher to script contents must NOT be adopted: it would gate the routine Notion REST *reads* that `scripts/notion-ticket-lookup.ps1` performs on an ordinary GEN-id lookup. Piece 2 owns that gap. Still unverified before install: whether PreToolUse hooks fire for sub-agent-originated tool calls.
+
+---
+
 ## 2026-08-04 (2) — GEN-615 + GEN-620 paired: designed over six /check rounds, built, then TWO code-review rounds (9 defects fixed, 5 still open); NOT installed
 <!-- session:bd0001a6-26bf-477d-8189-caeb0b4b2de5 -->
 **Ask.** Work GEN-615, find whether another ticket should be done with it, and if so propose a path for both. Session started at medium effort, raised to xhigh for the design and high for the build at Erez's instruction.
