@@ -1,12 +1,70 @@
-# GEN-508 piece 1 — design (v6.3, the single normative document)
+# GEN-508 piece 1 — design (v7, the single normative document)
 
-> # ⚠ THE REVIEW PANEL ESCALATED AT ITS CAP. This document is not converged.
+> # v7 — Erez's scope decision applied, and three cuts
 >
-> **Three rounds, nine independent reviews.** Round 3 ran on Opus per the skill's cap rule and returned
-> **REVISE from all three lenses**, so this is an escalation to Erez rather than a claim of convergence.
-> Two independent triggers fired: the round cap, and one finding tagged **RECURRENCE** after two fix
-> attempts.
+> **Erez settled §12.1 on 2026-08-04: raw REST/curl writes are IN piece 1.** He was shown the three options
+> in plain language, labelled in this order — "ship now, cover it later" (B, the standing recommendation),
+> "cover it now" (A), and "block that route entirely and force everything through the connector" (C) — and
+> answered *"I prefer you cover it now"*, which is the second label verbatim, i.e. Option A. A `/check` lens flagged that "cover" could also be read as Option
+> C (the funnel); it cannot, because C was on the same list under its own label and was not the one chosen.
+> He also asked
+> for **the simplest design that delivers everything needed**, reusing what this project already has
+> rather than adding a fourth copy of anything. v7 is that delta, and it is a **net reduction** in
+> mechanism despite adding coverage.
 >
+> | change | effect |
+> |---|---|
+> | **new §4.5 — the raw REST/curl arm** | reuses `notion-schema-guard`'s existing write-detector (plus two added patterns, so the fixture asserts a superset), binds the record to the command text **plus every referenced body file** — refusing outright when a body cannot be bound — and adds no second input shape to the JSON normaliser, the one cost §12.1 charged against this option |
+> | **§9 deleted — the adjudicator role** | the hook already ignored it (v6.3). A disputed finding now goes to a **fresh reviewer**, which was already v6.3's answer for an overturned one. Three failed fix attempts across three rounds are the argument for deleting rather than patching again |
+> | **deliverable 4 cut — the PostToolUse volume-id appender** | the skill's GEN-58 lane appends reactively and autonomously anyway; the appender's whole value was avoiding one self-resolving block per ~25 log entries, at the price of a second hook arm, a second writer to the exemption file and its own concurrency property |
+> | **deliverable 10's fork resolved — `/wrap` files unattended** | no summary card at wrap time; the reviewer is the gate and `/wrap` reports counts. A card there would reintroduce exactly the interruption this gate is meant not to add |
+>
+> **The deliverable table still has 14 rows, and saying "14 → 13" was wrong** — a `/check` lens caught the
+> arithmetic. Row 4 was *replaced* (appender → REST arm), not removed, and the adjudicator was never its own
+> numbered row; it lived inside rows 5 and 6. So: **one row's content swapped, two mechanisms deleted from
+> inside other rows, one fork closed.** The count is unchanged; the work is smaller. The document's own
+> recurring defect is a number restated in a second place and left stale, so this correction is written where
+> the wrong number was.
+>
+> **What this box replaces.** v6.3 ended in an escalation: the round-3 panel returned REVISE from all
+> three lenses at its cap, and the adjudication rewrite written after the panel closed had been reviewed
+> by nobody. **v7 deletes that rewrite**, which retires the flag rather than answering it. Three round-3
+> advisories remain open and are listed here rather than quietly carried: §4.0.1 still blends Part 4 and
+> Part 4a counts in one sentence; §13's "finding 11 is closed" reads against §14's disclosed marker
+> fail-open; and Part 4a's `46`/`25` pair is used in two senses. The fourth (§7 step 3 reading as though
+> it gated housekeeping edits) is **fixed** in §7.
+>
+> **Review state: see the round-1 box directly below.**
+
+> ### v7 `/check` round 1 — holistic PASS, pre-mortem REVISE (5), soundness REVISE (2)
+>
+> Reviewer agent ids, for a future `/vet-code` Step 1b record: pre-mortem `a7ee238379a4af562`, holistic
+> `aae03ca6224426b82`, soundness `aaa68b8f281947130` (all `check-reviewer`, Sonnet, 2026-08-04).
+>
+> **All seven material findings are fixed in the text below.** Three of them were mine, verified against the
+> live regexes rather than argued about:
+>
+> | finding | lens | what changed |
+> |---|---|---|
+> | a body passed as a PowerShell sub-expression (`-Body (Get-Content -Raw x.json)`) is neither `@file` nor a literal, and `scanChain` returns `NO-CHAIN` — so the hash silently covered the command only and the bytes on the wire were **unbound** | pre-mortem | §4.5 now **refuses** any body argument it cannot classify (`body-source-unrecognised`). There is no command-only fallback |
+> | `-T` / `--upload-file` / `-InFile` take **bare** paths, never `@`-prefixed — so the uniform "`@<path>` after a data flag" rule would never have read those bodies at all | pre-mortem | §4.5 now specifies the argument convention **per flag**, in a table |
+> | "dropping the client-name gate means an inline `node -e` / `python -c` write is caught" is **false**: the write-signal regexes match CLI-flag syntax only | pre-mortem **and** soundness, independently | claim withdrawn and replaced: the widening is now **two** changes, the second adding native-call patterns that actually match, with "zero corpus instances" stated |
+> | the REST GEN-58 exemption covers only the append endpoint, so a REST in-place correction to a log entry gates — possibly against a standing rule | pre-mortem | disclosed with the reason it is **forced** (a block id cannot be mapped to a page without a network call), and the escapes named. Also surfaced the block→page hop the skill's lanes need |
+> | the unattended-`/wrap` decision was justified by aggregate `/wrap` counters that cannot see the `/wrap` slice they monitor | pre-mortem | events now carry `source`, and §10 has a `/wrap`-slice row with its own two bars |
+> | "Deliverables: 14 → 13" contradicted §12's table, which still has 14 rows | soundness | corrected in both places, with what actually changed |
+> | a bearer token inlined in a gated command would be persisted in a reviewer transcript | pre-mortem advisory, adopted | `/vet-ticket` refuses a command carrying a literal token |
+>
+> Advisories folded in: the Part 4 / Part 4a attribution in §4.5's DELETE counts; the `--ticket-hash-shell`
+> equality is now a blocking install assertion (§7.1) rather than an assumption; the Option-A-vs-C reading is
+> settled from the labels Erez was shown.
+>
+> **Holistic passed on the first round**, having checked every reuse claim against the live files, and found
+> no smaller design that still delivers content-bound review of raw REST writes.
+
+---
+
+## Earlier round history — v6.3's escalation (kept for the audit trail)
+
 > **What round 3 found, and what v6.3 did:**
 >
 > | finding | lens | what changed |
@@ -16,16 +74,14 @@
 > | §10's "complete set" of block reasons was still missing three real block paths, which would have inherited `internal-error` and reported the arm as broken when a corrupt record was the cause | soundness | **each blocking step in §7 now names its own reason**, and §10's list is derived from §7 rather than curated separately |
 > | deliverable 13 moves ticket-rule prose into the reviewer's checklist while measuring only byte-neutrality, so a rule that fails the trip stops being enforced anywhere — the gap between "a review ran" and the ticket's word **all** | holistic | **new §12.2** makes enumeration, no-loss and sync binding acceptance criteria, and states the narrow guarantee if they are not met |
 >
-> **Still open, listed rather than quietly carried** (round-3 advisories, all non-blocking, none applied):
-> §4.0.1 still blends Part 4 and Part 4a counts in one sentence and undercounts the `/v1/databases`
-> writes; §7 step 3's "read the exemption file here" is ambiguous enough to read as gating housekeeping
-> edits, which §4.2 forbids; §13's "finding 11 is closed" conflicts with §14's disclosed marker fail-open;
-> Part 4a's `46`/`25` pair is used in two different senses. **And the adjudication redesign above has not
-> been reviewed by anyone** — it was written after the panel's cap.
+> **Round-3 advisories** (all non-blocking, none applied at v6.3): §4.0.1 blends Part 4 and Part 4a counts
+> in one sentence and undercounts the `/v1/databases` writes; §7 step 3's "read the exemption file here"
+> reads as gating housekeeping edits, which §4.2 forbids; §13's "finding 11 is closed" reads against §14's
+> disclosed marker fail-open; Part 4a's `46`/`25` pair is used in two senses. **And the adjudication
+> redesign above was reviewed by nobody** — written after the panel's cap. **See the v7 box for the
+> current disposition of all five** (one fixed, one deleted, three still open).
 
 ---
-
-## Earlier round history (kept for the audit trail)
 
 > **Round 2 is complete. Both round-1 findings that were carried over are RESOLVED by the reviewers'
 > own tags; three new findings arrived and are fixed here. v6.2 is that revision.**
@@ -90,10 +146,11 @@
 > but `review-findings.md`, `HISTORY.md`, the plan file and GEN-508 all link to this path, and
 > renaming means updating every one of them for no gain.
 
-**The change:** add a fourth gate arm, `enforceTicketVetting`, to `~/.claude/hooks/auto-approve.js`;
-add a small PostToolUse companion that maintains one exemption list; add a `/vet-ticket` skill that
-writes the single-use **review record** the arm demands. Piece 1 is the **Notion** half; Jira and the
-cross-tracker rule set are pieces 2 and 3.
+**The change:** add a fourth gate arm, `enforceTicketVetting`, to `~/.claude/hooks/auto-approve.js`,
+covering both the four Notion MCP write tools and raw REST/curl writes; add a `/vet-ticket` skill that
+writes the single-use **review record** the arm demands. **One arm, one record type, one skill** — no
+PostToolUse companion, no second hook file. Piece 1 is the **Notion** half; Jira and the cross-tracker rule
+set are pieces 2 and 3.
 
 ---
 
@@ -110,7 +167,8 @@ independent reviewer, **without growing the always-loaded global CLAUDE.md**.
 an airtight stop on an unverified write, with a per-case waive he controls; both trackers; create
 **and** edit; review every create and every edit touching body/substance or the priority fields, and
 skip pure housekeeping (status / labels / assignee); the reviewer must be **independent** of the
-drafter; a reviewer/Claude disagreement is settled by adjudication, not by either party's fiat.
+drafter; a reviewer/Claude disagreement is settled by **another independent review**, not by either
+party's fiat (his 2026-08-03 call — v7 delivers it as one fresh reviewer on the unchanged content, §6.2).
 
 ### The threat model, stated once because everything depends on it
 
@@ -168,7 +226,7 @@ The three installed sibling gates block the same way in production.
 
 **What replaces the human gate — three layers, none involving Erez:** refuse until a record exists,
 bound to a content hash; verify the record names a reviewer that really ran *and* returned PASS on
-*this* content; adjudicate disagreement rather than letting either party settle it.
+*this* content; send a disputed finding to a fresh reviewer rather than letting either party settle it.
 
 ---
 
@@ -290,10 +348,8 @@ changes the scope question rather than confirming the deferral (`measurement-edi
   `bypassPermissions`. **So the detector for this hole exists, is already scoped correctly, and is
   neutered only by using the permission verb that does not work.** That changes the options in §12.1.
 
-**This is now an open decision for Erez, not a deferral I should make** — see §12.1. It bears directly
-on whether piece 1 is worth shipping alone: a gate that covers the MCP tools while ~15% of write traffic
-goes ungated is a materially weaker delivery of "every Notion create/edit" than the earlier qualitative
-framing implied.
+**DECIDED 2026-08-04 — Erez chose to cover this surface in piece 1.** The arm is specified in **§4.5**;
+§12.1, which held the three-way option comparison, records the decision and is otherwise closed.
 
 ### 4.1 Stage 1 — normalise (this is where payload shape stops mattering)
 
@@ -480,6 +536,203 @@ Three notes on the choices in that table:
 **The arm makes no subprocess call and no network call on any path.** Its cost is one bounded local
 read of the payload plus, on the record path only, a bounded read of the reviewer's transcript.
 
+### 4.5 The raw REST/curl arm `[v7]`
+
+**Erez's decision, 2026-08-04: cover this surface in piece 1**, in the smallest shape that delivers it.
+What follows is that shape. Everything in it either reuses a mechanism already running on this machine or
+closes a specific hole; nothing here is a second copy of anything.
+
+**Detection reuses the detector that already exists.** `notion-schema-guard.js`'s GEN-378 shell-write arm
+(`isNotionMutatingHttp` + `pathIsNotionRead`, read 2026-08-04) already solves the hard part: telling a
+Notion read from a Notion write when both arrive as `POST`, via a maintained allow-list of read endpoints
+(`*/query`, `/v1/search`) rather than a blacklist. **Copy it into `auto-approve.js`** rather than
+`require`ing a shared module: `auto-approve.js` is a locked file, and putting a gating-critical decision
+in an unlocked one trades tamper-resistance for tidiness. A fixture test over a shared command corpus is
+mandatory, and its assertion is **superset, not equality** — every command schema-guard flags, this arm
+must flag — because of the widening below.
+
+**Two deliberate widenings, stated precisely because a first draft of this section overstated what one of
+them buys** — both `/check` lenses that reviewed v7 caught it independently, by reading the regexes:
+
+1. **Drop the HTTP-client-name requirement.** `notion-schema-guard.js:131`/`:161` require the command to
+   name `curl`, `wget`, `iwr`, `irm` or `invoke-*` before anything else fires, which is why
+   `measurement-edit-targets.md` Part 4 calls its own totals a floor. This arm drops that gate: the write
+   signal alone plus `api.notion.com` is enough. **What this actually buys is narrow** — a client invoked
+   through a variable or an unusual path (`& $curlBin -X POST …`) while still using curl-style flags. It is
+   free, so it is kept, but it is not the reason coverage improves.
+2. **Add native-call write patterns to the write signal** — this is the widening that does the work.
+   `WRITE_METHOD_RE` / `PS_METHOD_RE` / `BODY_FLAG_RE` (`notion-schema-guard.js:132`–`134`) match
+   **CLI-flag syntax only** (`-X POST`, `-Method Patch`, `--data`). Dropping the client-name gate therefore
+   does **nothing** for `node -e "fetch(u,{method:'PATCH'})"` or `python -c "requests.patch(...)"`, and a
+   first draft of this section claimed exactly that case as newly caught. It was wrong. So this arm adds two
+   patterns of its own: `method\s*:\s*['"](POST|PUT|PATCH|DELETE)` and
+   `\.(post|put|patch|delete)\s*\(`, case-insensitive, and treats either as a write signal. **Measured: zero
+   instances** — `grep -cE` for both patterns over `~/.claude/hooks/credential-denials.jsonl` and
+   `deferred-calls.jsonl` returned `0` and `0` on 2026-08-04, against 8 and 1,349 lines mentioning
+   `api.notion.com` respectively. Scope of that measurement, stated because it is narrower than Part 4's: it
+   covers the two hook logs, not the full session-transcript corpus Part 4 swept. So this is a
+   shape-coverage add, not a measured gap, and the fixture test asserts the patterns fire rather than
+   claiming traffic exists.
+
+Reads stay excluded by the same allow-list in both cases. Cost: a command that mentions the URL and carries
+a write signal without performing a write would over-gate, at one `/vet-ticket` run; the corpus contains no
+such command.
+
+**What the fixture test asserts, therefore, is a superset with a named exception**: every command
+`notion-schema-guard`'s matcher flags, this arm flags — plus the two shapes above, which schema-guard does
+not flag and is not expected to.
+
+**Scope: every detected write is in scope, with exactly one exemption** — a closed shape mirroring §5.1,
+so anything unrecognised gates. Exempt iff **all** hold:
+
+1. the method is `PATCH` or `POST` (never `DELETE`, never `PUT`);
+2. the URL path matches `/v1/blocks/<32-hex-or-dashed-id>/children` — the append-children endpoint, which
+   is the REST form of a log append. **Only this form**, for a reason given below;
+3. **every** 32-hex id appearing anywhere in the command is exempt under §5.1 clause 1 (the hardcoded
+   GEN-58 id or a valid line in the exemption file);
+4. the command text carries no `archived`, `in_trash` or `allow_deleting_content`.
+
+**Why the REST exemption is narrower than §5.1's, and why that is forced rather than chosen.** §5.1 exempts
+four MCP content commands including `update_content` — an in-place edit of an existing block. Its REST
+equivalent is `PATCH /v1/blocks/{block-id}` with no `/children`, and **the id in that URL is a block id, not
+a page id**. The exemption list holds page ids, and mapping a block to its page needs a network call, which
+this arm does not make on any path (§4.4). So an in-place block correction over REST cannot be recognised as
+exempt locally, and it gates. Consequences, stated rather than left to be discovered:
+
+- The **append** path — which is what a log write is, and the only form the standing immediate-and-pause-free
+  rule covers — **is** exempt, because `/v1/blocks/{page-id}/children` carries the page id.
+- A **correction** to an already-written log entry over REST is gated. Its escapes are the MCP tool
+  (`update_content`, exempt under §5.1) or one `/vet-ticket` run. This was surfaced by a `/check` lens as a
+  possible violation of that standing rule; it is not one, because the rule is about the log write being
+  immediate, not about every later edit of it — but the asymmetry is real and belongs in the hook header so
+  a future maintainer does not read it as an oversight.
+- The same block-id-is-not-a-page-id fact constrains the **skill**, not just the hook: for a REST target
+  addressing a block, `/vet-ticket`'s "not a ticket" and GEN-58 lanes must walk `GET /v1/blocks/{id}` →
+  `parent` **until the parent is a page** — blocks nest, so this is a bounded loop rather than one hop; cap
+  it, and treat exhaustion as "fall back to the full ticket review", which is the safe direction — before
+  the page lookup those lanes already do. The skill is off the blocking path, so the network cost is free
+  (§8).
+
+**There is no housekeeping lane on this path**, deliberately. §4.2's closed shape reads a parsed object,
+and a shell body may not be in the command text at all (see the binding below), so the lane cannot be
+evaluated here without reconstructing it from text — which is the fragile-parsing direction this design
+refuses everywhere else. The escape for a housekeeping-only REST edit is to make it through
+`notion-update-page`, which has the lane, or to run one `/vet-ticket`. **Cost is an inference, not a
+measurement:** Part 4 buckets by method and URL and never inspected request bodies, so how many of the 88
+`PATCH /v1/pages` calls are housekeeping-only is unknown. If that friction shows up in practice, §10's
+counter is what says so.
+
+**Binding: the command text plus every body file it references.** This is the hole the §12.1 write-up
+missed, and it is the whole point of the gate:
+
+```
+contentHash = sha256Hex(stableStringify({ shell: "<command string, verbatim>",
+                                          bodies: ["<file contents, in reference order>"] }))
+```
+
+`notion-schema-guard.js`'s own header records that a shell write's body "may live in a temp file via
+`--data-binary @file` the hook cannot read", and this project's `notion-howto` skill instructs exactly
+that for quoting reasons — so **hashing the command alone would leave the ticket text unbound**, and a
+record could authorise content no reviewer ever saw.
+
+**The rule is therefore: the hash must cover the body, or the write is refused. There is no third
+outcome** — and that is the fix for the one fail-open a `/check` lens found in v7's first draft, where a
+body the extractor did not recognise silently degraded to command-only hashing. Concretely, for every
+body-bearing flag in the command, classify its argument:
+
+| flag | argument convention | hashed as |
+|---|---|---|
+| `-d`, `--data`, `--data-raw`, `--data-urlencode`, `--json`, `--data-binary` | `@<path>` → a file; anything else → a literal | file contents, or the literal text |
+| `-T`, `--upload-file` (curl), `-InFile` (PowerShell) | **bare path, never `@`-prefixed** | file contents |
+| `-Body` (PowerShell) | a literal quoted string, **or** `@<path>`, **or** anything else | literal text or file contents — *or refusal, see below* |
+
+In every row, "a literal" means **no unescaped `$` or backtick outside a single-quoted span**, and a path
+means a **literal** path — see the refusal rule below, which is what makes this table safe rather than
+merely descriptive.
+
+The per-flag split matters: a uniform "`@<path>` after a data flag" rule — which this section's first draft
+stated — would never have recognised `-T body.json` or `-InFile body.json` at all, and would have hashed
+those writes command-only. Second `/check` finding, same root cause as the first.
+
+**Anything not classifiable is a hard block, reason `body-source-unrecognised`.** Two shapes force this,
+one found in each `/check` round, and they are the same defect twice:
+
+- **A parenthesised sub-expression.** `Invoke-RestMethod -Uri … -Method Post -Body (Get-Content -Raw
+  ticket.json)` — no `@`, no `$`, and `scanChain` returns `NO-CHAIN` because there is no chaining and no
+  `$(`/`${`, so nothing else would have caught it either.
+- **An unexpanded variable inside an otherwise well-formed argument** — `-Body "$body"`, `-d "$TICKET_BODY"`,
+  or `--data-binary "@$bodyFile"`. Round 2 caught this as a residual of the first fix: the argument *looks*
+  like a literal string or an `@path`, so a classifier that stopped at shape would hash the **unexpanded
+  text** while Notion received the interpolated value. `scanChain` does not help — it flags `$(` and `${`,
+  never a bare `$name` (`auto-approve.js:413`–`461`).
+
+**So the classifier's rule is about content, not just shape:** an argument qualifies only if it is a
+single-quoted literal, a double-quoted literal containing no unescaped `$` or backtick, or `@` followed by a
+literal path containing no `$` or backtick. Anything else — including `@` followed by a variable — is
+`body-source-unrecognised`. The refusal text names the fix: **issue the gated write with the body file's
+literal path** (`--data-binary "@C:/…/body.json"`), which is one substitution and deterministic.
+
+**This does not conflict with the project's existing idiom, and the distinction matters.**
+`scripts/notion-ticket-lookup.ps1:32` uses exactly `--data-binary "@$bodyFile"` — but that call is a
+**read** (`POST …/query`, on the read allow-list), so this arm never sees it. The literal-path requirement
+applies only to gated *writes*.
+
+A referenced file that is missing or unreadable is likewise a hard block, reason
+**`body-file-unreadable`**; files are read under a shared 2 MB cap, and exceeding it blocks too rather than
+truncating.
+
+**One safety clause, from a `/check` advisory.** The command text is hashed *and* shown to the reviewer,
+whose transcript is persisted to disk — so a command with a bearer token inlined would put that token in a
+transcript in plaintext. `/vet-ticket` refuses to proceed when the command text contains a literal Notion
+token (`ntn_`/`secret_` prefix, or `Authorization: Bearer` followed by anything other than a variable
+reference), directing the caller to the read-into-a-variable form this project already uses
+(`scripts/notion-ticket-lookup.ps1:32`). This is a refusal in the skill, not the hook: the hook must not
+depend on it, and a token in a command is not itself a gate-evasion.
+
+**The normaliser is untouched, and that answers §12.1's charge against this option.** The stated cost of
+covering REST was "the normaliser gains a second input shape, which cuts against §7.1's own argument that
+keeping it small is the strongest defence against a residual normalisation bug". It does not gain one: the
+JSON walker never sees shell text. The shell path assembles its own hash input in a few lines and shares
+only `stableStringify` and the digest. `--ticket-hash` gains a second entry form
+(`--ticket-hash-shell <command-file>`) so `/vet-ticket` still never reproduces the formula (§6.1).
+
+**Chain guard, reused — with one deliberate divergence.** `enforceCheckDue` (`auto-approve.js:1381`–`1395`)
+hard-blocks a chained command on a gated target, because a smuggled `&& <tail>` would ride the approval
+sight-unseen; that ordering hole was found by a code-review panel, so the guard is precedent, not
+invention. Same stance here: `CHAINED` → hard block, reason **`rest-chained`**. The divergence:
+`enforceCheckDue` *returns* on `AMBIGUOUS`/multiline, which under `bypassPermissions` is a silent approve
+(§2). This arm has no fall-through anywhere (§7 step 10), so an unparseable command is also a hard block,
+reason **`rest-chain-unreadable`**. The escape for both is to issue the write as its own single call.
+
+**`notion-schema-guard`'s shell arm stays where it is.** It emits `ask`, which is inert under
+`bypassPermissions`, so it neither helps nor conflicts — and it is the only mechanism that would resume
+working if a genuine prompt were ever restored (§14). Retiring it means editing a second locked file for
+no behavioural gain. §12.1's Option C write-up called for retiring it; that was specific to C, where this
+arm would have refused the traffic outright.
+
+**What the arm costs.** The 236 raw write commands in the corpus become gated. Among them the destructive
+ones are gated **for the first time** — under Option C they would have passed through as ungated as they are
+today. Counts, attributed per script because the two detectors differ slightly, and **re-read from
+`measurement-edit-targets.md` rather than restated** after a `/check` lens found the previous sentence
+undercounting: `DELETE /v1/blocks` is **5** in Part 4a's table and **6** in Part 4's; `DELETE /v1/pages` is
+**1** (Part 4 only); and the `/v1/databases` writes are **three**, not two — Part 4a lists `POST`/body
+`/v1/databases` 2 **plus** `PATCH /v1/databases` 1, and the earlier "two" silently dropped the schema write.
+Nothing operational turns on the count (§4.5's rule is that *every* detected write is in scope, so all of
+them gate either way), but the destructive-write enumeration is cited elsewhere and must be right. No network
+call and no subprocess: the command is already in hand, and the body files are one bounded local read.
+
+**The residual, stated rather than glossed — and the reason it is not closed by widening further.** A
+write whose URL never appears in the command text, because it lives inside a `.js`/`.ps1`/`.py` file the
+command merely runs, is still invisible. Extending the match to "the script file this command runs
+contains `api.notion.com`" would close it and **must not be adopted**: it cannot distinguish a read from a
+write inside a script, and this machine's own `scripts/notion-ticket-lookup.ps1` performs Notion REST
+reads on an ordinary ticket lookup — so that rule would gate a routine read every time a skill resolves a
+GEN-id. That is the class of defect `review-findings.md` finding 10 flagged as "most likely to make the
+installed gate unusable in daily work". So the honest guarantee after v7 is **every Notion write reachable
+through the four MCP tools, or named in a shell command** — materially wider than v6.3's "through the MCP
+tools", and not the same thing as "every write". Piece 2 owns the script-file case; §10 carries the
+counter that says whether it is costing anything.
+
 ---
 
 ## 5. The GEN-58 exemption — the one gating-removing fact held on disk
@@ -587,43 +840,37 @@ Under the omission threat model this is acceptable: Claude will not *accidentall
 A deliberate actor who appends one gets content writes on one page — and the same actor could write
 to its own session transcript, which defeats a stronger layer than this one. Named, not hidden.
 
-### 5.3 Nothing appended the volume ids — so something has to (new deliverable)
+### 5.3 What maintains the volume-id list — one writer, reactive `[v7]`
 
-The volumes roll over roughly every 25 entries, so the list changes. v5 had **no component that
-maintains it**: a PreToolUse hook cannot see a tool response, and "Claude remembers to add the new
-id" is the exact omission failure this whole gate exists to remove.
+The volumes roll over roughly every 25 entries, so the list changes. A PreToolUse hook cannot see a tool
+response, and "Claude remembers to add the new id" is the exact omission failure this whole gate exists to
+remove — so something has to maintain the file.
 
-**Primary mechanism — a PostToolUse arm.** On a *successful* `notion-create-pages` whose payload
-parent is the GEN-58 page (or an already-exempt id), extract the created page id from the tool
-**response** and append it. `notion-fetch-staleness.js` is an existing PostToolUse hook that already
-does Notion work, so this is a known-good shape rather than a new one.
+**The single writer is `/vet-ticket`'s GEN-58 lane** (§8 step 4). When a write to an unlisted volume is
+blocked, that lane verifies the page's parent is the GEN-58 page over the network, appends the id, and
+re-issues. It is autonomous — no interruption to Erez — and it needs Notion access, which costs nothing
+real, because a Notion write is going to fail during an outage anyway.
 
-**Its scope is wider than "a log volume", and that is disclosed rather than implied away** (round-1
-advisory): the trigger is *any* page created with `parent.page_id` = an exempt id, not a page verified
-to be a rollover volume. A sub-page created under GEN-58 for some other purpose would therefore be
-appended and become exempt. Impact is small and bounded — such a page is not a Team-Tasks row, so the
-ticket bar does not apply to it, and §5.1's clauses still refuse every destructive form on it — but the
-mechanism is broader than the prose, so the prose says so.
+**v6.3 also proposed a PostToolUse appender as the primary mechanism; v7 cuts it.** Its whole marginal
+value was avoiding one self-resolving block per ~25 log entries, and it had to coexist with the reactive
+lane regardless — because a volume created by `notion-duplicate-page` (async; its documented return says
+not to rely on the new page) or by hand in the Notion UI produces no usable tool response. The price was a
+second hook arm, a second writer to the same file, and its own concurrency property. Cutting it also
+removes the disclosed over-reach a round-1 advisory extracted: the appender would have exempted *any* page
+created under GEN-58, not only a verified rollover volume, because a payload parent is not proof of what
+the page is. The reactive lane verifies parentage before appending, so it does not have that property.
 
-- **`O_APPEND`, one id per line — never read-modify-write.** Two sessions run concurrently in this
-  setup (there is a concurrent-session incident in this repo's own history), and a read-modify-write
+Two facts that stand independent of which writer maintains the list:
+
+- **Appends are `O_APPEND`, one id per line — never read-modify-write.** Two sessions run concurrently in
+  this setup (there is a concurrent-session incident in this repo's own history), and a read-modify-write
   loses one session's entry silently.
-- The create that makes a new volume is itself **free**: its parent page id is exempt, so §4.3's
-  create row exempts it with no record. This closes finding 12, in which the rollover create was
-  hard-blocked — the one write a standing rule requires to be immediate.
+- The create that makes a new volume is itself **free**: its parent page id is exempt, so §4.3's create
+  row exempts it with no record. This closes finding 12, in which the rollover create was hard-blocked —
+  the one write a standing rule requires to be immediate.
 
-**Two adjacent cases the appender does not handle, and what happens instead:**
-
-- A volume created by `notion-duplicate-page`: duplication is **async** and its documented return
-  says not to rely on the new page being populated. The id is still recordable, but if the response
-  shape differs nothing is appended.
-- A volume created by hand in the Notion UI: there is no tool response at all, so nothing is
-  appended.
-
-Both fail toward **more** gating: the first write to an unlisted volume is gated. The escape is
-`/vet-ticket`'s GEN-58 branch (§7), which verifies the page's parentage over the network and appends
-the id. That branch needs Notion access — which costs nothing real, because a Notion write is going
-to fail during an outage anyway.
+**What the cut costs, stated plainly:** the first write to a newly rolled-over volume is blocked once, and
+the block resolves itself in the same turn through the lane above. That is the entire difference.
 
 ---
 
@@ -634,7 +881,7 @@ sibling gates' passes. The location carries **no security property** (§2); it i
 consistency and could move under `~/.claude/` without weakening anything.
 
 ```json
-{ "kind": "ticket", "surface": "notion",
+{ "kind": "ticket", "surface": "notion-mcp | notion-rest",
   "contentHash": "<sha256 of the normalised reviewed payload>",
   "reviewerAgentId": "<agentId of the sub-agent that reviewed this exact content>",
   "verdict": "PASS",
@@ -681,6 +928,13 @@ record with no hash binds nothing.
 **One shared definition.** The hook and `/vet-ticket` must compute the hash identically; any drift
 makes *every* record fail to match. The normaliser is written once, in the hook, and `/vet-ticket`
 calls it through `--ticket-hash` rather than reproducing ~100 lines that would drift.
+
+**The shell surface has its own hash input and the same single definition** `[v7]`. A raw REST/curl write
+is hashed as `{shell, bodies}` per §4.5, not through the normaliser — the JSON walker never sees shell
+text. `/vet-ticket` obtains it from the same file through `--ticket-hash-shell <command-file>`, so the
+"one shared definition" property holds on both surfaces for the same reason: there is one implementation
+and both callers invoke it. The record's `surface` field (`notion-mcp` | `notion-rest`) records which
+input shape produced the hash; it is diagnostic and, like `target`, is never matched on.
 
 ### 6.2 What the hook verifies — three facts, not two
 
@@ -747,66 +1001,41 @@ and the transcript format itself carries the fix.
 `verdict` and `waived` in the record remain a cheap pre-filter — fail fast before opening a large
 file — and are **not** the authority. The token is.
 
-#### Adjudication does not clear the gate — it sends the content back to a fresh reviewer `[v6.3]`
+#### Two ways to clear the gate, and no adjudicator anywhere `[v7]`
 
-> **This replaces the "substitution" mechanism entirely, after three failed attempts at it.** The
-> history is in the Appendix and on GEN-58; the short version is that v6 had no path for an overturned
-> finding, v6.1 added a token substitution that did not compose with multiple findings, and v6.2 added a
-> precondition that **two round-3 lenses independently found unenforceable** — it could only be checked
-> inside `/vet-ticket`, the layer this section itself says the hook must not trust. A standing rule says
-> that when a third fix becomes necessary, stop patching and re-derive. This is the re-derivation.
+**The rule: the reviewer returned PASS on this exact content, or Erez waived it.** There is no third way,
+and as of v7 there is no adjudicator role at all.
 
-**The rule: the hook has exactly two ways to clear the gate — the reviewer returned PASS on this exact
-content, or Erez waived it.** There is no third. Adjudication is a process that changes *what Claude
-does*, not *what the hook accepts*:
+**Why the role is deleted rather than kept.** Three successive attempts to give an overturned finding a
+path through the hook all failed review: v6 had no path, v6.1's token substitution did not compose with
+multiple findings, and v6.2's "one live adjudication per hash" precondition was found unenforceable by two
+independent round-3 lenses — it could only be checked inside `/vet-ticket`, the layer this section exists
+not to trust. v6.3 then removed adjudication as a hook input but kept the role as a Claude-side process,
+and that residue was itself never reviewed. A standing rule says that when a third fix becomes necessary,
+stop patching and re-derive from scratch. **The re-derivation is that the role has no remaining function:**
+v6.3's own answer for an overturned finding was "send the content to a fresh reviewer", and a fresh
+reviewer is available without an adjudicator ever running.
 
-- The reviewer returns REVISE. Claude disputes one finding. A fresh adjudicator (§9) rules.
-- **UPHELD** → the finding stands and must be fixed, exactly as now.
-- **OVERTURNED** → the finding is dropped, and the content goes back to a **fresh reviewer** — a new
-  `check-reviewer` with no prior context, on the same hash. That reviewer either returns PASS, and the
-  gate clears through the ordinary path, or raises findings of its own.
+**What replaces it, in one line:** the reviewer returns REVISE; Claude either fixes the finding, or — if it
+believes the finding is wrong — sends the unchanged content to a **fresh `check-reviewer` with no prior
+context**, at most once. If the fresh reviewer also raises it, the finding stands and must be fixed or
+waived. That is one mechanism (re-review) instead of two (adjudicate, then re-review).
 
-What this buys, and why it is smaller rather than cleverer:
+**This stays inside Erez's 2026-08-03 decision** rather than reversing it, and the difference is worth
+stating precisely because it narrows it. He decided that a disagreement is settled **by another
+independent review** — not by Claude overriding, and not by an automatic hard stop. A fresh reviewer on
+the same content *is* another independent review, so the guarantee he asked for holds. What is lost is the
+*focused* second opinion: the adjudicator was briefed on one specific finding, where a fresh reviewer sees
+the whole ticket and may raise different findings instead. Two round-3 lenses had already argued that the
+whole-content path is the sounder of the two, because a finding-scoped brief is what let a second finding
+be silently dropped.
 
-- **The hook's check stays two-valued.** No `adjudication` field to verify, no adjudication token to
-  parse, no substitution rule, no differing-agentId requirement, no finding count. Deleted, not fixed.
-- **The multi-finding hole cannot exist.** A fresh reviewer sees the whole content and raises whatever
-  it raises, so there is no way for a second finding to be silently dropped — the failure both round-3
-  lenses reached from different directions.
-- **The unenforceable per-ticket bound disappears too.** §9's "at most two adjudications per ticket" was
-  uncountable, because records are keyed on hash and `target` is never matched on. The bound is now on
-  the loop Claude runs, not on a number the hook pretends to know.
-- **It does not restore "strict".** Erez rejected reviewer #1 being unappealable, and it is not: an
-  independent adjudicator can overturn its finding. It also does not make Claude terminal. And if the
-  fresh reviewer independently re-raises the same finding, that is *stronger* evidence the finding is
-  real than one adjudicator's opinion — which is a better outcome than the substitution rule gave.
-- **Cost:** one extra reviewer run per successful adjudication. That is the whole price.
-
-**The fallback, if this is ever found unsound:** both round-3 lenses proposed the same minimal patch to
-the old mechanism — have the reviewer end its own token with a finding count
-(`TICKET-REVIEW-VERDICT: REVISE <hash> FINDINGS:<n>`) and honour a substitution only when the last token
-for that hash reads `FINDINGS:1`. It is recorded here because two independent reviewers derived it
-independently, which makes it the best-attested alternative. It is not adopted, because deleting the
-mechanism beats adding a parsing rule to it.
-
-#### ~~Which token is authoritative when adjudication ran~~ — superseded by the above `[v6.3]`
-
-**Deleted, not annotated.** The substitution rule that stood here — a verified
-`TICKET-ADJUDICATION: OVERTURNED <hash>` standing in for the reviewer's PASS token — is gone, along with
-the `adjudication` record field, the adjudicator-token verification, the differing-agentId requirement
-and the "exactly one live adjudication per hash" precondition that was supposed to make it safe. The
-reasoning is in the sub-section above.
-
-It is deleted rather than struck through with a pointer because **leaving superseded mechanism text
-visible is itself a defect this document has committed five times** — a linear reader implements what is
-in front of them. The only trace kept is the fallback paragraph above, which is a genuine alternative, not
-a superseded rule.
-
-**One consequence to carry forward:** the reviewer's verdict token keeps its exact-match rule
-(`TICKET-REVIEW-VERDICT: PASS <contentHash>`, assistant-authored, last occurrence), and it is now the
-**only** token the hook parses. `TICKET-ADJUDICATION` is no longer a hook input at all — the adjudicator
-still emits it, but as a record for a human reading the transcript, so the source-side prefix scan keeps
-covering both prefixes.
+**What this deletes:** the `adjudication` record field, the adjudicator token and its verification, the
+differing-agentId rule, the finding-count fallback, the per-ticket bound that nothing could count, §9 in
+its entirety, the `adjudicated` event-log field and its `/wrap` line. The reviewer's token
+(`TICKET-REVIEW-VERDICT: PASS <contentHash>`, assistant-authored, last occurrence) is the **only** token
+the hook parses. The source-side prefix scan (§6.2) keeps covering `TICKET-ADJUDICATION:` as well, at no
+cost, so a stale brief carrying the old prefix cannot become a channel.
 
 **One record per ticket**, consumed by `unlink`. **Consumption must refuse unless it actually removed
 a record whose hash matches** (finding 7): v2's implementation returned success without checking, so
@@ -817,14 +1046,24 @@ one record could authorise a second write.
 ## 7. Enforcement flow
 
 1. `configUnlocked()` → return (break-glass; shared accepted residual with the siblings).
-2. Tool is not one of the four → return.
-3. Compute scope: §4.1 → §4.2 → §4.3, no network. `out` → return, untouched.
+2. **Pick the surface, or return** `[v7]`. One of the four MCP tools → the MCP path (step 3). A `Bash` or
+   `PowerShell` call → the shell path (step 3s). Anything else → return.
+3. **MCP path.** Compute scope: §4.1 → §4.2 → §4.3, no network. `out` → return, untouched.
+   Order matters and is the fix for a round-3 advisory: **§4.2's housekeeping exemption runs first and
+   returns `out` before the exemption file is opened at all**, so a housekeeping-only property edit can
+   never be blocked by anything about that file. The sentence below is about the *remaining* traffic.
    **The exemption file is read here, and its cap is checked here** — a round-2 lens found that §5.1
    promised a distinct `exempt-list-overflow` block while no operative section wired it in, so it would
    have fallen into step 10's generic `internal-error` bucket and lost exactly the loud diagnosis the
    cap fix claimed. If the file has more than 4,096 valid ids, or cannot be read at all, this step
    hard-blocks with reason `exempt-list-overflow` (or `exempt-list-unreadable`) and does **not** fall
    through to the generic catch.
+3s. **Shell path** `[v7]`. Run the §4.5 detector. Not a detected Notion write → return, untouched.
+   Detected → run the chain guard (`rest-chained` / `rest-chain-unreadable`), then the §4.5 exemption
+   shape; exempt → return. Otherwise compute the `{shell, bodies}` hash, hard-blocking on
+   `body-source-unrecognised` (a body argument that is neither a literal nor a resolvable file path) or
+   `body-file-unreadable` (missing, unreadable, or over the 2 MB cap), and continue at step 4 — every step from here on is shared with the MCP path,
+   which is the point: **one record type, one verification, two ways in.**
 4. **Read the record directory for `block` verdicts too, not only `in`.** Every `scope:'block'`
    short-circuited before the record directory was read (finding 8), so an unreadable-payload or
    malformed-target block could not be cleared by a record even though the refusal text and the skill
@@ -883,7 +1122,11 @@ hash by calling the *same* code through `--ticket-hash`, so a normalisation bug 
 enforcement path and the escape path identically. Mitigation is pre-install, not runtime:
 `/vet-code` Step 4's mandatory write-record → block-without-record → approve-and-consume round-trip
 exercises the real normaliser, and must be run against an **enveloped** payload as well as a plain
-one. Treat that assertion as blocking for install. Residual: a normalisation bug on a payload shape
+one — **and, since v7, against a raw-REST command whose body is an `@file`, asserting that the hash the
+`--ticket-hash-shell` CLI returns equals the one the arm computes at block time.** That equality is
+currently a design assertion, not a measured fact (nothing is installed), and a `/check` lens was right to
+flag it: two hash-assembly call sites exist even though the normaliser has one implementation, so the
+round-trip is what proves they agree. Treat all three assertions as blocking for install. Residual: a normalisation bug on a payload shape
 the fixture does not cover — which is the strongest argument for keeping the normaliser as small as
 this design allows.
 
@@ -920,6 +1163,25 @@ this failure class.
 ## 8. The `/vet-ticket` skill
 
 Modelled on `/vet-rule`, the lighter of the two existing record-writing skills.
+
+**What it reuses rather than rebuilds** `[v7]` — Erez's explicit ask, and each item is a mechanism already
+running on this machine:
+
+- **The reviewer is the existing `check-reviewer` agent type**, the same one `/check` spawns: read-only by
+  definition, so a reviewer cannot edit the ticket it is judging.
+- **One reviewer under one lens — the ticket bar — not a `/check` panel.** `/check` runs three lenses to
+  convergence because it reviews designs; a ticket is not an architecture proposal, and Erez's decision 6
+  asks for an independent reviewer, not a panel. This is the single biggest size difference between this
+  skill and `/check`, and it is deliberate.
+- **The evidence path is GEN-518's**, already in production in `/vet-rule` Step 4: sub-agent transcripts at
+  `<session dir>/subagents/agent-<id>.jsonl` plus the `.meta.json` sidecar, with the session directory
+  derived from `transcript_path`.
+- **The record plumbing is the shared one**: `findPassInDir` (`auto-approve.js:577`) and `consumePassFile`
+  (`:601`), which GEN-564 already factored out for exactly this reason. No fourth copy.
+- **The REST detector is `notion-schema-guard`'s** (§4.5).
+
+Both surfaces run the same seven steps below. For a raw REST write, "the drafted payload" in steps 2–3 is
+the command string plus any body file it references, and the hash comes from `--ticket-hash-shell`.
 
 1. **Fail-closed self-check.** Grep the hook for `enforceTicketVetting` and its record reader;
    missing → refuse.
@@ -962,18 +1224,18 @@ Modelled on `/vet-rule`, the lighter of the two existing record-writing skills.
    re-review against the new hash. A token carrying the pre-fix hash is worthless to the hook, which
    is correct — reviewed-then-edited content has not been reviewed. This loop is the mechanism by
    which "a record cannot survive an edit to the content it covers" is actually enforced end to end.
-   If the bar cannot be met because only Erez holds the missing information, STOP and consult him. If
-   a finding is *disputed* rather than unfixable, run the bounded adjudication in §9 — never override
-   it.
+   If the bar cannot be met because only Erez holds the missing information, STOP and consult him. If a
+   finding is *disputed* rather than unfixable, send the **unchanged** content to one fresh
+   `check-reviewer` (§6.2) — at most once — and never override the finding yourself.
 6. **Evidence precondition, then write the record.** Verify: `reviewerAgentId` present; both
    `agent-<id>.jsonl` and `agent-<id>.meta.json` exist under this session's `subagents/` with
    `"agentType":"check-reviewer"`; the hash still equals step 3's; `verdict === 'PASS'` **or**
    `waived === true` — those are the only two, since adjudication is no longer a hook input (§6.2) — and
    the reviewer's own transcript carries `TICKET-REVIEW-VERDICT: PASS <hash>` under the assistant-role
    rule. The skill runs the same check the hook will run, so a mismatch surfaces here with context
-   instead of as a bare refusal later. **If adjudication overturned a finding, the record written here is
-   for the FRESH reviewer that ran afterwards**, not for the adjudicator — there is nothing special about
-   an adjudicated ticket by the time it reaches the hook. Then write the record. The record write prompts nobody and **is not an approval step** — it
+   instead of as a bare refusal later. **If a fresh reviewer ran after a dispute, the record is that
+   reviewer's** — whichever reviewer returned PASS on the exact content being written is the one named.
+   Then write the record. The record write prompts nobody and **is not an approval step** — it
    is evidence, and the hook re-verifies all of it independently.
 7. **Apply** the Notion call, then **verify no record for this hash remains**. v2's post-write check
    FAILed on every successful filing (finding 27) because it looked for "a still-live `*.json` naming
@@ -1011,11 +1273,10 @@ v1 had this backwards, claiming "Erez declining the mint IS the waive" — decli
 so the write stays blocked; a decline *reinforces* the stop. The waive is the opposite: it lets a
 specific write through despite the stop.
 
-So: when the reviewer holds findings that cannot be fixed — and any that were *disputed* have been
-through adjudication and were **upheld**, since a disputed finding goes to adjudication rather than
-straight to a waive; a finding that is simply unfixable needs no adjudication first — `/vet-ticket` shows
-Erez the
-outstanding findings in plain terms and asks. On his affirmative the record stores `waived: true` +
+So: when the reviewer holds findings that cannot be fixed — and any that were *disputed* have already been
+re-raised by a fresh reviewer, since a disputed finding gets its one re-review before a waive is proposed;
+a finding that is simply unfixable needs no re-review first — `/vet-ticket` shows Erez the outstanding
+findings in plain terms and asks. On his affirmative the record stores `waived: true` +
 `waiveReason` + the outstanding findings. The hook is unchanged: a valid record is a valid record. The
 waive is scoped to one write and never touches the global break-glass. It rests on **a single
 explicit chat answer**, which must therefore be an unambiguous yes to a specific named finding, never
@@ -1023,45 +1284,22 @@ inferred from a general go-ahead.
 
 ---
 
-## 9. Disagreement with the reviewer — adjudicate
+## 9. Disagreement with the reviewer — **deleted in v7**
 
-**Erez's decision, 2026-08-03.** When the reviewer returns REVISE and Claude disagrees, the
-disagreement is settled by **another independent review** — not by Claude overriding, and not by an
-automatic hard stop. Two options were put to him and he rejected both, correctly: "strict" makes a
-pedantic or mistaken reviewer an unappealable authority and lands the cost on him as an interruption;
-"override with a record" makes Claude the judge in its own case, which is the exact failure this gate
-exists to prevent, merely documented.
+The adjudicator role that stood here is gone. The rule that replaces it is one line and lives in §6.2
+("Two ways to clear the gate, and no adjudicator anywhere"): a disputed finding may go to **one fresh
+`check-reviewer` on the unchanged content**, and if that reviewer raises it too, it stands. The section
+number is kept as a stub only so the cross-references in §8 and §10 resolve; there is no mechanism here to
+implement.
 
-- The adjudicator is a **fresh** sub-agent with no prior context, briefed on **one specific finding**,
-  not asked to re-review the whole ticket.
-- The brief carries, separately labelled and verbatim: the original goal, **the disputed drafted
-  ticket text itself**, the reviewer's finding, and Claude's counter-argument. Claude does not
-  summarise or characterise any of them. v3 omitted the draft, which would have left the adjudicator
-  weighing two pieces of prose *about* a ticket it could not read — and findings at this bar ("the
-  body stands on its own") are checkable only against the draft. Omitting it hands Claude control of
-  what the judge sees, which is the precise failure adjudication exists to remove.
-- **An OVERTURNED finding sends the content back to a fresh reviewer; it never clears the gate itself**
-  (§6.2). Two earlier attempts to make the hook honour an overturned finding directly both failed
-  review, and the second one failed because its guarantee could only be evaluated inside this skill —
-  the layer the hook is built not to trust. There is no adjudication field, no adjudication token check,
-  and no finding count in the record. What the hook accepts is what it always accepted: a reviewer PASS,
-  or Erez's waive.
-- **Bounded, and the bound is on the loop rather than on a number the hook pretends to know.** At most
-  two adjudications while resolving one ticket, and at most one fresh-review cycle after each. If a
-  finding survives adjudication it stands and must be fixed. If the fresh reviewer raises it again, that
-  is two independent agents agreeing and it stands. Past the bound it goes to Erez with both positions
-  stated plainly. (v6.2 tried "at most two adjudications per ticket in total" as a hook-side bound; a
-  round-3 lens pointed out nothing can count *per ticket*, because records are keyed on content hash and
-  `target` is never matched on. The bound belongs where it can actually be observed — this skill's own
-  loop — and the event log's `adjudicated` field plus a `/wrap` count is what makes it visible.)
-- The adjudicator still ends its reply with `TICKET-ADJUDICATION: <UPHELD|OVERTURNED> <contentHash>`,
-  and the source-side scan still refuses a brief or payload containing that prefix — but the **hook no
-  longer reads it**. It is an audit record for a human reading the transcript and a signal for the event
-  log, not a gate input. That is the point of the redesign: the only agent whose word the hook takes is
-  the reviewer that returned PASS on the exact content being written.
-- **Honest limit:** this does not remove Erez from the loop; it makes his involvement rare and
-  well-justified. Anyone terminal must be a human. The claim is only that Claude is never terminal in
-  its own case.
+**Erez's 2026-08-03 decision is preserved, narrowed:** a disagreement is still settled by another
+independent review, never by Claude overriding and never by an automatic hard stop. What is gone is the
+finding-scoped brief. §6.2 states the trade-off and why two round-3 lenses independently preferred the
+whole-content path.
+
+**Honest limit, carried over unchanged:** this does not remove Erez from the loop; it makes his involvement
+rare and well-justified. Anyone terminal must be a human. The claim is only that Claude is never terminal
+in its own case.
 
 ---
 
@@ -1071,12 +1309,26 @@ Every mechanism below produces a signal for a later decision, so each names its 
 its bar. A signal with no surfacing path is not designed in.
 
 **The event log.** `/vet-ticket` appends every gate event to
-`~/.claude-staging/ticket-gate-events.jsonl` — `{ts, target, verdict, adjudicated, waived, notTicket,
-reason}` — and the hook appends every hard-block with its reason. The complete set, **derived from §7 by
-walking every blocking step rather than maintained separately**: `no-pass`, `bad-verdict`,
-`reviewer-unverified`, `no-token`, `bad-record`, `transcript-too-large`, `consume-failed`,
-`unreadable-payload`, `bad-target`, `exempt-list-overflow`, `exempt-list-unreadable`, `internal-error` —
-plus `rest-refused` if §12.1's Option C ships. **`internal-error` is reserved for a genuine bug in the
+`~/.claude-staging/ticket-gate-events.jsonl` — `{ts, target, surface, source, verdict, reReviewed, waived,
+notTicket, reason}` — and the hook appends every hard-block with its reason. **`source` records which
+routine originated the write** (`interactive`, `wrap-step1`, `wrap-step3c`, or a named caller from §11); a
+`/check` lens found that without it the unattended-`/wrap` decision below rests on a monitor that cannot see
+the slice it is monitoring.
+
+**How `source` is actually set — named here because a round-2 lens found the field specified with no writer,
+which is this document's own worst recurring defect.** `/vet-ticket` takes an explicit `--source <tag>`
+argument, defaulting to `interactive` when absent; the rewritten `/wrap` Steps 1 and 3c pass `wrap-step1` and
+`wrap-step3c`, and every other caller §11's enumeration turns up passes its own tag. **The hook cannot tag
+its own hard-block events** — a PreToolUse hook has no way to know which routine is running — so those
+events record `source: "unknown"`, and the `/wrap`-slice counters below are computed from the **skill's**
+events, which do carry the tag. That asymmetry is stated rather than left to be discovered when the counter
+reads zero. Correct tagging is a blocking acceptance criterion on deliverable 10, on the same footing as
+§7.1's hash-equality assertion. The complete reason set, **derived from §7 by walking every blocking step rather
+than maintained separately**: `no-pass`, `bad-verdict`, `reviewer-unverified`, `no-token`, `bad-record`,
+`transcript-too-large`, `consume-failed`, `unreadable-payload`, `bad-target`, `exempt-list-overflow`,
+`exempt-list-unreadable`, `internal-error`, and from §4.5's shell path `rest-chained`,
+`rest-chain-unreadable`, `body-source-unrecognised`, `body-file-unreadable`.
+**`internal-error` is reserved for a genuine bug in the
 arm and must never be inherited by a named condition**; §7 now carries each reason at its own step, which
 is the only arrangement that keeps the two in sync. Two consecutive review rounds found this list
 incomplete, both times because a block path was added somewhere else — hence deriving it from §7 rather
@@ -1087,9 +1339,12 @@ one and shows up only as unexplained friction.
 |---|---|---|
 | a **waive** or a **decline** at the card | a line in that same turn's "📌 For you" block, per the skill's own instructions — never deferred to a later routine | — |
 | waive rate | a `/wrap` line | above ~1 in 4 gated writes, the lane is firing too often — revisit scope |
-| adjudication rate | a `/wrap` line | above ~1 in 4 reviews, reviewer #1's brief is too strict — rewrite the brief, do not add more adjudication |
+| **re-review rate** (a finding disputed, then re-reviewed) | a `/wrap` line | above ~1 in 4 reviews, reviewer #1's brief is too strict — rewrite the brief, do not loosen the gate |
+| **raw-REST blocks, by reason** `[v7]` | a `/wrap` line | `rest-chained` / `rest-chain-unreadable` / `body-source-unrecognised` / `body-file-unreadable` recurring across two windows means §4.5 is over-gating real work — narrow the shape, do not disable the arm. This is the monitor the arm is held to for the same reason §12.1 demanded one of every option |
+| **`/wrap`-originated filings, as their own slice** `[v7]` | a `/wrap` line: count filed, count PASSed with no re-review, count waived | this is the only unattended lane (§12), so its numbers must be separable from interactive traffic rather than averaged into it. **Bar: any waive, or a PASS rate of 100% across a window with more than five filings, gets a line** — the first because a waive on an unattended filing had no human in the loop at all, the second because a reviewer that never finds anything on auto-filed tickets is the lenient-reviewer failure §14 admits nothing else detects |
+| **raw-REST writes gated vs MCP writes gated** `[v7]` | a `/wrap` line | the coverage counter: if raw-REST gated writes stay near zero while §4.0.1 measured ~15% of traffic there, the detector has stopped matching and the widening in §4.5 needs re-checking |
 | **"not a ticket" rate** — the drift counter | a `/wrap` line | above ~1 in 20 gated writes, the "every page is a ticket" premise has drifted and scoping needs revisiting |
-| exemption-file contents | a `/wrap` line: entry count, and any ids added since the last report | two bars: any id added by a route other than the appender is worth a look; and **above 3,686 of 4,096 entries (90%)** something is appending non-volume ids — find the bug, do not trim the list (§5.1) |
+| exemption-file contents | a `/wrap` line: entry count, and any ids added since the last report | two bars: every id should have been added by `/vet-ticket`'s GEN-58 lane after a verified parentage check, so an id with no such event in the log is worth a look; and **above 3,686 of 4,096 entries (90%)** something is appending non-volume ids — find the bug, do not trim the list (§5.1) |
 | repeated `internal-error` blocks | a `/wrap` line | more than one in a session means the arm is broken, not the traffic |
 
 The drift counter is the answer to `measurement-edit-targets.md`'s last limit — the corpus is
@@ -1154,39 +1409,38 @@ make the total the right size to ship as one change — **that judgement is Erez
 | 1 | `enforceTicketVetting` PreToolUse arm | the gate itself |
 | 2 | The local scoping layer, §4 | three stages, no network; this is how scope is decided |
 | 3 | The exemption file and its closed shape, §5.1 | the log subtree comes into scope for the first time under "every page is a ticket" |
-| 4 | **PostToolUse volume-id appender**, §5.3 | nothing else maintains the list, and "Claude remembers" is the omission failure the gate exists to remove |
+| 4 | **The raw REST/curl arm, §4.5** `[v7]` | Erez's 2026-08-04 decision. Reuses the existing detector; adds ~15% of write traffic, and gates the destructive REST calls for the first time |
 | 5 | `/vet-ticket` skill, rebuilt, with all three lanes | the checked-in draft still asserts the refuted premise, the deleted `targets[]` shape and raw-`tool_input` hashing; the non-ticket lane is what keeps over-gating off Erez |
 | 6 | Verdict-token verification, assistant-role-scoped | without it a REVISE record clears the gate |
 | 7 | The 14 surviving `FIX` defects + `CARRY` #7, §13 | fail-opens in code that survives |
 | 8 | Test-oracle rebuild in `test-gen508.js` | the current sweep cannot detect the bug class it exists for; two tests assert nothing |
 | 9 | Latency + no-subprocess assertions, §7.2 | these are what keep the arm in the class verified to block |
-| 10 | `/wrap` Steps 1 and 3c rewritten via `/vet-rule` | otherwise the first `/wrap` after install hard-blocks with no consult path |
+| 10 | `/wrap` Steps 1 and 3c rewritten via `/vet-rule` | otherwise the first `/wrap` after install hard-blocks with no consult path. **Blocking acceptance criterion** `[v7]`: both steps must pass `--source wrap-step1` / `--source wrap-step3c`, or §10's `/wrap`-slice monitor — the sole justification for leaving these filings unattended — reads zero and looks clean |
 | 11 | Caller enumeration, widened per §11 | `/wrap` is one instance of a class |
 | 12 | The `/wrap` signal lines, §10 | a signal with no reader is not designed in |
 | 13 | Two global `CLAUDE.md` edits via `/check` then `/vet-rule` | the amendment resolves a live rule contradiction; the prose move pays for it — **with the acceptance criterion in §12.2, which is not optional** |
 | 14 | Pieces 2 and 3 filed as sub-tickets | standing rule: a named follow-up is created, not referenced |
 
-**Two items on this list carry an unresolved question each, both raised in round 1 and both recorded
-here rather than smoothed over:**
+**Both of v6.3's open questions on this list are now closed** `[v7]`, and neither closure is a silent one:
 
-- **Deliverable 4 (the appender) is the one plausible cut.** The reactive fallback in `/vet-ticket`'s
-  GEN-58 lane has to exist anyway, for volumes created by duplicate or by hand — and it is autonomous,
-  so it costs no interruption. If it exists, the appender's whole marginal value is avoiding one
-  self-resolving block per ~25 log entries, in exchange for a new hook arm, a second writer to the
-  exemption file, and its own concurrency property. The justification given in §5.3 argues against
-  relying on Claude's memory, which is not the alternative on the table. Worth putting to Erez as an
-  explicit cut before building it; the design is sound either way.
-- **Deliverable 10 (`/wrap` Steps 1 and 3c) has an unpriced fork.** Do the rewritten steps show Erez
-  the §8.1 summary card, or stay unattended? Interactive approval reintroduces exactly the interruption
-  he said this gate should not add; skipping it removes one of the few named backstops against a lenient
-  reviewer, on the filings most likely to need it (auto-filed, unattended, and the two GEN-508 records
-  as having gone wrong). The `/vet-rule` step on that edit is the right place to force the choice, and it
-  must not be allowed to pass by default.
+- **The PostToolUse appender is CUT** (was deliverable 4). The reasoning and the exact cost are in §5.3:
+  one self-resolving block per ~25 log entries, in exchange for deleting a hook arm, a second writer to the
+  exemption file, and a concurrency property. The reactive lane it would have fronted has to exist anyway.
+- **Deliverable 10's fork is resolved: the rewritten `/wrap` steps stay UNATTENDED** — no summary card at
+  wrap time. A card there would reintroduce exactly the interruption this gate is meant not to add, and
+  `/wrap`'s two filing steps carry an explicit standing override *so that* they run without stopping. **The
+  cost, stated rather than assumed away:** the filings most likely to need a human eye — auto-filed,
+  unattended, and two GEN-508 records of having gone wrong — get the independent reviewer and nothing else.
+  §14's honest limit already says the reviewer's competence is unproven, and this is the place that limit
+  bites hardest. **The monitor that watches this had to be built for it specifically:** a `/check` lens found
+  that §10's aggregate rates could hide a problem confined to `/wrap`'s filings indefinitely, since they are
+  a small slice of total traffic. So events now carry a `source` field and §10 has a `/wrap`-slice row with
+  its own bars. If that row starts printing, revisit this choice rather than the gate.
 
 **Deliberately not in piece 1:** the Jira arms; re-examining the three installed sibling gates' false
-headers; and anything about a parent cache, which no longer exists. The raw REST/curl arm was on this
-list and has moved to §12.1 as an open decision, because measuring it showed it is ~15% of write
-traffic rather than an edge.
+headers; and anything about a parent cache, which no longer exists. **A Notion write whose URL appears only
+inside a script file** the command runs is also out — §4.5 states why widening the match to script contents
+must not be done, and piece 2 owns it.
 
 **Dropped from v5's list:** the blocking pre-build race measurement. The arm no longer makes a
 network call, so it sits in the class already verified to block; deliverable 9 replaces the
@@ -1202,7 +1456,8 @@ A round-3 lens found the gap between what this gate mechanically guarantees and 
 and it is the most consequential finding of the round after the adjudication rewrite.
 
 **The mechanism guarantees that a review ran.** What that review *checks* is the reviewer's checklist —
-§14 says so outright: the real backstops are adjudication and "the reviewer brief's own quality". §8
+§14 says so outright: after v7 the real backstops are one optional re-review and "the reviewer brief's own
+quality". §8
 step 4 refers to "the ticket-bar checklist" without defining it or requiring it to be complete.
 
 **And deliverable 13 pays for the §8.1 rule amendment by moving ticket-bar prose out of the always-loaded
@@ -1227,10 +1482,21 @@ others).
    body-self-containment and the priority fields — not "all ticket-quality rules" — and the honest
    phrasing has to be the narrow one.
 
-## 12.1 The one open decision — raw REST/curl writes, in or out of piece 1?
+## 12.1 The scope decision — **DECIDED 2026-08-04** (comparison kept for the audit trail)
 
-Surfaced by measurement during round 1 (§4.0.1). It is a scope trade-off with a real cost either way, so
-it is Erez's rather than mine.
+> **Erez's decision: cover raw REST/curl writes in piece 1** — "I prefer you cover it now" — with the
+> simplest design that delivers it. **§4.5 is the only normative statement of that arm. Nothing in the
+> comparison below is a specification**, and two of its claims about the chosen option are superseded
+> there: the hash covers the command text **plus every referenced body file** (hashing the command alone
+> would leave the ticket text unbound), and the normaliser gains **no** second input shape, which was the
+> comparison's main charge against this option.
+>
+> Kept below because the measurements are still load-bearing (§4.5 cites them) and because the
+> recommendation moved three times — A, then C, then B — and Erez chose against the standing
+> recommendation. That is worth being able to re-read.
+
+Surfaced by measurement during round 1 (§4.0.1). It was a scope trade-off with a real cost either way, so
+it was Erez's rather than mine.
 
 **Option A — full parity: gate raw REST writes through the same review record.** Detect the write with
 `notion-schema-guard`'s existing matcher, then require a record as for any other gated write; the hash
@@ -1312,10 +1578,15 @@ gated properly. This is the cheapest of the three and the only one that *reduces
   the matcher, not the file. Once this arm refuses the traffic first, schema-guard's shell arm becomes
   dead weight and should be retired in the same change rather than left to look active.
 
-**What I would do — changed twice, and this is the position after round 3 tested it.** v6.1 recommended
-A. v6.2 recommended C, on a viability claim the cap round showed the evidence does not carry. **v6.3
-recommends B — ship piece 1 with the MCP tools gated, the gap measured, and a monitor with a bar — and
-open the REST question as its own ticket whose first step is the missing measurement.**
+**What I would have done — recorded as it stood, and NOT what was chosen.** v6.1 recommended A, v6.2 C,
+v6.3 B. **Erez chose A** (cover it now). Two of the three reasons v6.3 gave for B are answered by §4.5
+rather than merely overruled: A's stated cost — a second normaliser input shape — does not materialise,
+because shell text never reaches the JSON walker; and the availability objection was against C, not A, since
+raw REST keeps working under A and merely needs a record. The reason that stands unanswered: **the sampling
+of the 38 non-overlapping REST calls was never done**, so nobody knows how many of them exist *because* the
+MCP tools could not express the operation. Under A that matters much less than it did under C — A does not
+reroute anything, it only requires a review — but it is still unmeasured, and §10's over-gating counter is
+what will surface it if it bites.
 
 The reasoning, stated so the change is auditable rather than a drift:
 
@@ -1333,14 +1604,12 @@ The reasoning, stated so the change is auditable rather than a drift:
   is page-body edits via `PATCH /v1/blocks`, and the monitor with its bar is what stops that becoming
   permanent by inattention.
 
-**What this means for the ticket's own wording**, stated rather than glossed: under B, GEN-508 piece 1
-does not deliver "every Notion create/edit". It delivers every create/edit through the four MCP tools,
-with ~15% of write traffic named, measured, monitored and deferred. That should be written into the
-ticket rather than left to be discovered.
-
-**The scope call is Erez's**, and the plain-language version of it is: ship the guard now covering the
-tools normally used, with the other route measured and watched — or hold piece 1 until the other route is
-handled too, which needs one more measurement first and carries a real risk of blocking legitimate work.
+**What this means for the ticket's own wording**, stated rather than glossed: under the chosen option,
+GEN-508 piece 1 delivers **every Notion create/edit reachable through the four MCP tools or named in a
+shell command**. That is wider than "through the MCP tools" and is still not "every Notion create/edit" —
+a write whose URL lives only inside a script file the command runs is invisible to it, and §4.5 explains
+why closing that particular gap would gate routine reads. **Write that sentence into the ticket** rather
+than leaving it to be discovered; §12.2 clause 4 holds the same requirement for the rule-coverage half.
 
 ---
 
@@ -1395,9 +1664,11 @@ acceptance test, not the pass count.
 - **The record proves an independent review ran on this exact content, that the reviewer named really
   existed and returned, and that its verdict was PASS** (or that Erez waived it). It **cannot prove
   the review was competent.** v2 named "Erez's mint-approval" as the backstop; that backstop never
-  existed and could not have seen anything if it had. The real backstops are the adjudication panel
-  and the reviewer brief's own quality — and **if reviewer #1 is systematically lenient, nothing in
-  this design detects it.** The `/wrap` aggregate counts are the only early warning.
+  existed and could not have seen anything if it had. After v7 deleted the adjudicator, the real
+  backstops are **one optional re-review by a fresh reviewer and the reviewer brief's own quality** — and
+  **if reviewer #1 is systematically lenient, nothing in this design detects it.** The `/wrap` aggregate
+  counts are the only early warning. This limit bites hardest on `/wrap`'s unattended filings, per §12's
+  resolution of deliverable 10.
 - **The transcript and sidecar checks raise the cost of a fabricated review; they do not make one
   impossible.** A Claude willing to write into its own session state defeats them. This design targets
   omission, not evasion, and says so.
@@ -1427,11 +1698,17 @@ acceptance test, not the pass count.
 - **Whether a *user-scope* `permissions.ask` rule would prompt under `bypassPermissions` is
   untested** — the global settings files are locked. Nothing here depends on the answer, but it is the
   open question for anyone trying to restore a genuine prompt to any of the four gates.
-- **Piece 1 is large.** Fourteen deliverables, three of which are rule or skill edits needing Erez's
-  confirmation. Splitting the install is a live option two of three round-3 reviewers recommended;
-  the natural seam is hook + skill + appender first, with the `/wrap` and `CLAUDE.md` edits as a
-  second change — except that §11 makes the `/wrap` fix a ship blocker, so the seam is narrower than
-  it looks.
+- **Coverage after v7, in one sentence, because the ticket's title says "every"** `[v7]`: every Notion
+  create/edit reachable through the four MCP write tools **or named in a shell command**. A write whose URL
+  appears only inside a script file the command runs is not covered, and §4.5 records why the obvious
+  widening must not be adopted (it would gate routine Notion *reads* performed by an existing script). The
+  rule-coverage half of "every" is §12.2's, and it is a separate claim with its own acceptance criteria.
+- **Piece 1 is large.** Fourteen deliverable rows (§12), three of which are rule or skill edits needing
+  Erez's confirmation. v7 swapped one row and deleted two mechanisms from inside others; it did not make this
+  small, and the row count is unchanged. Splitting the install is a live
+  option two of three round-3 reviewers recommended; the natural seam is hook + skill first, with the
+  `/wrap` and `CLAUDE.md` edits as a second change — except that §11 makes the `/wrap` fix a ship blocker,
+  so the seam is narrower than it looks.
 
 ---
 
@@ -1503,11 +1780,15 @@ started over.**
   but the pre-mortem tagged its round-2 finding **RECURRENCE** and four new material findings arrived
   across the three. **This is an escalation, not convergence** — both the round cap and the
   twice-attempted-finding trigger fired.
-- **v6.3 is a post-cap revision and has been reviewed by no one.** Its central change — deleting the
-  adjudication substitution mechanism in favour of a fresh reviewer — is a from-scratch re-derivation
-  made because a standing rule forbids patching the same mechanism a fourth time. It is the smallest
-  answer I can find and it removes machinery rather than adding it, but it carries none of the panel's
-  endorsement and should be reviewed before anything is built from it.
+- **v6.3 was a post-cap revision reviewed by no one.** Its central change — deleting the adjudication
+  substitution mechanism in favour of a fresh reviewer — was a from-scratch re-derivation made because a
+  standing rule forbids patching the same mechanism a fourth time.
+- **v7 (2026-08-04) is Erez's scope decision plus three cuts, and it retires v6.3's unreviewed residue** by
+  deleting the adjudicator role outright rather than keeping a Claude-side process nobody had reviewed.
+  The four v6.3 findings stay fixed; §4.5 is new; the appender and the summary-card-at-`/wrap` fork are
+  closed by cut and by choice respectively. **The cut of the adjudicator role is the fourth touch of that
+  mechanism**, and the standing rule about a third fix is why it is a deletion rather than another
+  revision: the role's last remaining function was already available without it.
 
 **The pattern across all three rounds, since it is the most useful thing here.** Every round's worst
 finding was the same shape: **a rule stated correctly in one place with no realised path through the place
