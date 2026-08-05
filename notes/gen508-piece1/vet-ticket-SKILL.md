@@ -42,28 +42,36 @@ the body" escape are the backstops. The shared break-glass (`CLAUDE_CONFIG_UNLOC
 
 ## Scope — what is gated
 
-Gated (the hook's five arms — see the `GEN-508` header block in `~/.claude/hooks/auto-approve.js`):
+Four tools are gated — `notion-create-pages`, `notion-update-page`, `notion-duplicate-page`,
+`notion-move-pages`. They are the complete set that can create or materially change a Team-Tasks
+**row**; the other six mutating Notion tools are scoped out with a per-tool reason in the `GEN-508`
+header block in `~/.claude/hooks/auto-approve.js`.
 
-| Arm | Tool | Condition |
-|-----|------|-----------|
-| A1 create | `notion-create-pages` | `parent` is the Team-Tasks data source / database |
-| A2 property edit | `notion-update-page` | `update_properties` touching any **substance** key |
-| A3 body edit | `notion-update-page` | any command except `update_properties` / `update_verification` |
-| A4 duplicate | `notion-duplicate-page` | the SOURCE page is a Team-Tasks row |
-| A5 move | `notion-move-pages` | `new_parent` is Team-Tasks (move **in**) **or** any moved page is a Team-Tasks row (move **out**) |
-
-Move-out is gated because moving a row to a non-database parent de-lists it and **drops every
-database property** (body kept) — the most destructive ticket write these tools can make.
+**Do not try to predict the verdict from a field path.** The hook does not read one. It normalises the
+whole payload (parsing any embedded JSON, unwrapping envelopes), then looks for a Team-Tasks id
+*anywhere* in it, and resolves any remaining page id against the database. That is deliberate: two
+earlier field-path versions each silently approved real traffic that put the parent somewhere else.
+So a call is gated whenever it touches a Team-Tasks row, however the payload happens to be shaped —
+including a move **out**, which de-lists a row and **drops every database property** (body kept), the
+most destructive ticket write these tools can make.
 
 NOT gated, and you do not need this skill for them:
 - **Housekeeping-only property edits** — `Status`, `Assignee`, `Project`, `Type`, `Reason`,
   `Due Date`, `Remind me (days before)`, `Date Created`, `ID`, `Parent item`. Substance is a
   deny-list: anything NOT in that set counts as substance, so a renamed or new property is gated by
-  default rather than silently exempt.
-- **Append-only GEN-58 log writes** (`insert_content` / `insert_content_after` on the GEN-58 page).
-  A standing rule requires those to happen immediately and exempts them from the approval pause. A
-  non-append rewrite of that page is still gated.
+  default rather than silently exempt. The exemption is a closed shape — it applies only to a payload
+  whose top level carries nothing but a page id, `command: "update_properties"`, and `properties`
+  holding plain values. Anything else about the payload, recognised or not, is gated.
+- **Content writes inside the GEN-58 subtree** — the GEN-58 ticket page and its log-volume child
+  pages. A standing rule requires reasoning-failure log writes to happen immediately and exempts them
+  from the approval pause. A **property** edit on the GEN-58 row is still a ticket-property edit and
+  stays gated. (This replaces an earlier command-name rule that covered only 5% of real GEN-58
+  writes.)
 - Comments, views, attachments, and any page outside Team-Tasks.
+
+**If a page cannot be resolved, the write is blocked, not waved through** (no token, Notion
+unreachable, rate-limited, archived, or a target id that is malformed or missing). Minting needs no
+Notion access, so the escape is one review plus one mint — not break-glass.
 
 Known gaps, stated so they are not mistaken for coverage: **raw REST/curl writes to
 `api.notion.com`** and **all Jira writes** are outside this gate (piece 2). REST Notion writes are
@@ -132,7 +140,7 @@ Write a **ticket-record** into `~/.claude-staging/ticket-passes/` (create the di
 
 ```json
 { "kind": "ticket-record",
-  "targets": [ { "target": "<see Step 5 target forms>", "contentHash": "<sha256 of the projection>" } ],
+  "targets": [ { "target": "<see Step 5 target forms>", "contentHash": "<the line --ticket-hash printed>" } ],
   "reviewerAgentIds": ["<the agentId the Agent tool returned for EACH reviewer run>"],
   "verdict": "PASS",
   "capturedFindings": "<the reviewer's verdict block, copied in so the record is self-contained>",
@@ -142,20 +150,36 @@ Write a **ticket-record** into `~/.claude-staging/ticket-passes/` (create the di
   "draftedUtc": "<ISO-8601 UTC now>" }
 ```
 
-**The content hash must match the hook's exactly** — the definition lives in the `GEN-508` header of
-`auto-approve.js` and this skill cites it; if the two ever drift, NO pass will match and only
-break-glass gets a write through.
+### Getting the `contentHash` — never compute it yourself
 
-It is `sha256` (hex, UTF-8) of `stableStringify(<the entire tool_input you are about to send>)` —
-every arm, no per-arm projection, no field omitted. Deliberately not a hand-picked subset: an
-allow-list leaves every unlisted field unbound, and the omitted ones were not cosmetic
-(`apply_template` hashed to a constant, and `allow_deleting_content` permits deleting child pages).
-So hash the exact payload object, then send that same object unchanged — if you edit it afterwards,
-re-hash and re-mint.
+**Do not reproduce the hash formula here.** Ask the hook for it. It hashes a *normalised* form of the
+payload (embedded JSON parsed, single-key envelopes unwrapped, object keys sorted), and that
+normaliser is ~100 lines. Any hand-rolled copy of it drifts, and a drifted hash means NO pass ever
+matches and only break-glass gets a write through.
 
-`stableStringify` is defined at `auto-approve.js:829` (arrays keep order, object keys sorted,
-`undefined` → `null`). Reproduce it exactly, or shell out to a node one-liner that inlines those six
-lines, rather than approximating it — a mismatch fails closed but costs a wasted mint to discover.
+1. Write the exact payload you are about to send — the whole `tool_input` object, nothing omitted — to
+   a temp `.json` file.
+2. Run the hook's own hash mode:
+
+```bash
+node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>"
+```
+
+3. It prints one line: the `contentHash`. Use it verbatim.
+
+That exact invocation is auto-approved (it only reads a file and prints a hash), so it costs no
+permission prompt. Both paths must be quoted, and nothing may be appended to the command.
+
+**If it exits non-zero it prints no hash — then STOP and do not mint.** A non-zero exit means the
+hook could not read that payload end to end, so it is going to hard-block the call whatever pass
+exists. Re-issue the call in the ordinary shape instead of hunting for a pass.
+
+Hash the payload, then send that same object unchanged. If you edit it afterwards — even a
+whitespace change in the body — re-hash and re-mint.
+
+Why the whole payload and not a chosen subset: an allow-list leaves every unlisted field unbound, and
+the omitted ones were not cosmetic (`apply_template` hashed to a constant, and
+`allow_deleting_content` permits deleting child pages).
 
 ## Step 5 — Show Erez the card, then mint
 
@@ -179,14 +203,19 @@ moment**, never a bare file-write dialog.
   "expires": "<now + 15 min, ISO-8601 UTC>" }
 ```
 
-Target forms: `create:<data-source-id32>` · `duplicate:<source-page-id32>` ·
-`move:<data-source-id32>` · `<page-id32>` for an edit. All ids dashless lowercase. Get the timestamp
-from a read-only `(Get-Date).ToUniversalTime().AddMinutes(15).ToString("o")` immediately before
-writing.
+**The hook matches on `contentHash` alone.** `target` is a human-readable label only — it appears in
+the refusal message and the audit log, and getting it wrong costs nothing. Write something a person
+can recognise: the ticket id, or `create in Team-Tasks`. (Earlier drafts made the hook derive a
+canonical target string and match on it, which would have obliged this skill to reproduce the whole
+scoping scan; that is now the hash's job.)
 
-ONE pass file covers the whole approved batch. Consumption is per target: the hook removes the used
-entry and renames the file `*.consumed.<ts>` only when the last one goes — so a half-used batch pass
-still gates whatever it has not authorised yet.
+Get the timestamp from a read-only `(Get-Date).ToUniversalTime().AddMinutes(15).ToString("o")`
+immediately before writing.
+
+ONE pass file covers the whole approved batch. Consumption is per entry, keyed by `contentHash`: the
+hook claims the file by renaming it, drops the entry whose hash matched, puts the survivors back
+under the original name, and renames the file `*.consumed.<ts>` only when the last entry goes — so a
+half-used batch pass still gates whatever it has not authorised yet.
 
 ## Step 6 — The waive lane (Erez's per-case override)
 
@@ -205,7 +234,8 @@ the gate working. The waive is scoped to this one write and never touches the gl
   `timestamp` across all lines of the `.jsonl` is `<= draftedUtc`. Read `$CLAUDE_SESSION_ID` via the
   Bash tool (it is not exported to PowerShell), and find the `<project-slug>` folder by listing
   `~/.claude/projects/` for the one containing that session id — do not hand-derive the slug.
-- Every `contentHash` still equals the current payload's projection (nothing edited since review).
+- Re-run `--ticket-hash` on each payload and confirm it still prints the `contentHash` in the record
+  (nothing edited since review). Re-running it, rather than trusting the recorded value, is the point.
 - `verdict === 'PASS'` **or** `waived === true`.
 - Every note has a recorded resolution (Step 3).
 
