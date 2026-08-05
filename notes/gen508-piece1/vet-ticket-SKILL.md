@@ -42,28 +42,36 @@ the body" escape are the backstops. The shared break-glass (`CLAUDE_CONFIG_UNLOC
 
 ## Scope — what is gated
 
-Gated (the hook's five arms — see the `GEN-508` header block in `~/.claude/hooks/auto-approve.js`):
+Four tools are gated — `notion-create-pages`, `notion-update-page`, `notion-duplicate-page`,
+`notion-move-pages`. They are the complete set that can create or materially change a Team-Tasks
+**row**; the other six mutating Notion tools are scoped out with a per-tool reason in the `GEN-508`
+header block in `~/.claude/hooks/auto-approve.js`.
 
-| Arm | Tool | Condition |
-|-----|------|-----------|
-| A1 create | `notion-create-pages` | `parent` is the Team-Tasks data source / database |
-| A2 property edit | `notion-update-page` | `update_properties` touching any **substance** key |
-| A3 body edit | `notion-update-page` | any command except `update_properties` / `update_verification` |
-| A4 duplicate | `notion-duplicate-page` | the SOURCE page is a Team-Tasks row |
-| A5 move | `notion-move-pages` | `new_parent` is Team-Tasks (move **in**) **or** any moved page is a Team-Tasks row (move **out**) |
-
-Move-out is gated because moving a row to a non-database parent de-lists it and **drops every
-database property** (body kept) — the most destructive ticket write these tools can make.
+**Do not try to predict the verdict from a field path.** The hook does not read one. It normalises the
+whole payload (parsing any embedded JSON, unwrapping envelopes), then looks for a Team-Tasks id
+*anywhere* in it, and resolves any remaining page id against the database. That is deliberate: two
+earlier field-path versions each silently approved real traffic that put the parent somewhere else.
+So a call is gated whenever it touches a Team-Tasks row, however the payload happens to be shaped —
+including a move **out**, which de-lists a row and **drops every database property** (body kept), the
+most destructive ticket write these tools can make.
 
 NOT gated, and you do not need this skill for them:
 - **Housekeeping-only property edits** — `Status`, `Assignee`, `Project`, `Type`, `Reason`,
   `Due Date`, `Remind me (days before)`, `Date Created`, `ID`, `Parent item`. Substance is a
   deny-list: anything NOT in that set counts as substance, so a renamed or new property is gated by
-  default rather than silently exempt.
-- **Append-only GEN-58 log writes** (`insert_content` / `insert_content_after` on the GEN-58 page).
-  A standing rule requires those to happen immediately and exempts them from the approval pause. A
-  non-append rewrite of that page is still gated.
+  default rather than silently exempt. The exemption is a closed shape — it applies only to a payload
+  whose top level carries nothing but a page id, `command: "update_properties"`, and `properties`
+  holding plain values. Anything else about the payload, recognised or not, is gated.
+- **Content writes inside the GEN-58 subtree** — the GEN-58 ticket page and its log-volume child
+  pages. A standing rule requires reasoning-failure log writes to happen immediately and exempts them
+  from the approval pause. A **property** edit on the GEN-58 row is still a ticket-property edit and
+  stays gated. (This replaces an earlier command-name rule that covered only 5% of real GEN-58
+  writes.)
 - Comments, views, attachments, and any page outside Team-Tasks.
+
+**If a page cannot be resolved, the write is blocked, not waved through** (no token, Notion
+unreachable, rate-limited, archived, or a target id that is malformed or missing). Minting needs no
+Notion access, so the escape is one review plus one mint — not break-glass.
 
 Known gaps, stated so they are not mistaken for coverage: **raw REST/curl writes to
 `api.notion.com`** and **all Jira writes** are outside this gate (piece 2). REST Notion writes are
@@ -82,17 +90,55 @@ Confirm the Agent tool and the `check-reviewer` sub-agent type are available. If
 the evidence bar (an independent reviewer) cannot be met, so no pass may be minted. Do not degrade to
 reviewing your own draft.
 
-## Step 1 — Draft the write
+## Step 1 — Draft the write, then hash it
 
 Produce the exact payload that will be sent — properties and body for a create; the precise
 `properties` object, `content`, `new_str`, or `content_updates` for an edit. For a Team-Tasks create
 or a material body change, that includes `Urgency` and `Gain ratio`, and `Priority` derived from
 them by the rule in `hooks/refs/notion.md` (a body append counts as material).
 
+Hash it **now, before the review**. The reviewer has to end its verdict on this exact hash (Step 2),
+and the hook reads that token out of the reviewer's own transcript — so a review run without the hash
+in hand cannot clear the gate, however good the review was.
+
+### Getting the `contentHash` — never compute it yourself
+
+**Do not reproduce the hash formula here.** Ask the hook for it. It hashes a *normalised* form of the
+payload (embedded JSON parsed, single-key envelopes unwrapped, object keys sorted), and that
+normaliser is ~100 lines. Any hand-rolled copy of it drifts, and a drifted hash means NO pass ever
+matches and only break-glass gets a write through.
+
+1. Write the exact payload you are about to send — the whole `tool_input` object, nothing omitted — to
+   a temp `.json` file.
+2. Run the hook's own hash mode:
+
+```bash
+node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>"
+```
+
+3. It prints one line: the `contentHash`. Use it verbatim.
+
+That exact invocation is auto-approved (it only reads a file and prints a hash), so it costs no
+permission prompt. Both paths must be quoted, and nothing may be appended to the command.
+
+**If it exits non-zero it prints no hash — then STOP and do not mint.** A non-zero exit means the
+hook could not read that payload end to end, so it is going to hard-block the call whatever pass
+exists. Re-issue the call in the ordinary shape instead of hunting for a pass.
+
+Hash the payload, then send that same object unchanged. If you edit it afterwards — even a whitespace
+change in the body — **re-hash AND re-review**. Re-minting alone is not enough any more: the old hash
+is baked into the old reviewer's token, so an edited payload has no reviewer token that matches and
+the write blocks with `no-token`.
+
+Why the whole payload and not a chosen subset: an allow-list leaves every unlisted field unbound, and
+the omitted ones were not cosmetic (`apply_template` hashed to a constant, and
+`allow_deleting_content` permits deleting child pages).
+
 ## Step 2 — Independent review
 
 Spawn ONE `check-reviewer` sub-agent (Agent tool) that did not draft the ticket. Give it the drafted
-payload in full and this checklist, and require the verdict block below verbatim:
+payload in full, **the `contentHash` from Step 1**, and this checklist, and require the verdict block
+below verbatim — including its machine-readable last line, which is the part the hook actually reads:
 
 1. **Stands on its own** — could someone with no memory of this conversation act on it? Problem and
    why it matters; the background needed to execute (file paths, ids, links, prior decisions); the
@@ -113,11 +159,30 @@ payload in full and this checklist, and require the verdict block below verbatim
 STATUS: PASS | REVISE
 FINDINGS: (numbered; each = the flaw + a concrete fix. "none" if PASS.)
 NOTES: (non-blocking observations; or "none")
+TICKET-REVIEW-VERDICT: PASS <contentHash>
 ```
 
-`REVISE` → fix and re-review (a fresh agent). If the bar cannot be met because only Erez holds the
-missing information, STOP and consult him — inline if the stuck ticket blocks the task he asked for,
-otherwise batched at the next natural pause.
+**The last line is load-bearing and the hook verifies it in the reviewer's own transcript, not in
+anything this skill writes.** Brief the reviewer on all four rules:
+
+- It is the **final line** of its reply: `TICKET-REVIEW-VERDICT: PASS <hash>` or
+  `TICKET-REVIEW-VERDICT: REVISE <hash>`.
+- `<hash>` is the Step-1 `contentHash`, all 64 hex characters, copied verbatim. A wrong or truncated
+  hash reads exactly like no review at all.
+- The verdict word must agree with `STATUS`. The hook only accepts `PASS`.
+- The reviewer must **not** write the prefix `TICKET-REVIEW-VERDICT:` anywhere else in its reply — not
+  when quoting this instruction, not when explaining itself. The hook takes the **last** occurrence in
+  the transcript, so a trailing mention overrides the real verdict and the write blocks.
+
+Why the token rather than the record's own `verdict` field: the hook's whole purpose is not to trust
+this skill. The token establishes three facts at once that a skill-written field cannot — this agent
+ran, it reviewed *this* content, and it returned PASS — and an unrelated reviewer's transcript carries
+a different hash or none. If the token is missing, malformed, or not last, the write blocks with
+`no-token`; that is the gate working, not a bug to route around.
+
+`REVISE` → fix and re-review (a fresh agent), **re-hashing first if the payload changed**. If the bar
+cannot be met because only Erez holds the missing information, STOP and consult him — inline if the
+stuck ticket blocks the task he asked for, otherwise batched at the next natural pause.
 
 ## Step 3 — Resolve every note before filing
 
@@ -128,12 +193,17 @@ inside an approval.
 
 ## Step 4 — Write the ticket-record
 
-Write a **ticket-record** into `~/.claude-staging/ticket-passes/` (create the dir if missing):
+Write a **ticket-record** into `~/.claude-staging/ticket-passes/` (create the dir if missing). This
+file is the audit trail, **not** the thing the hook reads — it carries no `expires`, so the hook's
+pass scan skips it entirely. The Step-5 pass is what clears the gate, and every field the hook needs
+has to be on that file, flat at its top level.
 
 ```json
 { "kind": "ticket-record",
-  "targets": [ { "target": "<see Step 5 target forms>", "contentHash": "<sha256 of the projection>" } ],
-  "reviewerAgentIds": ["<the agentId the Agent tool returned for EACH reviewer run>"],
+  "target": "<see Step 5 target forms>",
+  "contentHash": "<the line --ticket-hash printed>",
+  "reviewerAgentId": "<the agentId of the reviewer whose PASS token binds this hash>",
+  "priorReviewerAgentIds": ["<any earlier REVISE rounds, for the audit trail>"],
   "verdict": "PASS",
   "capturedFindings": "<the reviewer's verdict block, copied in so the record is self-contained>",
   "noteResolutions": "<each note and how it was resolved>",
@@ -142,20 +212,11 @@ Write a **ticket-record** into `~/.claude-staging/ticket-passes/` (create the di
   "draftedUtc": "<ISO-8601 UTC now>" }
 ```
 
-**The content hash must match the hook's exactly** — the definition lives in the `GEN-508` header of
-`auto-approve.js` and this skill cites it; if the two ever drift, NO pass will match and only
-break-glass gets a write through.
-
-It is `sha256` (hex, UTF-8) of `stableStringify(<the entire tool_input you are about to send>)` —
-every arm, no per-arm projection, no field omitted. Deliberately not a hand-picked subset: an
-allow-list leaves every unlisted field unbound, and the omitted ones were not cosmetic
-(`apply_template` hashed to a constant, and `allow_deleting_content` permits deleting child pages).
-So hash the exact payload object, then send that same object unchanged — if you edit it afterwards,
-re-hash and re-mint.
-
-`stableStringify` is defined at `auto-approve.js:829` (arrays keep order, object keys sorted,
-`undefined` → `null`). Reproduce it exactly, or shell out to a node one-liner that inlines those six
-lines, rather than approximating it — a mismatch fails closed but costs a wasted mint to discover.
+**One reviewer id, singular.** The hook verifies exactly one reviewer — that agent's sidecar
+`agentType` and that agent's own PASS token — so `reviewerAgentId` names the reviewer whose token
+binds the hash you are about to mint, which after a REVISE round is the LAST reviewer, not the first.
+Earlier rounds go in `priorReviewerAgentIds`, which nothing enforces and which exists only so the
+history is not lost.
 
 ## Step 5 — Show Erez the card, then mint
 
@@ -174,55 +235,96 @@ is outside `~/.claude`, so the write prompts him — **show the card content inl
 moment**, never a bare file-write dialog.
 
 ```json
-{ "kind": "ticket", "surface": "notion",
-  "targets": [ { "target": "<...>", "contentHash": "<...>" } ],
+{ "kind": "ticket",
+  "surface": "notion-mcp",
+  "contentHash": "<the 64-hex line --ticket-hash printed>",
+  "reviewerAgentId": "<the same agentId as the record>",
+  "verdict": "PASS",
+  "waived": false,
+  "target": "<human-readable label>",
   "expires": "<now + 15 min, ISO-8601 UTC>" }
 ```
 
-Target forms: `create:<data-source-id32>` · `duplicate:<source-page-id32>` ·
-`move:<data-source-id32>` · `<page-id32>` for an edit. All ids dashless lowercase. Get the timestamp
-from a read-only `(Get-Date).ToUniversalTime().AddMinutes(15).ToString("o")` immediately before
-writing.
+**Flat, and one hash per file.** The hook reads `kind`, `contentHash`, `verdict`, `waived`,
+`reviewerAgentId` and `expires` off the top level of this one file. Nesting any of them — inside a
+`targets` array or anywhere else — means the hook never sees them: it finds no matching pass and
+hard-blocks with `no-pass`, which looks identical to never having run a review at all. `surface` and
+`target` are diagnostic only and are never matched on.
 
-ONE pass file covers the whole approved batch. Consumption is per target: the hook removes the used
-entry and renames the file `*.consumed.<ts>` only when the last one goes — so a half-used batch pass
-still gates whatever it has not authorised yet.
+**The hook matches on `contentHash` alone.** `target` is a human-readable label — it appears in the
+refusal message and the audit log, and getting it wrong costs nothing. Write something a person can
+recognise: the ticket id, or `create in Team-Tasks`. (Earlier drafts made the hook derive a canonical
+target string and match on it, which would have obliged this skill to reproduce the whole scoping
+scan; that is now the hash's job.)
+
+`verdict` and `waived` are a cheap pre-filter the hook applies before it opens the transcript — they
+are not the authority and cannot substitute for the reviewer's token. A pass carrying
+`verdict: "REVISE"` and no waive blocks with `bad-verdict`; one carrying `verdict: "PASS"` whose named
+reviewer never emitted the token blocks with `no-token`.
+
+Get the timestamp from a read-only `(Get-Date).ToUniversalTime().AddMinutes(15).ToString("o")`
+immediately before writing.
+
+**ONE pass file authorises ONE write.** The batch `targets[]` array and its partial-consumption
+machinery are gone: the hook consumes a matched pass by renaming the whole file to
+`*.consumed.<ts>`, so the first write it authorises retires it completely. A card list covering
+several tickets therefore needs one pass file per ticket, each with its own hash and its own reviewer
+token, written in the same approved moment.
+
+Known cost, not a design claim: each of those files is a separate Write, so a multi-ticket card list
+raises one prompt per ticket rather than the single prompt the batch pass used to give. Do not try to
+recover the old behaviour by putting several hashes in one file — the hook cannot read them.
 
 ## Step 6 — The waive lane (Erez's per-case override)
 
 When the reviewer holds findings that cannot be fixed and Erez wants it filed anyway: show him the
 outstanding findings in plain terms and ask. On his affirmative, set `waived: true` + `waiveReason` +
-the outstanding findings in the record, and mint normally — the mint prompt is his second,
-deliberate confirmation. **Declining the mint is NOT a waive**: it leaves the write blocked, which is
-the gate working. The waive is scoped to this one write and never touches the global break-glass.
+the outstanding findings in the record, **and set `waived: true` on the pass as well** — the pass is
+the only file the hook opens, so a waive recorded solely in the record blocks with `bad-verdict`. Then
+mint normally; the mint prompt is his second, deliberate confirmation.
+
+A waive is the ONLY path that skips the reviewer checks: on `waived: true` the hook verifies no
+sidecar and looks for no token, so a waived pass needs no `reviewerAgentId` and Erez's explicit chat
+answer is the entire evidence base. That is why it is per-write, and why it is never the answer to a
+token that merely failed to match — re-review that instead.
+
+**Declining the mint is NOT a waive**: it leaves the write blocked, which is the gate working. The
+waive is scoped to this one write and never touches the global break-glass.
 
 ## Step 7 — Evidence precondition (run immediately before the mint write)
 
-- `reviewerAgentIds` is present and **non-empty** — a record citing no reviewer is not evidence, and
-  an empty array would let a "for EACH" loop pass vacuously.
-- For EACH id: `~/.claude/projects/<project-slug>/$CLAUDE_SESSION_ID/subagents/agent-<id>.jsonl` and
-  its `.meta.json` both exist; the sidecar reads `"agentType":"check-reviewer"`; and the minimum
+- `reviewerAgentId` is present and non-empty, unless `waived === true` — a pass citing no reviewer is
+  not evidence.
+- `~/.claude/projects/<project-slug>/$CLAUDE_SESSION_ID/subagents/agent-<id>.jsonl` and its
+  `.meta.json` both exist; the sidecar reads `"agentType":"check-reviewer"`; and the minimum
   `timestamp` across all lines of the `.jsonl` is `<= draftedUtc`. Read `$CLAUDE_SESSION_ID` via the
   Bash tool (it is not exported to PowerShell), and find the `<project-slug>` folder by listing
   `~/.claude/projects/` for the one containing that session id — do not hand-derive the slug.
-- Every `contentHash` still equals the current payload's projection (nothing edited since review).
-- `verdict === 'PASS'` **or** `waived === true`.
+- **The token is present, correct, and last.** In that same `.jsonl`, confirm the final
+  `TICKET-REVIEW-VERDICT:` occurrence among the `"type":"assistant"` records reads
+  `PASS <contentHash>` for this hash. This is the one precondition that mirrors exactly what the hook
+  will do, so failing it here costs a re-review instead of an unexplained block after the mint.
+- Re-run `--ticket-hash` on the payload and confirm it still prints the `contentHash` in the record
+  (nothing edited since review). Re-running it, rather than trusting the recorded value, is the point.
+- `verdict === 'PASS'` **or** `waived === true`, checked on the pass file.
 - Every note has a recorded resolution (Step 3).
 
 Any check fails → REFUSE to mint; say what is missing and re-review rather than forcing it.
 
-Residual, same as the siblings: the agent ids are chosen by the session being vetted, so this proves
-the cited transcripts are genuine reviewer runs in this session that pre-date the record — not that
-those runs reviewed THIS text. Erez's card-showing mint-approval is the backstop.
+Residual, and narrower than the siblings' now that the token carries the hash: this establishes that a
+genuine `check-reviewer` run in this session returned PASS for THIS content, which an agent id alone
+never proved. What it still cannot show is that the review was *competent* — a lenient reviewer emits
+PASS on a hollow ticket, and a reviewer handed a truthful hash can emit the token having barely read
+the payload. Erez's card-showing mint-approval is the backstop.
 
 ## Step 8 — Apply, verify, and record the event
 
-Issue the Notion call. The hook matches the pass, consumes the entry, and approves — no second
-prompt. Then:
+Issue the Notion call. The hook matches the pass on its hash, verifies the reviewer's token, consumes
+the pass, and approves — no second prompt. Then:
 - Confirm the write landed: re-fetch and check the key properties are what was requested (a `select`
   set at create time can silently not save — see `hooks/refs/notion.md`).
-- Confirm the pass entry was consumed. A still-live `*.json` pass entry for this target after a
-  successful write is a FAIL, not a pass — retire it and investigate.
+- Confirm the pass was consumed: its file is now named `*.consumed.<ts>`. A still-live `*.json` pass
+  for this hash after a successful write is a FAIL, not a pass — retire it and investigate.
 - Do NOT write the events log yourself for an ordinary filing. The hook already appends `approve`,
   `block` and `consume-failed` events to `~/.claude-staging/ticket-gate-events.jsonl` from inside the
   hook process, where the `Write` allow-list does not apply. A skill-side append to that path is
@@ -237,9 +339,11 @@ routine. Aggregate counts and a re-evaluate bar at `/wrap` are piece 3.
 
 ## Step 9 — Recovery
 
-- A consumed entry is gone — re-mint (re-prompting Erez, re-showing the card) and retry the one call.
-- If the payload changed after the record was written, the hash will not match — re-review rather
-  than forcing it.
+- A consumed pass is gone — re-mint (re-prompting Erez, re-showing the card) and retry the one call.
+  The reviewer's token is still valid as long as the payload is byte-identical, so this needs no
+  re-review.
+- If the payload changed after the record was written, the hash will not match — re-hash AND re-review
+  rather than forcing it. Re-minting alone cannot help: the new hash has no reviewer token behind it.
 - If NO pass ever matches and the payload is unchanged, suspect a projection drift between this skill
   and the hook header. Do not paper over it with break-glass: fix the mismatch via `/vet-code`.
 - Break-glass (`CLAUDE_CONFIG_UNLOCK=1`, or the `.config-unlock` sentinel + reaper token) skips the
