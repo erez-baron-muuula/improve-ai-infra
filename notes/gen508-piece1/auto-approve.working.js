@@ -211,10 +211,10 @@ const PROTECTED_FILES = new Set([
   'c:\\users\\erez\\.claude\\claude.md',
   'c:\\users\\erez\\.claude\\hooks\\auto-approve.js',
   'c:\\users\\erez\\.claude\\scripts\\notion-ticket-lookup.ps1',
-  // GEN-508: the ONLY permitted route for a raw Notion REST write. Its bytes are pinned in this
-  // file (REST_SCRIPT_SHA256), so an edit here would also break every gated REST write until the
-  // pin is updated in the same change.
-  'c:\\users\\erez\\.claude\\scripts\\notion-rest-write.ps1',
+  // GEN-508 piece 2 adds notion-rest-write.ps1 here, together with the REST arm that pins its bytes.
+  // It is NOT listed while that arm is unwired: protecting a path this hook does not yet depend on
+  // would buy nothing and would block the script's own creation, since PROTECTED_FILES is matched on
+  // the path whether or not the file exists.
 ]);
 const BLOCK_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Break-glass override tokens. These are the SOLE durable home for the override
@@ -2231,10 +2231,34 @@ function ticketScope(tool, ti) {
 }
 
 // ============================================================================
-// ---- §4.5: the raw REST/curl arm -------------------------------------------
+// ---- §4.5: the raw REST/curl arm -- BUILT, NOT WIRED (piece 2) -------------
 // ============================================================================
-// Erez decided on 2026-08-04 to cover this surface in piece 1 rather than defer it: raw REST is ~15%
-// of Notion write traffic and carries the ONLY destructive operations in the surface.
+// *** NOT WIRED: nothing in this hook reaches this arm. Do not reconnect it without the three fixes
+// *** listed below. It is kept in place so piece 2 is a reconnection rather than a rebuild.
+//
+// Erez decided on 2026-08-04 to cover this surface in piece 1, then on 2026-08-05 to install the MCP
+// surface first and defer this one. The reason for deferring is not just cost: shipping this arm as
+// built would REFUSE every raw REST write with no working escape, because the pinned script is not on
+// disk (so restScriptPinOk() fails for all of them) and listing its path in PROTECTED_FILES blocked
+// creating it. That is worse than the pre-install state, in which the surface is simply unchecked.
+//
+// BEFORE RECONNECTING, three things must be true. The first is a live fail-open, not a nicety:
+//   1  restJsonKeys STOPS COLLECTING at TN_MAX_DEPTH / TN_MAX_NODES and returns silently, so a
+//      destructive key nested deeper than 12 levels is invisible to clause 4 of restIsGen58Exempt and
+//      the write is exempted. The MCP walk calls bust() and hard-blocks on the same overflow; this
+//      side must do the same -- a truncated scan is not evidence of a clean body.
+//   2  /vet-ticket must document this surface -- the canonical invocation, the --ticket-hash-shell
+//      step, and the notion-rest record. It currently tells the reader REST is out of scope entirely.
+//   3  The pinned script must be installed AND its path re-added to PROTECTED_FILES, in that order.
+//
+// THE THREE ATTACHMENT POINTS removed for piece 1a, so reconnection is mechanical: the isShell branch
+// in enforceTicketVetting, the --ticket-hash-shell dispatch under `main`, and the -shell mode of
+// isSafeTicketHash. Everything in this section is otherwise unchanged and already reviewed.
+//
+// Raw REST is ~15% of Notion write traffic and carries destructive operations. It is NOT the only
+// destructive surface, and an earlier version of this comment claimed it was: the MCP arm's move-out
+// (which drops every database property), `replace_content`, and `allow_deleting_content` are all
+// destructive, and all three ARE gated by piece 1a.
 //
 // WHY THIS IS NOT A COMMAND PARSER, which is the single most important comment in this section.
 // FIVE successive review rounds each found a DIFFERENT way a body reached Notion that the record's
@@ -2855,15 +2879,16 @@ function enforceTicketVetting(tool, input) {
   // other tool call in the session.
   const isMcp = (tool === NOTION_CREATE_TOOL || tool === NOTION_UPDATE_TOOL ||
                  tool === NOTION_DUPLICATE_TOOL || tool === NOTION_MOVE_TOOL);
-  const isShell = SHELL_TOOLS.has(tool);
-  if (!isMcp && !isShell) return;
+  // PIECE 1a SCOPE: the MCP surface ONLY. The raw REST/curl arm (§4.5) is built but DELIBERATELY NOT
+  // WIRED -- shell tools are not in scope here, which makes ticketShellScope unreachable from this
+  // hook. Read the NOT WIRED banner above §4.5 before reconnecting it; two of its findings are open.
+  if (!isMcp) return;
   if (configUnlocked()) return;                 // break-glass: skip the gate entirely
 
   const ti = input && input.tool_input;
   let sc;
   try {
-    sc = isMcp ? ticketScope(tool, ti)
-               : ticketShellScope(ti && ti.command, input && input.cwd);
+    sc = ticketScope(tool, ti);
   } catch (e) {
     // A throw in our own scoping is NOT a reason to let a Notion write through. Under
     // bypassPermissions returning here would be a SILENT APPROVE of an unreviewed write, not a
@@ -3023,16 +3048,15 @@ function ticketHashShellCli(argv) {
 // printing a hash of it is the entire blast radius that remains.
 function isSafeTicketHash(command) {
   if (typeof command !== 'string' || /[\r\n]/.test(command)) return false;
+  // PIECE 1a: `--ticket-hash` on a `.json` payload ONLY. `--ticket-hash-shell` is deliberately NOT
+  // allow-listed while the REST arm is unwired -- it would hand back a hash binding a record to a
+  // surface this hook does not gate, which is the "a record exists for a write nothing checked" shape
+  // the gate exists to refuse. The literal `--ticket-hash` cannot match `--ticket-hash-shell`,
+  // because the `\s+` after it requires whitespace where that form has a hyphen.
   const m = command.trim().match(
-    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-hash(-shell)?\s+"([^"<>|&;`$]+\.(?:json|txt))"$/i
+    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-hash\s+"([^"<>|&;`$]+\.json)"$/i
   );
   if (!m) return false;
-  // --ticket-hash takes a .json payload; --ticket-hash-shell takes a .txt command file. Keeping the
-  // pairing strict means neither mode can be handed the other's file shape by accident.
-  const isShellMode = !!m[2];
-  const argExt = m[3].toLowerCase().endsWith('.json') ? 'json' : 'txt';
-  if (isShellMode && argExt !== 'txt') return false;
-  if (!isShellMode && argExt !== 'json') return false;
   return m[1].replace(/\//g, '\\').toLowerCase() === String(__filename).replace(/\//g, '\\').toLowerCase();
 }
 
@@ -3227,7 +3251,9 @@ function redirectNudgeContext(input, tool, cmd) {
 // process.exit(), so nothing below runs in those modes. Unreachable in normal PreToolUse operation,
 // where argv carries no flags at all.
 if (process.argv.indexOf('--ticket-hash') !== -1) ticketHashCli(process.argv);
-if (process.argv.indexOf('--ticket-hash-shell') !== -1) ticketHashShellCli(process.argv);
+// PIECE 1a: `--ticket-hash-shell` is NOT dispatched -- the REST arm it serves is unwired (see the NOT
+// WIRED banner above §4.5). ticketHashShellCli stays defined so piece 2 is a reconnection rather than
+// a rebuild; with no dispatch here it is unreachable, and the flag is no longer allow-listed either.
 
 let raw = '';
 process.stdin.setEncoding('utf8');
