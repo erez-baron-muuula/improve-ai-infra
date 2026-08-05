@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-08-05 (3) - GEN-508 second code review: Opus tier was 529-down for five attempts so a lower-tier panel ran first, then Erez set the re-run to Opus 5 explicitly; it caught two defects inside the first round's own fixes (a break-glass-only lockout loop and a moved crash site) plus a duplicate-page silent approve; 5 fixed, suite 27 -> 38, GEN-58 class D logged, 8 open of which 2 are Erez's call; nothing installed <!-- toc-session:1f35b63a-78f2-43e3-8dfd-21793f22dcc1 -->
 - 2026-08-05 (2) — GEN-508's first code-review pass: four skill/hook format mismatches that would have blocked every ticket write, found and fixed; Erez narrowed the piece to the Notion MCP surface and the raw-REST arm was unwired; the test suite split in two and made runnable for the first time. Nothing installed. <!-- toc-session:48087e06-5ca4-4eb5-a621-c38e6543febb -->
 - 2026-08-05 — GEN-641 shipped end-to-end (three pass-gates now refuse an unreadable gated command instead of silently approving it; 11,213-command real-corpus live-fire, 203 decisions changed, 2 false fires signed off; pass consumed, proving the gate worked on its own fix); GEN-576 closed out and Erez's ticket-status taxonomy landed on 08-04; a shared-helper refactor recommendation withdrawn after Erez asked why the code was that way (GEN-58 Class D); filed GEN-645/650/651/652/653 <!-- toc-session:268f3c56-7931-4e01-be37-bd9f507e72d9 -->
 - 2026-08-04 (3) — GEN-508 piece 1: Erez chose to cover raw REST/curl writes, then to replace the parse-the-command mechanism after five `/check` rounds found five instances of one fail-open class; v8 (an anchored invocation of one pinned project-owned script) designed, measured over 1,247 real commands and reviewed in three more rounds — then applied to the design doc, the ticket handoff rewritten, and the hook build reconstructed (48 assertions passing) and re-anchored after a concurrent session changed the live hook mid-session. Nothing installed. <!-- toc-session:9320ec4f-6c26-472f-bdbe-95b5332bc717 -->
@@ -189,6 +190,143 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-08-05 (3) — GEN-508 second code review: two cold panels, and two defects found inside the first round's own fixes
+<!-- session:1f35b63a-78f2-43e3-8dfd-21793f22dcc1 -->
+
+Erez asked for the second independent code review of GEN-508 piece 1a (`/vet-code` Step 3 Pass B). It ran
+twice, on two model tiers, and the second run caught defects the first run had *introduced*. Nothing was
+installed; the live hook is untouched. Full findings with evidence live in
+`notes/gen508-piece1/README.md` — this entry records the shape, the decisions and what is still open.
+
+### Model tier: the procedure's requirement could not be met, then Erez set it explicitly
+
+`/vet-code` Step 3 requires Pass B pinned to the strongest available model. **Opus-pinned sub-agents
+returned 529 Overloaded on five consecutive attempts spanning the whole early session** (3 concurrent, then
+1, then 1 — a single-agent probe confirmed it was tier capacity, not concurrency; a `sonnet` probe returned
+normally). Rather than stall, the panel ran one tier down and was flagged as **not** discharging Step 3.
+
+Erez then directed: *"fix the confirmed defects now, then re-run the review on this model, and not the
+highest."* So round two ran on **Opus 5**, deliberately not Fable 5. Per `notes/effort-model-reference.md`
+the two are within ~0.5 pt on coding at half the cost, so this is a defensible reading of "strongest
+available" — recorded as **Erez's call on the record, not the skill's default**.
+
+**Dead end, do not repeat:** retrying a 529'd tier immediately. Five attempts produced nothing. The move
+that worked was to run the cheaper tier for breadth and re-run the strong tier later.
+
+### Panel shape
+
+Three cold `check-reviewer` sub-agents per round, each given only the diff, the working file, and the goal
+quoted verbatim — with an explicit prohibition on reading anything else in `notes/gen508-piece1/`, because
+the README and design doc carry the first `/code-review`'s conclusions and would have destroyed the
+independence. Lenses: scope fail-open; record forgery/replay/crash; premises + new attack surface. Agent
+ids and their sidecar-recorded model tiers are tabulated in the README for the Step 1b/5 evidence record.
+
+**The tier difference was not marginal.** The Opus panel produced nine findings the lower tier missed
+entirely, *and* caught two defects in the lower-tier round's fixes. Direct evidence for Step 3's tier
+requirement — worth remembering next time capacity pressure makes a substitution look acceptable.
+
+### Fixed and verified (5 defects, suite 27 -> 38 assertions, all passing)
+
+Round one:
+- **`findPassInDir` failed OPEN on a pass file containing the literal `null`.** `null` is valid JSON, so the
+  reader's own try/catch never fired and `pass.expires` threw uncaught — a non-2 exit, which is not a
+  refusal, so the gated write proceeded and would keep proceeding until the file was deleted by hand.
+  Reproduced live (exit 1, no refusal), fixed, re-verified (exit 2 restored). **This is PRE-EXISTING live
+  code**, shared with the staging, vetting and check-due pass dirs, so the fail-open is live in three
+  ALREADY-INSTALLED gates — including the one guarding this hook's own code. The fix reaches the live hook
+  only when piece 1a installs; a sooner fix needs its own `/vet-code`.
+- The stale wiring comment claiming the gate covers "the four MCP write tools AND raw REST/curl" (REST is
+  unwired in piece 1a, and that comment is what whoever wires piece 2 would read).
+
+Round two — **both of these were defects in round one's own hash re-assert**:
+- Written as a bare `rec.contentHash !== sc.hash`, it was *stricter* than the matcher it re-asserted
+  (`ticketRecordMatches` trims and lower-cases). Since `--ticket-hash` prints the digest with a trailing
+  newline, a record carrying it matched the finder then failed the re-assert as `bad-record`, whose remedy
+  text says re-run `/vet-ticket` — which regenerates an identical record. **A closed lockout loop escapable
+  only by break-glass**, on the gate whose whole point is being unroutable-around.
+- It was also the first dereference of `rec`, and `JSON.parse('null')` succeeds — so it moved a crash site
+  *earlier* than the null guard added one edit before. Now `if (!ticketRecordMatches(rec, sc.hash))`: same
+  predicate, null-safe, both defects closed by one call.
+- **The housekeeping exemption was not tool-scoped**, so `notion-duplicate-page` with
+  `{page_id, properties:{Status}}` returned `out` — and a duplicate spawns a live ticket, i.e. a create
+  reaching Notion with no record. Scoped to `update-page`, matching the GEN-58 carve-out below it that was
+  already scoped that way (which is what flagged this as an oversight rather than a decision).
+
+Diff went 6 hunks / 1,558 added to **7 hunks / 1,603 added, still 0 removed** — the new hunk is the only one
+touching pre-existing code and it is an insertion, not a rewrite.
+
+### Verified empirically (what a static reviewer structurally cannot do)
+
+Pass B has no shell, so these were run in the main session as real PreToolUse processes: the `null` crash
+repro before/after; a seven-case characterisation of the waive path; and a check of whether the pass
+directories are writable. **All four pass dirs (`passes`, `vetting-passes`, `check-passes`,
+`ticket-passes`) accept a Write or a shell write with no gate**, with a control (the protected hook file)
+correctly blocking — so the mitigation the design believed in (the dir being outside `~/.claude` buys a
+prompt) does not exist. Also confirmed `notion-schema-guard.js` really does gate the destructive
+`notion-update-data-source` operations GEN-508 leaves out, rather than taking that on faith.
+
+### Corrections made this session
+
+- **Over-graded severity, corrected:** cross-session waive reuse was first reported as CRITICAL on the
+  reasoning that a stale waive lets an unreviewed write through. Wrong — the record binds to the content
+  hash, so a stale waive can only clear a write of the exact content Erez waived; the harm is a duplicate,
+  not an unreviewed ticket. The genuinely severe finding in that area surfaced only on reading the skill
+  (below).
+- **Over-stated the `/vet-ticket` absence.** Erez asked what `/vet-ticket` even is — correctly, since it
+  does not exist yet: it is a NEW skill GEN-508 creates, the third sibling to `/vet-code` and `/vet-rule`,
+  working copy at `notes/gen508-piece1/vet-ticket-SKILL.md`. It was reported as an alarming discovery about
+  the machine's state when the README had always documented it as not-yet-installed. Real content is one
+  line for step 8: **the hook and the skill must install together**, because the hook's refusals name a
+  skill that would not be runnable. Also corrected an exhaustiveness slip: two escapes exist from a
+  hook-only install (break-glass, or hand-minting a record), not one.
+- **`/vet-ticket`'s claim that the mint write "prompts him" is false** — verified against the live hook: it
+  falls through, and this project's own measured record establishes a fall-through under
+  `bypassPermissions` is a silent approve. It appears in the skill's opening paragraph as the design's
+  justification AND in its waive section. **This is the third time the belief "this write will prompt Erez"
+  has been written into a GEN-508 artifact and found false** (design-converged.md retracted it once already
+  for a different write). Treat as a pattern to design against, not three typos.
+
+### GEN-58
+
+Logged as **class D** (designed/diagnosed on an unverified primitive), **new distinct element**, to Vol. 8;
+header 104x -> 105x; volume count 2 -> 3. Trigger was the fix-needing-a-fix. Root cause: a cold reviewer
+*described* `ticketRecordMatches` in passing, that description was recorded as fact without opening the
+function, and a guard was then written to agree with the description. Lesson: a reviewer's description of
+code reads as fact in a way its prescription does not; and for any guard re-asserting a check made
+elsewhere, reuse the original predicate by name rather than re-expressing it — a stricter re-expression
+fails closed into a lockout, a looser one fails open, and neither shows up in a green suite.
+
+### Still open — 8 items, 2 of them Erez's call
+
+Erez chose: **fix the four ordinary bugs, then re-review** — deferred to after a `/compact`, since the
+session was already long. His two decisions (not blocking the fixes):
+- Whether break-glass should be able to skip this gate session-wide with **no log entry at all** — both
+  Opus reviewers found this independently; it is the one branch that neither blocks, approves, nor logs,
+  and it is reachable by following a sibling gate's own printed remedy for an unrelated command.
+  Recommendation: drop it for this gate, matching `enforceStaging`, which deliberately has no global
+  break-glass because "a pass-MISS must stay unbreakable, since that is Erez's content approval".
+- How a waive should be bound to the moment he grants it, plus an `expires` ceiling in the hook (the skill
+  writes now+15min; the hook enforces no upper bound, so a far-future expiry is honoured indefinitely).
+
+The four ordinary bugs queued for next session: the verdict token being accepted from a reviewer's
+`thinking` block (and "last" meaning last-in-file, not last delivered message); `ticketSessionDir` yielding
+a wrong dir for a sub-agent transcript so legitimate records block; the GEN-58 carve-out never firing for
+real `update_content` payloads (they carry edits in `content_updates[]`, so **every edit to existing GEN-58
+log text hard-blocks** — demonstrated this session, as this very log write would have been refused — and the
+naive fix opens a wipe path because the emptiness check only reads root-level `new_str`, so it must
+recurse); and three comment-vs-code mismatches. Plus the design-level data-source finding: a create into a
+second or rotated Team-Tasks data source returns `out` and logs nothing, with `containerTeamTasks` computed
+and never read.
+
+### Deliberately not done
+
+No install and no `/vet-code` steps 4–8. No git commit or push (that is `/wrap`). The two proposed tickets
+— the live `null` crash across the three installed gates, and the unprotected pass directories — were
+**offered and not filed**, awaiting Erez's approval per the draft-first rule. The eight open findings were
+not fixed blind.
+
+---
+
 ## 2026-08-05 (2) — GEN-508 first `/code-review` run (14 findings): four skill/hook format mismatches that would have blocked every ticket write, found and fixed; Erez narrowed the piece to the MCP surface and the raw-REST arm was unwired; the test suite split in two and made runnable for the first time. Nothing installed.
 <!-- session:48087e06-5ca4-4eb5-a621-c38e6543febb -->
 
