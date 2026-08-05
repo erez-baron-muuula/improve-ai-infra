@@ -642,6 +642,16 @@ function findPassInDir(dir, matchFn, exclude) {
     if (exclude && exclude.includes(full)) continue;
     let pass;
     try { pass = JSON.parse(fs.readFileSync(full, 'utf8').replace(/^﻿/, '')); } catch (e) { continue; }
+    // GEN-508 second-review fix: `null` is valid JSON, so the parse above SUCCEEDS and leaves
+    // `pass === null`; `pass.expires` then throws a TypeError that nothing on this path catches. An
+    // uncaught throw here exits non-2, which is not a refusal -- the gated call proceeds, and keeps
+    // proceeding for every call this gate covers until the file is deleted by hand. Verified live
+    // before this fix (exit 1, no refusal on stderr) and after (refusal restored). `[]`, `0` and
+    // `false` never threw: they box or return undefined, so only `null` reaches the TypeError.
+    // This guard is the one line in this change that touches PRE-EXISTING code, deliberately: the
+    // same reader serves the staging, vetting and check-due pass dirs, so the fail-open was live in
+    // all three before GEN-508 added a fourth caller.
+    if (!pass || typeof pass !== 'object') continue;
     const exp = Date.parse(pass.expires || '');
     if (!exp || exp < now) continue;
     if (matchFn(pass)) return full;
@@ -2928,6 +2938,17 @@ function enforceTicketVetting(tool, input) {
     return blockTicketVetting({ target: sc.target, reason: 'bad-record', ids: sc.ids });
   }
 
+  // GEN-508 second-review fix: findTicketPassFile matched the hash against its OWN read of this file
+  // and then returned only the path, so every field trusted below comes from the SECOND read above.
+  // Re-assert the binding here: without it, a file rewritten between the two reads is trusted on
+  // fields that were never matched against this write's hash. On the PASS branch ticketTokenVerdict
+  // re-checks sc.hash against the reviewer's token and largely closes this; on the WAIVED branch
+  // nothing did, which is exactly where a mismatch is cheapest to exploit.
+  if (rec.contentHash !== sc.hash) {
+    logTicketGateEvent({ event: 'block', tool: tool, surface: sc.surface, target: sc.target, reason: 'bad-record' });
+    return blockTicketVetting({ target: sc.target, reason: 'bad-record', ids: sc.ids });
+  }
+
   // Cheap pre-filter -- fail fast before opening a large transcript. TWO values, not three:
   // adjudication is no longer a hook input at all. These fields are NOT the authority; the token is.
   const waived = rec.waived === true;
@@ -3297,12 +3318,15 @@ process.stdin.on('end', () => {
   // through. Target-anchored (fail-safe), same as enforceVetting.
   enforceCheckDue(tool, input.tool_input, input.tool_input && input.tool_input.command, input.cwd);
 
-  // GEN-508: ticket-quality gate for Notion writes -- the four MCP write tools AND raw REST/curl.
+  // GEN-508: ticket-quality gate for Notion writes -- the four MCP write tools ONLY. Piece 1a: the
+  // raw REST/curl arm (§4.5) is present in this file but UNWIRED, so nothing here reaches it. An
+  // earlier version of this comment said "AND raw REST/curl", which described the pre-narrowing
+  // build and would have told whoever wires piece 2 that the work was already done.
   // Runs before the allow-list so an allow entry cannot bypass it; consumes a one-time review
   // record on match (approve), hard-blocks (exit 2) on an in-scope write with no usable record,
   // falls through otherwise. Takes the WHOLE envelope, not just tool_input: it needs
-  // `transcript_path` to verify the named reviewer's own sub-agent transcript, and `cwd` for the
-  // REST script-token scan.
+  // `transcript_path` to verify the named reviewer's own sub-agent transcript. (`cwd` is passed for
+  // the REST script-token scan, which piece 2 reconnects; under piece 1a it is unused.)
   enforceTicketVetting(tool, input);
 
   // Already allow-listed by settings (bare names) => no action, no log.

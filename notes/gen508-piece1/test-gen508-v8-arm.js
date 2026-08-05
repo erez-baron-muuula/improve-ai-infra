@@ -205,6 +205,36 @@ console.log('\n== D. the record path end to end ==');
   const rNested = callWith();
   check('a nested targets[] record does NOT match (the v7 skill shape)',
         blocked(rNested, 'no usable ticket review record'), 'code=' + rNested.code + ' err=' + rNested.err.slice(0, 160));
+
+  // Regression guard for the fail-open the SECOND code review found (2026-08-05). A pass file whose
+  // entire content is the literal `null` parses without throwing -- `null` IS valid JSON -- so the
+  // reader's own try/catch never fires, and `pass.expires` then threw a TypeError that nothing on
+  // that path caught. An uncaught throw exits non-2, which is NOT a refusal: the gated write went
+  // through, and kept going through on every gated call until the file was deleted by hand.
+  // Confirmed live before the fix (exit 1, no refusal on stderr) and after (refusal restored).
+  //
+  // The five values below are every JSON scalar/shape that survives JSON.parse but is not a usable
+  // record. Only `null` ever threw; the rest are here so a future "simplify" of the guard cannot
+  // narrow it back to a null-only check and silently reopen the others.
+  //
+  // This guard is worth more than its own gate: the reader it protects (findPassInDir) is shared with
+  // the staging, vetting and check-due pass dirs, so the same fail-open was live in three ALREADY
+  // INSTALLED gates -- including the one guarding this hook's own code.
+  for (const junk of ['null', '[]', '0', 'false', '"str"']) {
+    fs.writeFileSync(path.join(passDir, 'rec.json'), junk, 'utf8');
+    const rJunk = callWith();
+    check('a pass file containing ' + junk + ' refuses instead of crashing',
+          blocked(rJunk, 'no usable ticket review record'),
+          'code=' + rJunk.code + ' err=' + rJunk.err.slice(0, 120));
+  }
+  fs.rmSync(path.join(passDir, 'rec.json'), { force: true });
+
+  // NOT asserted, deliberately, so nobody reads this suite as covering it: the same review added a
+  // re-check that the matched record's contentHash still equals this write's hash after the SECOND
+  // read of the file (findTicketPassFile matches on its own read, then returns only a path). That
+  // branch is unreachable without a concurrent rewrite of the same filename between the two reads,
+  // so it cannot be driven from a single-process suite. It is defence-in-depth with no test behind
+  // it -- if a future change makes the two reads diverge by any means a test CAN reach, assert it.
 }
 
 console.log('\n== E. latency ==');
