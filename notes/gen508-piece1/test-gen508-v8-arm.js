@@ -205,6 +205,83 @@ console.log('\n== D. the record path end to end ==');
   const rNested = callWith();
   check('a nested targets[] record does NOT match (the v7 skill shape)',
         blocked(rNested, 'no usable ticket review record'), 'code=' + rNested.code + ' err=' + rNested.err.slice(0, 160));
+
+  // Regression guard for the fail-open the SECOND code review found (2026-08-05). A pass file whose
+  // entire content is the literal `null` parses without throwing -- `null` IS valid JSON -- so the
+  // reader's own try/catch never fires, and `pass.expires` then threw a TypeError that nothing on
+  // that path caught. An uncaught throw exits non-2, which is NOT a refusal: the gated write went
+  // through, and kept going through on every gated call until the file was deleted by hand.
+  // Confirmed live before the fix (exit 1, no refusal on stderr) and after (refusal restored).
+  //
+  // The five values below are every JSON scalar/shape that survives JSON.parse but is not a usable
+  // record. Only `null` ever threw; the rest are here so a future "simplify" of the guard cannot
+  // narrow it back to a null-only check and silently reopen the others.
+  //
+  // This guard is worth more than its own gate: the reader it protects (findPassInDir) is shared with
+  // the staging, vetting and check-due pass dirs, so the same fail-open was live in three ALREADY
+  // INSTALLED gates -- including the one guarding this hook's own code.
+  for (const junk of ['null', '[]', '0', 'false', '"str"']) {
+    fs.writeFileSync(path.join(passDir, 'rec.json'), junk, 'utf8');
+    const rJunk = callWith();
+    check('a pass file containing ' + junk + ' refuses instead of crashing',
+          blocked(rJunk, 'no usable ticket review record'),
+          'code=' + rJunk.code + ' err=' + rJunk.err.slice(0, 120));
+  }
+  fs.rmSync(path.join(passDir, 'rec.json'), { force: true });
+
+  // Regression guard for a LOCKOUT the second review's own first fix introduced. That fix re-asserted
+  // the hash after the record's second read using a bare `rec.contentHash !== sc.hash` -- stricter than
+  // ticketRecordMatches, which compares `.trim().toLowerCase()`. Since `--ticket-hash` prints the digest
+  // with a trailing newline, a skill that captures stdout without stripping produces exactly the record
+  // the trim exists to absorb: it matched the finder, then failed the re-assert as `bad-record`, whose
+  // remedy text says re-run /vet-ticket -- which regenerates an identical record. A closed loop whose
+  // only exit was break-glass. The re-assert now calls ticketRecordMatches, so it re-asserts the SAME
+  // predicate. This must APPROVE.
+  writeTranscript('PASS'); writeRecord({ contentHash: hash + '\n' });
+  const rTrailingNl = callWith();
+  check('a record whose contentHash has the CLI trailing newline still APPROVES (no lockout)',
+        rTrailingNl.code === 0 && rTrailingNl.out.indexOf('review record consumed') !== -1,
+        'code=' + rTrailingNl.code + ' err=' + rTrailingNl.err.slice(0, 160));
+
+  writeTranscript('PASS'); writeRecord({ contentHash: hash.toUpperCase() });
+  const rUpper = callWith();
+  check('an upper-case contentHash still APPROVES (matcher and re-assert agree)',
+        rUpper.code === 0 && rUpper.out.indexOf('review record consumed') !== -1,
+        'code=' + rUpper.code + ' err=' + rUpper.err.slice(0, 160));
+}
+
+console.log('\n== A2. the housekeeping exemption is TOOL-SCOPED ==');
+{
+  // Regression guard for a silent approve the second review found: the housekeeping exemption was not
+  // tool-scoped, so notion-duplicate-page with a property-edit-shaped payload returned 'out'. A
+  // duplicate SPAWNS A LIVE TICKET, so that is a create reaching Notion with no review record.
+  const hkShape = { page_id: PAGE, properties: { Status: 'Done' } };
+
+  const rDup = mcp('notion-duplicate-page', hkShape);
+  check('duplicate-page with a housekeeping-shaped payload is GATED, not exempt',
+        rDup.code === 2, 'code=' + rDup.code + ' err=' + rDup.err.slice(0, 160));
+
+  const rMove = mcp('notion-move-pages', hkShape);
+  check('move-pages with a housekeeping-shaped payload is GATED, not exempt',
+        rMove.code === 2, 'code=' + rMove.code + ' err=' + rMove.err.slice(0, 160));
+
+  const rCreate = mcp('notion-create-pages', hkShape);
+  check('create-pages with a housekeeping-shaped payload is GATED, not exempt',
+        rCreate.code === 2, 'code=' + rCreate.code + ' err=' + rCreate.err.slice(0, 160));
+
+  // The genuine housekeeping case must still fall through -- the scoping narrowed the exemption and
+  // must not have removed it. `update_properties` on Status is the case the exemption exists for.
+  const rKeep = mcp('notion-update-page',
+                    { page_id: PAGE, command: 'update_properties', properties: { Status: 'Done' } });
+  check('update-page housekeeping STILL falls through (exemption not lost)', fellThrough(rKeep),
+        'code=' + rKeep.code + ' err=' + rKeep.err.slice(0, 160));
+
+  // NOT asserted, deliberately, so nobody reads this suite as covering it: the same review added a
+  // re-check that the matched record's contentHash still equals this write's hash after the SECOND
+  // read of the file (findTicketPassFile matches on its own read, then returns only a path). That
+  // branch is unreachable without a concurrent rewrite of the same filename between the two reads,
+  // so it cannot be driven from a single-process suite. It is defence-in-depth with no test behind
+  // it -- if a future change makes the two reads diverge by any means a test CAN reach, assert it.
 }
 
 console.log('\n== E. latency ==');
