@@ -1,0 +1,793 @@
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-template.js =====
+// GEN-508 piece 1 v8: measure the ANCHORED CANONICAL TEMPLATE against the real raw-REST write corpus.
+// Re-detects writes with the SAME rule measure-rest-targets.js used (notion-schema-guard's
+// isNotionMutatingHttp), then reports, for every detected write command:
+//   - which HTTP client it uses
+//   - which single template requirement it FIRST fails (so the refusal profile is measured, not guessed)
+//   - the shape features that matter to the design (assignment prefix, pipe, redirect, multiline,
+//     literal-vs-interpolated URL id, body flag, absolute-vs-relative body path)
+// Tokens are masked in every printed sample.
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+const OUTDIR = __dirname;
+
+const files = [];
+(function walk(d, dep) {
+  if (dep > 8) return;
+  let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); }
+})(PROJ, 0);
+
+const mask = s => String(s)
+  .replace(/\b(ntn_|secret_)[A-Za-z0-9_-]+/g, '$1<REDACTED>')
+  .replace(/(Bearer\s+)(?!\$)[A-Za-z0-9_\-.]+/gi, '$1<REDACTED>');
+
+const seen = new Set();
+const cmds = [];
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const c = r && r.message && r.message.content;
+    if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      // --- notion-schema-guard's write rule, verbatim from measure-rest-targets.js ---
+      const explicitWrite = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i.test(cmd) || /-Method\s+['"]?(Put|Patch|Delete)\b/i.test(cmd);
+      const postish = /(-X|--request)\s*['"]?POST\b/i.test(cmd) || /-Method\s+['"]?Post\b/i.test(cmd);
+      const bodyish = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(cmd);
+      const isRead = /api\.notion\.com\/v1\/[^\s'"]*\/query/i.test(cmd) || /api\.notion\.com\/v1\/search/i.test(cmd);
+      if (!(explicitWrite || ((postish || bodyish) && !isRead))) continue;
+      cmds.push({ tool: String(b.name), cmd });
+    }
+  }
+}
+console.log(`raw-REST WRITE commands matched (same rule as Part 4a): ${cmds.length}`);
+
+// ---------------------------------------------------------------------------
+// THE CANDIDATE TEMPLATE (v8 §4.5). Anchored, whole-command, curl.exe only.
+//   curl.exe -q [-sS|-s|-k|-sk|-sSk] -X <METHOD> "<URL>" (-H "<HDR>")+ [--data-binary "@<ABS>"]
+// Slots:
+//   METHOD  POST|PATCH|PUT|DELETE
+//   URL     https://api.notion.com/v1/(pages|blocks|databases)/<32hex|uuid>[/children]
+//   HDR     Authorization: Bearer <varref>  |  Notion-Version: <yyyy-mm-dd>  |  Content-Type: application/json
+//   ABS     absolute path, no $ ` " '
+// ---------------------------------------------------------------------------
+const ID = '[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+const VARREF = '\\$(?:env:)?[A-Za-z_][A-Za-z0-9_]*';
+const ABS = '(?:[A-Za-z]:[\\\\/]|/)[^"\'`$\\r\\n]+';
+const HDR =
+  '(?:' +
+    '-H "Authorization: Bearer ' + VARREF + '"' + '|' +
+    '-H "Notion-Version: \\d{4}-\\d{2}-\\d{2}"' + '|' +
+    '-H "Content-Type: application/json"' +
+  ')';
+const TEMPLATE = new RegExp(
+  '^curl\\.exe -q(?: -(?:s|k|sS|sk|sSk))? -X (POST|PATCH|PUT|DELETE)' +
+  ' "(https://api\\.notion\\.com/v1/(?:pages|blocks|databases)/(?:' + ID + ')(?:/children)?)"' +
+  '(?: ' + HDR + '){1,3}' +
+  '(?: --data-binary "@(' + ABS + ')")?$'
+);
+
+// ---- first-failure classifier: WHY a real command misses the template ----
+function firstFailure(tool, cmd) {
+  if (TEMPLATE.test(cmd)) return null;
+  if (/[\r\n]/.test(cmd)) return 'multiline (newline or backtick continuation)';
+  if (/^\s*\$\w+\s*=/.test(cmd)) return 'assignment prefix ($x = curl ...)';
+  if (/(?:^|[^|])\|(?!\|)/.test(cmd)) return 'piped (| ...)';
+  if (/(?:^|\s)>>?\s*\S/.test(cmd)) return 'output redirect (> file)';
+  if (/(?:;|&&|\|\|)/.test(cmd)) return 'chained (; && ||)';
+  if (/\b(?:Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\b/i.test(cmd)) return 'PowerShell-native client (not admissible)';
+  if (/\b(?:node|python|py)\b\s+-(?:e|c)\b/.test(cmd)) return 'inline interpreter';
+  if (!/^\s*curl(\.exe)?\b/.test(cmd)) return 'does not start with the client token';
+  if (/^\s*curl\b(?!\.exe)/.test(cmd) && tool === 'PowerShell') return 'bare `curl` in PowerShell (alias for Invoke-WebRequest)';
+  if (!/(?:^|\s)-q(?:\s|$)/.test(cmd)) return 'no -q (ambient .curlrc not disabled)';
+  const urlm = /api\.notion\.com\/v1\/[^\s"'`]*/.exec(cmd);
+  if (urlm && /[$`]/.test(urlm[0])) return 'URL interpolated (variable in the URL, target unreadable)';
+  if (urlm && !new RegExp('^api\\.notion\\.com/v1/(?:pages|blocks|databases)/(?:' + ID + ')(?:/children)?$').test(urlm[0].replace(/^https?:\/\//, '').replace(/\?.*$/, '')))
+    return 'URL not one of the permitted endpoint shapes';
+  const bodym = /--data-binary\s+"@([^"]*)"/.exec(cmd);
+  if (bodym) {
+    if (/[$`]/.test(bodym[1])) return 'body path interpolated (@$var)';
+    if (!new RegExp('^(?:[A-Za-z]:[\\\\/]|/)').test(bodym[1])) return 'body path not absolute';
+  }
+  if (/(?:^|\s)(--data-raw|--data-ascii|--data-urlencode|--json|-d|--data)(?:\s|=)/.test(cmd)) return 'body flag other than --data-binary';
+  if (/(?:^|\s)(-K|--config|-F|--form|-T|--upload-file)\b/.test(cmd)) return 'file/config body flag not in the template';
+  return 'other token(s) outside the template';
+}
+
+const featureCount = {};
+const failCount = {};
+const clientCount = {};
+let matched = 0;
+const matchedSamples = [], failSamples = {};
+for (const { tool, cmd } of cmds) {
+  const client = /\bcurl\.exe\b/.test(cmd) ? 'curl.exe'
+    : /(?:^|\s)curl\b/.test(cmd) ? 'curl (bare)'
+    : /\b(Invoke-RestMethod|irm)\b/i.test(cmd) ? 'Invoke-RestMethod'
+    : /\b(Invoke-WebRequest|iwr)\b/i.test(cmd) ? 'Invoke-WebRequest'
+    : 'other';
+  clientCount[client] = (clientCount[client] || 0) + 1;
+  const feats = {
+    'multiline': /[\r\n]/.test(cmd),
+    'assignment prefix': /^\s*\$\w+\s*=/.test(cmd),
+    'piped': /(?:^|[^|])\|(?!\|)/.test(cmd),
+    'redirect': /(?:^|\s)>>?\s*\S/.test(cmd),
+    'chained': /(?:;|&&|\|\|)/.test(cmd),
+    'literal id in URL': new RegExp('api\\.notion\\.com/v1/[a-z_]+/(?:' + ID + ')').test(cmd),
+    '$ in URL': /api\.notion\.com\/v1\/[^\s"'`]*[$`]/.test(cmd),
+    'has -q': /(?:^|\s)-q(?:\s|$)/.test(cmd),
+    'uses --data-binary @file': /--data-binary\s+"?@/.test(cmd),
+    'body path interpolated': /--data-binary\s+"?@\$/.test(cmd),
+    'inline -d body': /(?:^|\s)(-d|--data|--data-raw)\s+['"]?\{/.test(cmd),
+  };
+  for (const [k, v] of Object.entries(feats)) if (v) featureCount[k] = (featureCount[k] || 0) + 1;
+  const f = firstFailure(tool, cmd);
+  if (f === null) { matched++; if (matchedSamples.length < 5) matchedSamples.push(mask(cmd)); }
+  else {
+    failCount[f] = (failCount[f] || 0) + 1;
+    if (!failSamples[f]) failSamples[f] = mask(cmd).slice(0, 300);
+  }
+}
+
+console.log(`\n=== client census ===`);
+for (const [k, v] of Object.entries(clientCount).sort((a, b) => b[1] - a[1])) console.log(`  ${String(v).padStart(4)}  ${k}`);
+console.log(`\n=== shape features (of ${cmds.length}) ===`);
+for (const [k, v] of Object.entries(featureCount).sort((a, b) => b[1] - a[1])) console.log(`  ${String(v).padStart(4)}  ${k}`);
+console.log(`\n=== TEMPLATE match: ${matched} / ${cmds.length} ===`);
+console.log(`=== first-failure reasons (why the other ${cmds.length - matched} refuse) ===`);
+for (const [k, v] of Object.entries(failCount).sort((a, b) => b[1] - a[1])) console.log(`  ${String(v).padStart(4)}  ${k}`);
+console.log(`\n=== one masked sample per reason ===`);
+for (const [k, s] of Object.entries(failSamples)) console.log(`\n[${k}]\n  ${s}`);
+if (matchedSamples.length) { console.log(`\n=== matched samples ===`); matchedSamples.forEach(s => console.log('  ' + s)); }
+
+fs.writeFileSync(path.join(OUTDIR, 'rest-write-commands.txt'), cmds.map(c => c.tool + '\t' + mask(c.cmd).replace(/\r?\n/g, '\\n')).join('\n') + '\n');
+console.log(`\nwrote ${cmds.length} masked commands to rest-write-commands.txt`);
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-idiom.js =====
+// Follow-up census on the same 236 raw-REST write commands: what does the surrounding
+// multi-statement idiom actually DO? Decides whether a one-line canonical invocation is
+// reachable at all, and what a caller would have to move out of the command.
+const fs = require('fs');
+const path = require('path');
+const lines = fs.readFileSync(path.join(__dirname, 'rest-write-commands.txt'), 'utf8').split(/\r?\n/).filter(Boolean);
+const cmds = lines.map(l => { const i = l.indexOf('\t'); return { tool: l.slice(0, i), cmd: l.slice(i + 1).replace(/\\n/g, '\n') }; });
+console.log('commands: ' + cmds.length);
+
+const f = {
+  'token from PasswordVault in-command': c => /PasswordVault/i.test(c),
+  'token from a file/Get-Content in-command': c => /\$token\s*=\s*(?:\(?\s*Get-Content|Import-Csv)/i.test(c),
+  'token from env var': c => /\$env:[A-Za-z_]*(TOKEN|NOTION)/i.test(c),
+  'body file WRITTEN in the same command': c => /(Set-Content|Out-File|\[IO\.File\]::WriteAllText|printf|cat\s*>|>\s*[^\s|]*\.json)/i.test(c),
+  'body file path is a variable': c => /--data-binary\s+"?@\$/.test(c),
+  'body inline (literal JSON after -d/--data*)': c => /(--data(-raw|-binary|-ascii)?|-d)\s+['"]?\{/.test(c),
+  'cleanup (Remove-Item / rm) in the same command': c => /(Remove-Item|(^|\s)rm\s)/i.test(c),
+  'response parsed in the same command (ConvertFrom-Json etc.)': c => /(ConvertFrom-Json|jq\b|python -c|node -e)/i.test(c),
+  'single-line': c => !/[\r\n]/.test(c),
+  'PowerShell tool': (c, t) => t === 'PowerShell',
+  'Bash tool': (c, t) => t === 'Bash',
+};
+const counts = {};
+for (const { tool, cmd } of cmds) for (const [k, fn] of Object.entries(f)) if (fn(cmd, tool)) counts[k] = (counts[k] || 0) + 1;
+for (const [k, v] of Object.entries(counts).sort((a, b) => b[1] - a[1])) console.log('  ' + String(v).padStart(4) + '  ' + k);
+
+console.log('\n=== every single-line command, in full ===');
+for (const { tool, cmd } of cmds) if (!/[\r\n]/.test(cmd)) console.log('\n[' + tool + '] ' + cmd.slice(0, 400));
+
+console.log('\n=== statement-count distribution (newline-separated, non-empty) ===');
+const dist = {};
+for (const { cmd } of cmds) { const n = cmd.split(/\r?\n/).filter(s => s.trim()).length; const b = n <= 1 ? '1' : n <= 3 ? '2-3' : n <= 6 ? '4-6' : n <= 10 ? '7-10' : '11+'; dist[b] = (dist[b] || 0) + 1; }
+for (const [k, v] of Object.entries(dist).sort()) console.log('  ' + String(v).padStart(4) + '  ' + k + ' lines');
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-detector.js =====
+// GEN-508 v8: price the DETECTOR widenings on the real corpus.
+//   D0 = notion-schema-guard's live rule (client-name gate ON, body-flag inference ON)
+//   D1 = D0 with the client-name gate DROPPED entirely (v7 widening 1 as written)
+//   D1' = D0 with the gate dropped ONLY for explicit-write-verb / native-call signals
+//         (body-flag inference kept only when a recognised client IS named)
+//   D3 = read allow-list applied only if EVERY api.notion.com URL is a read path
+// Reports: extra commands each widening flags, and how many of those look like NON-writes
+// (the false-refusal class the client-name gate was implicitly guarding).
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+
+const files = [];
+(function walk(d, dep) {
+  if (dep > 8) return;
+  let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); }
+})(PROJ, 0);
+
+const NOTION_HOST_RE = /api\.notion\.com/i;
+const HTTP_CLIENT_RE = /\b(curl|curl\.exe|invoke-restmethod|invoke-webrequest|iwr|irm|wget)\b/i;
+const WRITE_METHOD_RE = /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i;
+const PS_METHOD_RE = /-Method\s+['"]?(Put|Post|Patch|Delete)\b/i;
+const BODY_FLAG_RE = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const EXPLICIT_WRITE_VERB_RE = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i;
+const PS_WRITE_VERB_RE = /-Method\s+['"]?(Put|Patch|Delete)\b/i;
+const NATIVE_1 = /method\s*:\s*['"](POST|PUT|PATCH|DELETE)/i;
+const NATIVE_2 = /\.(post|put|patch|delete)\s*\(/i;
+
+function firstPath(command) {
+  const m = command.match(/https?:\/\/api\.notion\.com(\/[^\s'"]*)?/i);
+  return (m && m[1]) ? m[1].split(/[?#]/)[0] : '';
+}
+function allPaths(command) {
+  const out = []; const re = /https?:\/\/api\.notion\.com(\/[^\s'"`]*)?/gi; let m;
+  while ((m = re.exec(command)) !== null) out.push((m[1] || '').split(/[?#]/)[0]);
+  return out;
+}
+const isReadPath = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+
+function D0(c) {
+  if (!NOTION_HOST_RE.test(c)) return false;
+  if (!HTTP_CLIENT_RE.test(c)) return false;
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  if (!ew && !pb) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+function D1(c) {
+  if (!NOTION_HOST_RE.test(c)) return false;
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  if (!ew && !pb) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+function D1p(c) {                       // gate dropped only for hard write signals
+  if (!NOTION_HOST_RE.test(c)) return false;
+  const named = HTTP_CLIENT_RE.test(c);
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  const signal = ew || (named && pb);
+  if (!signal) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+function D3(c) {                        // D1p + every-URL read test
+  if (!NOTION_HOST_RE.test(c)) return false;
+  const named = HTTP_CLIENT_RE.test(c);
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  const signal = ew || (named && pb);
+  if (!signal) return false;
+  const ps = allPaths(c);
+  if (!ew && ps.length > 0 && ps.every(isReadPath)) return false;
+  return true;
+}
+
+const seen = new Set();
+let all = 0;
+const res = { D0: 0, D1: 0, D1p: 0, D3: 0 };
+const extraD1 = [], extraD1p = [], extraD3 = [];
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const c = r && r.message && r.message.content;
+    if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      all++;
+      const d0 = D0(cmd), d1 = D1(cmd), d1p = D1p(cmd), d3 = D3(cmd);
+      if (d0) res.D0++; if (d1) res.D1++; if (d1p) res.D1p++; if (d3) res.D3++;
+      if (d1 && !d0 && extraD1.length < 12) extraD1.push(cmd);
+      if (d1p && !d0 && extraD1p.length < 12) extraD1p.push(cmd);
+      if (d3 && !d1p && extraD3.length < 12) extraD3.push(cmd);
+    }
+  }
+}
+const mask = s => String(s).replace(/\b(ntn_|secret_)[A-Za-z0-9_-]+/g, '$1<REDACTED>').replace(/(Bearer\s+)(?!\$)[A-Za-z0-9_\-.]+/gi, '$1<REDACTED>').replace(/\r?\n/g, ' \\n ');
+console.log('distinct shell commands mentioning api.notion.com: ' + all);
+console.log('  D0  (live schema-guard rule)                     : ' + res.D0);
+console.log('  D1  (client-name gate dropped entirely)           : ' + res.D1 + '   (+' + (res.D1 - res.D0) + ')');
+console.log("  D1' (gate dropped for hard write signals only)    : " + res.D1p + '   (+' + (res.D1p - res.D0) + ')');
+console.log('  D3  (D1\' + every-URL read test)                   : ' + res.D3 + '   (+' + (res.D3 - res.D1p) + ' over D1\')');
+console.log('\n--- commands D1 newly flags that D0 did not (up to 12, masked, 260 chars) ---');
+extraD1.forEach((c, i) => console.log('\n[' + (i + 1) + '] ' + mask(c).slice(0, 260)));
+console.log("\n--- commands D1' newly flags that D0 did not ---");
+extraD1p.forEach((c, i) => console.log('\n[' + (i + 1) + '] ' + mask(c).slice(0, 260)));
+console.log("\n--- commands D3 newly flags that D1' did not ---");
+extraD3.forEach((c, i) => console.log('\n[' + (i + 1) + '] ' + mask(c).slice(0, 260)));
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/verify-d3.js =====
+// Verify the +11 commands widening 3 newly flags really do perform a Notion WRITE
+// (not a read misclassified the other way). Prints, per command, every api.notion.com
+// URL path and every method/body flag found, masked.
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+const files = [];
+(function walk(d, dep) { if (dep > 8) return; let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); } })(PROJ, 0);
+
+const HTTP_CLIENT_RE = /\b(curl|curl\.exe|invoke-restmethod|invoke-webrequest|iwr|irm|wget)\b/i;
+const WRITE_METHOD_RE = /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i;
+const PS_METHOD_RE = /-Method\s+['"]?(Put|Post|Patch|Delete)\b/i;
+const BODY_FLAG_RE = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const EW = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i, PSEW = /-Method\s+['"]?(Put|Patch|Delete)\b/i;
+const isRead = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+const firstPath = c => { const m = c.match(/https?:\/\/api\.notion\.com(\/[^\s'"]*)?/i); return (m && m[1]) ? m[1].split(/[?#]/)[0] : ''; };
+const allPaths = c => { const o = []; const re = /https?:\/\/api\.notion\.com(\/[^\s'"`]*)?/gi; let m; while ((m = re.exec(c)) !== null) o.push((m[1] || '').split(/[?#]/)[0]); return o; };
+const mask = s => String(s).replace(/\b(ntn_|secret_)[A-Za-z0-9_-]+/g, '$1<REDACTED>').replace(/(Bearer\s+)(?!\$)[A-Za-z0-9_\-.]+/gi, '$1<REDACTED>');
+
+const seen = new Set(); let n = 0;
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue; let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const c = r && r.message && r.message.content; if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      const named = HTTP_CLIENT_RE.test(cmd);
+      const ew = EW.test(cmd) || PSEW.test(cmd);
+      const pb = WRITE_METHOD_RE.test(cmd) || PS_METHOD_RE.test(cmd) || BODY_FLAG_RE.test(cmd);
+      const signal = ew || (named && pb);
+      if (!signal) continue;
+      const d0 = !(!ew && isRead(firstPath(cmd)));                 // live rule verdict (given signal+named)
+      const ps = allPaths(cmd);
+      const d3 = !(!ew && ps.length > 0 && ps.every(isRead));
+      if (!(d3 && !(d0 && named))) continue;                        // newly flagged only
+      n++;
+      console.log('\n===== [' + n + '] file=' + path.basename(f) + ' =====');
+      console.log('  URL paths: ' + JSON.stringify(ps));
+      console.log('  method/body flags: ' + JSON.stringify((mask(cmd).match(/(-X|--request)\s*['"]?\w+|-Method\s+['"]?\w+|(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/gi) || []).map(s => s.trim())));
+      // show the lines that contain a non-read URL
+      const lines = mask(cmd).split(/\r?\n/);
+      lines.forEach(L => { if (/api\.notion\.com/.test(L) && !isRead((L.match(/api\.notion\.com(\/[^\s'"`]*)?/i) || [, ''])[1].split(/[?#]/)[0])) console.log('    > ' + L.trim().slice(0, 220)); });
+    }
+  }
+}
+console.log('\nnewly flagged total: ' + n);
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-readwrite.js =====
+// How many of the raw-REST WRITE commands also perform a Notion READ in the same command,
+// and does the write appear to DEPEND on that read (a variable set from the read's output
+// used in the write's URL or body)? Decides whether v8's "write must be its own one-line
+// invocation" reintroduces a read->write staleness window that today's idiom does not have.
+const fs = require('fs');
+const path = require('path');
+const lines = fs.readFileSync(path.join(__dirname, 'rest-write-commands.txt'), 'utf8').split(/\r?\n/).filter(Boolean);
+const cmds = lines.map(l => { const i = l.indexOf('\t'); return { tool: l.slice(0, i), cmd: l.slice(i + 1).replace(/\\n/g, '\n') }; });
+
+const isReadPath = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+let both = 0, dependent = 0, readOnlyGet = 0;
+const samples = [];
+for (const { cmd } of cmds) {
+  // every api.notion.com call site in the command, with its own line
+  const callLines = cmd.split(/\r?\n/).filter(L => /api\.notion\.com/.test(L));
+  let hasRead = false, hasWrite = false;
+  for (const L of callLines) {
+    const m = L.match(/api\.notion\.com(\/[^\s'"`)]*)?/i);
+    const p = m && m[1] ? m[1].split(/[?#]/)[0] : '';
+    const w = /(-X|--request)\s*['"]?(PUT|PATCH|POST|DELETE)\b/i.test(L) || /-Method\s+['"]?(Put|Patch|Post|Delete)\b/i.test(L)
+      || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(L);
+    if (w && !isReadPath(p)) hasWrite = true;
+    else hasRead = true;
+    if (!w) readOnlyGet = readOnlyGet; // no-op, kept for clarity
+  }
+  if (hasRead && hasWrite) {
+    both++;
+    // dependence heuristic: a variable assigned from a read call site is referenced on a write call site
+    const readVars = new Set();
+    for (const L of cmd.split(/\r?\n/)) {
+      if (!/api\.notion\.com/.test(L)) continue;
+      const m = L.match(/api\.notion\.com(\/[^\s'"`)]*)?/i);
+      const p = m && m[1] ? m[1].split(/[?#]/)[0] : '';
+      const w = /(-X|--request)\s*['"]?(PUT|PATCH|POST|DELETE)\b/i.test(L) || /-Method\s+['"]?(Put|Patch|Post|Delete)\b/i.test(L);
+      if (w && !isReadPath(p)) continue;
+      const a = L.match(/^\s*\$(\w+)\s*=/); if (a) readVars.add(a[1]);
+      const b = L.match(/-o\s+"?\$?(\w+)/); if (b) readVars.add(b[1]);
+    }
+    // any later variable derived from those, referenced on a write line
+    let dep = false;
+    for (const L of cmd.split(/\r?\n/)) {
+      const m = L.match(/api\.notion\.com(\/[^\s'"`)]*)?/i);
+      if (!m) continue;
+      const p = m[1] ? m[1].split(/[?#]/)[0] : '';
+      const w = /(-X|--request)\s*['"]?(PUT|PATCH|POST|DELETE)\b/i.test(L) || /-Method\s+['"]?(Put|Patch|Post|Delete)\b/i.test(L)
+        || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(L);
+      if (!(w && !isReadPath(p))) continue;
+      for (const v of readVars) if (new RegExp('\\$\\(?\\$?' + v + '\\b').test(L)) dep = true;
+    }
+    if (dep) { dependent++; if (samples.length < 4) samples.push(cmd.slice(0, 700)); }
+  }
+}
+console.log('write commands total                        : ' + cmds.length);
+console.log('  ...that also contain a Notion READ call   : ' + both);
+console.log('  ...where the write TEXTUALLY references a  ');
+console.log('     variable set by a read call site       : ' + dependent);
+console.log('\n(heuristic; the second number is a floor -- a read feeding the BODY FILE written');
+console.log(' earlier in the same command is not detected by this variable-reference test)');
+samples.forEach((s, i) => console.log('\n--- dependent sample ' + (i + 1) + ' ---\n' + s));
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-round2.js =====
+// GEN-508 v8 round-2 checks demanded by the /check panel:
+//  (A) Does the arm's detector (D1 = client-name gate dropped ENTIRELY) flag every one of the
+//      236 Part-4a-rule write commands? A MISS is a silent approve, not a refusal.
+//  (B) How many detected commands contain NO write-ish api.notion.com URL at all -- the
+//      "read-only work refused with no clearable rewrite" class (pathIsNotionRead is first-URL-only).
+//  (C) What exactly are the 242-vs-236 delta commands?
+//  (D) Does D1 detect the NEW canonical invocation shape for every admissible method?
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+const files = [];
+(function walk(d, dep) { if (dep > 8) return; let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); } })(PROJ, 0);
+
+const NOTION_HOST_RE = /api\.notion\.com/i;
+const HTTP_CLIENT_RE = /\b(curl|curl\.exe|invoke-restmethod|invoke-webrequest|iwr|irm|wget)\b/i;
+const WRITE_METHOD_RE = /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i;
+const PS_METHOD_RE = /-Method\s+['"]?(Put|Post|Patch|Delete)\b/i;
+const BODY_FLAG_RE = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const EXPLICIT_WRITE_VERB_RE = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i;
+const PS_WRITE_VERB_RE = /-Method\s+['"]?(Put|Patch|Delete)\b/i;
+const NATIVE_1 = /["']?method["']?\s*:\s*['"](POST|PUT|PATCH|DELETE)/i;   // broadened per advisory
+const NATIVE_2 = /\.(post|put|patch|delete)\s*\(/i;
+const isReadPath = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+const firstPath = c => { const m = c.match(/https?:\/\/api\.notion\.com(\/[^\s'"]*)?/i); return (m && m[1]) ? m[1].split(/[?#]/)[0] : ''; };
+const allPaths = c => { const o = []; const re = /https?:\/\/api\.notion\.com(\/[^\s'"`)]*)?/gi; let m; while ((m = re.exec(c)) !== null) o.push((m[1] || '').split(/[?#]/)[0]); return o; };
+
+// Part 4a's rule -- the population the design quotes as "236"
+function P4a(c) {
+  const explicitWrite = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i.test(c) || /-Method\s+['"]?(Put|Patch|Delete)\b/i.test(c);
+  const postish = /(-X|--request)\s*['"]?POST\b/i.test(c) || /-Method\s+['"]?Post\b/i.test(c);
+  const bodyish = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(c);
+  const isRead = /api\.notion\.com\/v1\/[^\s'"]*\/query/i.test(c) || /api\.notion\.com\/v1\/search/i.test(c);
+  return explicitWrite || ((postish || bodyish) && !isRead);
+}
+function D0(c) {   // live schema-guard rule
+  if (!NOTION_HOST_RE.test(c) || !HTTP_CLIENT_RE.test(c)) return false;
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  if (!ew && !pb) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+function D1(c) {   // ARM's detector: client-name gate dropped ENTIRELY + native patterns
+  if (!NOTION_HOST_RE.test(c)) return false;
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  if (!ew && !pb) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+function D1p(c) {  // the REJECTED refinement (gate kept for the soft signal)
+  if (!NOTION_HOST_RE.test(c)) return false;
+  const named = HTTP_CLIENT_RE.test(c);
+  const ew = EXPLICIT_WRITE_VERB_RE.test(c) || PS_WRITE_VERB_RE.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  if (!(ew || (named && pb))) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+// is there any api.notion.com URL in this command that is NOT a read path and NOT a plain GET line?
+function hasWriteishUrl(c) {
+  for (const L of c.split(/\r?\n/)) {
+    const m = L.match(/https?:\/\/api\.notion\.com(\/[^\s'"`)]*)?/i);
+    if (!m) continue;
+    const p = (m[1] || '').split(/[?#]/)[0];
+    if (isReadPath(p)) continue;
+    const w = /(-X|--request)\s*['"]?(PUT|PATCH|POST|DELETE)\b/i.test(L) || /-Method\s+['"]?(Put|Patch|Post|Delete)\b/i.test(L)
+      || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(L);
+    if (w) return true;
+  }
+  return false;
+}
+const mask = s => String(s).replace(/\b(ntn_|secret_)[A-Za-z0-9_-]+/g, '$1<REDACTED>').replace(/(Bearer\s+)(?!\$)[A-Za-z0-9_\-.]+/gi, '$1<REDACTED>').replace(/\r?\n/g, ' \\n ');
+
+const seen = new Set();
+let n236 = 0, miss = 0, nD0 = 0, nD1 = 0, nD1p = 0, noWriteUrl = 0;
+const missS = [], deltaS = [], noWriteS = [];
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue; let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const c = r && r.message && r.message.content; if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      const p4a = P4a(cmd), d0 = D0(cmd), d1 = D1(cmd), d1p = D1p(cmd);
+      if (p4a) n236++;
+      if (d0) nD0++; if (d1) nD1++; if (d1p) nD1p++;
+      if (p4a && !d1) { miss++; if (missS.length < 6) missS.push(mask(cmd).slice(0, 300)); }
+      if (d1 && !p4a && deltaS.length < 10) deltaS.push(mask(cmd).slice(0, 300));
+      if (d1 && !hasWriteishUrl(cmd)) { noWriteUrl++; if (noWriteS.length < 6) noWriteS.push(mask(cmd).slice(0, 300)); }
+    }
+  }
+}
+console.log('(A) population sizes over the same deduped corpus');
+console.log('    Part 4a rule ("236")            : ' + n236);
+console.log('    live schema-guard rule ("242")  : ' + nD0);
+console.log('    ARM detector D1 (gate dropped)  : ' + nD1);
+console.log("    rejected refinement D1'         : " + nD1p);
+console.log('    Part-4a commands the ARM MISSES : ' + miss + '   <-- a miss is a SILENT APPROVE');
+missS.forEach((s, i) => console.log('      miss[' + (i + 1) + '] ' + s));
+console.log('\n(C) commands the ARM flags that the Part 4a rule did not (up to 10):');
+deltaS.forEach((s, i) => console.log('  [' + (i + 1) + '] ' + s));
+console.log('\n(B) ARM-flagged commands with NO write-ish api.notion.com URL on any line: ' + noWriteUrl);
+noWriteS.forEach((s, i) => console.log('  [' + (i + 1) + '] ' + s));
+
+console.log('\n(D) does D1 detect the NEW canonical invocation, per method?');
+const SC = 'C:\\Users\\Erez\\.claude\\scripts\\notion-rest-write.ps1';
+for (const m of ['POST', 'PATCH', 'DELETE']) {
+  const inv = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + SC + '" -Method ' + m +
+              ' -Url "https://api.notion.com/v1/pages/36d6e495d07c816e9e0cce265d694ab3" -BodyFile "C:\\tmp\\b.json"';
+  console.log('    -Method ' + m.padEnd(7) + ' D1=' + D1(inv) + '  D1\'=' + D1p(inv) + '  D0=' + D0(inv));
+  const pre = '$r = ' + inv;
+  console.log('      with `$r = ` prefix       D1=' + D1(pre) + '  D1\'=' + D1p(pre));
+  const abbr = 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + SC + '" -M ' + m +
+               ' -U "https://api.notion.com/v1/pages" -B "C:\\tmp\\b.json"';
+  console.log('      abbreviated -M/-U/-B      D1=' + D1(abbr) + '   (basename present: ' + /notion-rest-write/i.test(abbr) + ')');
+}
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-falsepos.js =====
+// Which token makes each of the 30 read-only commands look like a write? Decides whether the
+// refusal text can name a mechanical remedy, and whether the class is inherited from the live
+// detector (present under D0 too) or introduced by the arm's widening.
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+const files = [];
+(function walk(d, dep) { if (dep > 8) return; let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); } })(PROJ, 0);
+
+const HTTP_CLIENT_RE = /\b(curl|curl\.exe|invoke-restmethod|invoke-webrequest|iwr|irm|wget)\b/i;
+const WRITE_METHOD_RE = /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i;
+const PS_METHOD_RE = /-Method\s+['"]?(Put|Post|Patch|Delete)\b/i;
+const BODY_FLAG_RE = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const EW = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i, PSEW = /-Method\s+['"]?(Put|Patch|Delete)\b/i;
+const isReadPath = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+const firstPath = c => { const m = c.match(/https?:\/\/api\.notion\.com(\/[^\s'"]*)?/i); return (m && m[1]) ? m[1].split(/[?#]/)[0] : ''; };
+function hasWriteishUrl(c) {
+  for (const L of c.split(/\r?\n/)) {
+    const m = L.match(/https?:\/\/api\.notion\.com(\/[^\s'"`)]*)?/i); if (!m) continue;
+    const p = (m[1] || '').split(/[?#]/)[0]; if (isReadPath(p)) continue;
+    if (/(-X|--request)\s*['"]?(PUT|PATCH|POST|DELETE)\b/i.test(L) || /-Method\s+['"]?(Put|Patch|Post|Delete)\b/i.test(L)
+      || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(L)) return true;
+  } return false;
+}
+const seen = new Set(); const tally = {}; let n = 0, alsoD0 = 0;
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue; let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const c = r && r.message && r.message.content; if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      const ew = EW.test(cmd) || PSEW.test(cmd);
+      const pb = WRITE_METHOD_RE.test(cmd) || PS_METHOD_RE.test(cmd) || BODY_FLAG_RE.test(cmd);
+      const d1 = (ew || pb) && !(!ew && isReadPath(firstPath(cmd)));
+      if (!d1 || hasWriteishUrl(cmd)) continue;
+      n++;
+      const named = HTTP_CLIENT_RE.test(cmd);
+      const d0 = named && d1;
+      if (d0) alsoD0++;
+      const m = BODY_FLAG_RE.exec(cmd), mm = WRITE_METHOD_RE.exec(cmd), mp = PS_METHOD_RE.exec(cmd);
+      const why = ew ? 'EXPLICIT ' + (EW.exec(cmd) || PSEW.exec(cmd))[0].trim()
+        : mm ? 'method-flag ' + mm[0].trim() : mp ? 'method-flag ' + mp[0].trim()
+        : m ? 'body-flag "' + m[2] + '"' + (m[2] === '-d' ? '  <- context: ' + (cmd.match(/\S*\s+-d\s+\S*/) || [''])[0].trim() : '') : '?';
+      tally[why.split('<-')[0].trim()] = (tally[why.split('<-')[0].trim()] || 0) + 1;
+      if (n <= 8) console.log('[' + n + '] ' + why);
+    }
+  }
+}
+console.log('\nARM-flagged commands with no write-ish Notion URL: ' + n + '; of those also flagged by the LIVE rule (named client): ' + alsoD0);
+console.log('\nwhy they were flagged:');
+for (const [k, v] of Object.entries(tally).sort((a, b) => b[1] - a[1])) console.log('  ' + String(v).padStart(3) + '  ' + k);
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-dropd.js =====
+// Would dropping the ambiguous single-letter `-d` from THIS ARM's soft body-flag set cost any
+// real write detection? (`tr -d '\r'` is the sole cause of 29 of 30 read-only over-refusals.)
+// A miss here would be a SILENT APPROVE, so the bar is zero misses among the write population.
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+const files = [];
+(function walk(d, dep) { if (dep > 8) return; let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); } })(PROJ, 0);
+
+const WRITE_METHOD_RE = /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i;
+const PS_METHOD_RE = /-Method\s+['"]?(Put|Post|Patch|Delete)\b/i;
+const BODY_FULL = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const BODY_NO_D = /(^|\s)(--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const EW = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i, PSEW = /-Method\s+['"]?(Put|Patch|Delete)\b/i;
+const NATIVE_1 = /["']?method["']?\s*:\s*['"](POST|PUT|PATCH|DELETE)/i, NATIVE_2 = /\.(post|put|patch|delete)\s*\(/i;
+const isReadPath = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+const firstPath = c => { const m = c.match(/https?:\/\/api\.notion\.com(\/[^\s'"]*)?/i); return (m && m[1]) ? m[1].split(/[?#]/)[0] : ''; };
+function det(c, bodyRe) {
+  if (!/api\.notion\.com/i.test(c)) return false;
+  const ew = EW.test(c) || PSEW.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || bodyRe.test(c);
+  if (!ew && !pb) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+function P4a(c) {
+  const ew = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i.test(c) || /-Method\s+['"]?(Put|Patch|Delete)\b/i.test(c);
+  const postish = /(-X|--request)\s*['"]?POST\b/i.test(c) || /-Method\s+['"]?Post\b/i.test(c);
+  const bodyish = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(c);
+  const isRead = /api\.notion\.com\/v1\/[^\s'"]*\/query/i.test(c) || /api\.notion\.com\/v1\/search/i.test(c);
+  return ew || ((postish || bodyish) && !isRead);
+}
+function hasWriteishUrl(c) {
+  for (const L of c.split(/\r?\n/)) {
+    const m = L.match(/https?:\/\/api\.notion\.com(\/[^\s'"`)]*)?/i); if (!m) continue;
+    const p = (m[1] || '').split(/[?#]/)[0]; if (isReadPath(p)) continue;
+    if (/(-X|--request)\s*['"]?(PUT|PATCH|POST|DELETE)\b/i.test(L) || /-Method\s+['"]?(Put|Patch|Post|Delete)\b/i.test(L)
+      || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-Body|-InFile)\b/i.test(L)) return true;
+  } return false;
+}
+const mask = s => String(s).replace(/\b(ntn_|secret_)[A-Za-z0-9_-]+/g, '$1<REDACTED>').replace(/(Bearer\s+)(?!\$)[A-Za-z0-9_\-.]+/gi, '$1<REDACTED>').replace(/\r?\n/g, ' \\n ');
+const seen = new Set();
+let full = 0, noD = 0, lostWithWriteUrl = 0, lostNoWriteUrl = 0, p4aMissed = 0;
+const lostS = [], p4aS = [];
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue; let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const c = r && r.message && r.message.content; if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      const a = det(cmd, BODY_FULL), bb = det(cmd, BODY_NO_D);
+      if (a) full++; if (bb) noD++;
+      if (a && !bb) {
+        if (hasWriteishUrl(cmd)) { lostWithWriteUrl++; if (lostS.length < 6) lostS.push(mask(cmd).slice(0, 320)); }
+        else lostNoWriteUrl++;
+      }
+      if (P4a(cmd) && !bb) { p4aMissed++; if (p4aS.length < 6) p4aS.push(mask(cmd).slice(0, 320)); }
+    }
+  }
+}
+console.log('detected WITH -d in the soft set   : ' + full);
+console.log('detected WITHOUT -d                : ' + noD);
+console.log('  dropped, and they DO have a write-ish Notion URL (would be SILENT APPROVES): ' + lostWithWriteUrl);
+lostS.forEach((s, i) => console.log('    [' + (i + 1) + '] ' + s));
+console.log('  dropped, and they have NO write-ish Notion URL (over-refusals removed)     : ' + lostNoWriteUrl);
+console.log('Part-4a write-population commands missed without -d: ' + p4aMissed);
+p4aS.forEach((s, i) => console.log('    [' + (i + 1) + '] ' + s));
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/measure-classes.js =====
+// GEN-508 v8 round-3: measure the THREE refusal classes using the predicate that will actually
+// ship, after round 2 found the round-2 text specified one predicate and measured another.
+// Discriminator is the WRITE VERB, not the URL:
+//   class 3  rest-signal-no-target        : no unambiguous method flag (detector fired on a soft
+//                                           body flag, e.g. `tr -d '\r'` in a read)
+//   class 2  rest-template-cannot-express : method flag present, but NO api.notion.com URL that the
+//                                           template's grammar can express as a non-read path
+//   class 1  rest-not-via-script          : method flag present AND a template-expressible URL
+// Every class hard-blocks; the class selects only the refusal text and the monitor row.
+const fs = require('fs');
+const path = require('path');
+const PROJ = 'C:/Users/Erez/.claude/projects';
+const files = [];
+(function walk(d, dep) { if (dep > 8) return; let e = []; try { e = fs.readdirSync(d, { withFileTypes: true }); } catch (x) { return; }
+  for (const it of e) { const p = path.join(d, it.name); if (it.isDirectory()) walk(p, dep + 1); else if (it.name.endsWith('.jsonl')) files.push(p); } })(PROJ, 0);
+
+const WRITE_METHOD_RE = /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i;
+const PS_METHOD_RE = /-Method\s+['"]?(Put|Post|Patch|Delete)\b/i;
+const BODY_FLAG_RE = /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i;
+const EW = /(-X|--request)\s*['"]?(PUT|PATCH|DELETE)\b/i, PSEW = /-Method\s+['"]?(Put|Patch|Delete)\b/i;
+const NATIVE_1 = /["']?method["']?\s*:\s*['"](POST|PUT|PATCH|DELETE)/i, NATIVE_2 = /\.(post|put|patch|delete)\s*\(/i;
+const isReadPath = p => /\/query\/?$/i.test(p) || /^\/v1\/search\/?$/i.test(p);
+const firstPath = c => { const m = c.match(/https?:\/\/api\.notion\.com(\/[^\s'"]*)?/i); return (m && m[1]) ? m[1].split(/[?#]/)[0] : ''; };
+// the template's URL grammar, as specified: /v1/(pages|blocks|databases)[/<id>][/children], no query string
+const ID = '(?:[0-9a-fA-F]{32}|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})';
+const TEMPLATE_URL = new RegExp('^/v1/(?:pages|blocks|databases)(?:/' + ID + '(?:/children)?)?$');
+// Round-3 refinement: an INTERPOLATED url is not "the template cannot express it" -- it is a
+// caller-side rewrite (substitute the literal page id), i.e. class 1. Only a LITERAL url that the
+// grammar cannot express (unadmitted family, query string) is class 2.
+function urlFacts(c) {
+  const re = /https?:\/\/api\.notion\.com(\/[^\s'"`)]*)?/gi; let m;
+  let anyLiteral = false, anyExpressible = false, anyInterpolated = false;
+  while ((m = re.exec(c)) !== null) {
+    const raw = m[1] || '';
+    if (/[$`{}\[\]]/.test(raw)) { anyInterpolated = true; continue; }
+    if (isReadPath(raw.split(/[?#]/)[0])) continue;             // a read url tells us nothing
+    anyLiteral = true;
+    if (!/[?#]/.test(raw) && TEMPLATE_URL.test(raw)) anyExpressible = true;
+  }
+  return { anyLiteral, anyExpressible, anyInterpolated };
+}
+// the arm's detector (client-name gate dropped entirely)
+function detect(c) {
+  if (!/api\.notion\.com/i.test(c)) return false;
+  const ew = EW.test(c) || PSEW.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+  const pb = WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || BODY_FLAG_RE.test(c);
+  if (!ew && !pb) return false;
+  if (!ew && isReadPath(firstPath(c))) return false;
+  return true;
+}
+const hasMethodFlag = c => WRITE_METHOD_RE.test(c) || PS_METHOD_RE.test(c) || NATIVE_1.test(c) || NATIVE_2.test(c);
+const mask = s => String(s).replace(/\b(ntn_|secret_)[A-Za-z0-9_-]+/g, '$1<REDACTED>').replace(/(Bearer\s+)(?!\$)[A-Za-z0-9_\-.]+/gi, '$1<REDACTED>').replace(/\r?\n/g, ' \\n ');
+
+const seen = new Set();
+let det = 0, c1 = 0, c2 = 0, c3 = 0;
+const s2 = [], s3 = [];
+for (const f of files) {
+  let t; try { t = fs.readFileSync(f, 'utf8'); } catch (e) { continue; }
+  if (!t.includes('api.notion.com')) continue;
+  for (const line of t.split(/\r?\n/)) {
+    if (!line.trim()) continue; let r; try { r = JSON.parse(line); } catch (e) { continue; }
+    const cc = r && r.message && r.message.content; if (!Array.isArray(cc)) continue;
+    for (const b of cc) {
+      if (!b || b.type !== 'tool_use' || !/^(Bash|PowerShell)$/.test(String(b.name || ''))) continue;
+      const cmd = b.input && b.input.command;
+      if (typeof cmd !== 'string' || !cmd.includes('api.notion.com')) continue;
+      if (seen.has(cmd)) continue; seen.add(cmd);
+      if (!detect(cmd)) continue;
+      det++;
+      const uf = urlFacts(cmd);
+      if (!hasMethodFlag(cmd)) { c3++; if (s3.length < 4) s3.push(mask(cmd).slice(0, 240)); }
+      else if (uf.anyLiteral && !uf.anyExpressible && !uf.anyInterpolated) { c2++; if (s2.length < 8) s2.push(mask(cmd).slice(0, 300)); }
+      else c1++;
+    }
+  }
+}
+console.log('detected by the arm                                    : ' + det);
+console.log('  class 1  rest-not-via-script  (verb + expressible URL): ' + c1);
+console.log('  class 2  rest-template-cannot-express (verb, no URL)  : ' + c2);
+console.log('  class 3  rest-signal-no-target (no method flag)       : ' + c3);
+console.log('\nclass 3 samples (should be reads whose only signal is a soft body flag):');
+s3.forEach((s, i) => console.log('  [' + (i + 1) + '] ' + s));
+console.log('\nclass 2 samples (writes the template cannot express -> the over-gating bucket):');
+s2.forEach((s, i) => console.log('  [' + (i + 1) + '] ' + s));
+
+
+===== FILE: C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/9320ec4f-6c26-472f-bdbe-95b5332bc717/scratchpad/psdefault-probe.ps1 =====
+# Probe: does $PSDefaultParameterValues silently inject a parameter into a cmdlet call whose
+# command text does not mention that parameter, even when a DIFFERENT parameter is passed explicitly?
+# Analogue: explicit -InFile on Invoke-RestMethod while 'Invoke-RestMethod:Body' is defaulted.
+# Read-only (Get-ChildItem over $env:TEMP). No network, no writes.
+
+$before = (Get-ChildItem -Path $env:TEMP -ErrorAction SilentlyContinue | Measure-Object).Count
+$PSDefaultParameterValues = @{ 'Get-ChildItem:Filter' = '*.zzzz-no-such-ext' }
+$after = (Get-ChildItem -Path $env:TEMP -ErrorAction SilentlyContinue | Measure-Object).Count
+"items with no ambient default : $before"
+"items with ambient -Filter    : $after"
+if ($before -ne $after) {
+  "RESULT: ambient default WAS applied to a cmdlet call whose text passed only -Path"
+} else {
+  "RESULT: ambient default was NOT applied"
+}
+"PSVersion: $($PSVersionTable.PSVersion)"
