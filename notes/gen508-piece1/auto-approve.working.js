@@ -642,6 +642,16 @@ function findPassInDir(dir, matchFn, exclude) {
     if (exclude && exclude.includes(full)) continue;
     let pass;
     try { pass = JSON.parse(fs.readFileSync(full, 'utf8').replace(/^﻿/, '')); } catch (e) { continue; }
+    // GEN-508 second-review fix: `null` is valid JSON, so the parse above SUCCEEDS and leaves
+    // `pass === null`; `pass.expires` then throws a TypeError that nothing on this path catches. An
+    // uncaught throw here exits non-2, which is not a refusal -- the gated call proceeds, and keeps
+    // proceeding for every call this gate covers until the file is deleted by hand. Verified live
+    // before this fix (exit 1, no refusal on stderr) and after (refusal restored). `[]`, `0` and
+    // `false` never threw: they box or return undefined, so only `null` reaches the TypeError.
+    // This guard is the one line in this change that touches PRE-EXISTING code, deliberately: the
+    // same reader serves the staging, vetting and check-due pass dirs, so the fail-open was live in
+    // all three before GEN-508 added a fourth caller.
+    if (!pass || typeof pass !== 'object') continue;
     const exp = Date.parse(pass.expires || '');
     if (!exp || exp < now) continue;
     if (matchFn(pass)) return full;
@@ -2164,7 +2174,17 @@ function ticketScope(tool, ti) {
 
   // Stage 2 -- free, and BEFORE the exemption file is opened at all, so a housekeeping-only property
   // edit can never be blocked by anything about that file.
-  if (ticketIsHousekeepingOnly(norm.root)) return { scope: 'out' };
+  //
+  // TOOL-SCOPED to update-page, which the first version of this line was not. The exemption exists for
+  // a pure property edit (status / labels / assignee) on an EXISTING row; it is not a property about
+  // the payload shape alone. Unscoped, it was also offered to notion-duplicate-page, where
+  // `{page_id, properties:{Status}}` satisfies every clause and returned 'out' -- and a duplicate
+  // SPAWNS A LIVE TICKET, which is squarely inside Erez's "create and edit" decision and is the
+  // hazard the global CLAUDE.md calls out by name. create-pages and move-pages fail clause 1 on their
+  // real payload shapes anyway (`parent`/`pages` and `page_or_database_ids`/`new_parent`), so this
+  // scoping strictly narrows the exemption and cannot introduce a false block. The GEN-58 carve-out
+  // below was already tool-scoped the same way, which is what flagged this one as the oversight.
+  if (tool === NOTION_UPDATE_TOOL && ticketIsHousekeepingOnly(norm.root)) return { scope: 'out' };
 
   const split = ticketSplitIds(norm.idish);
   const label = ticketLabel(tool, split.pageIds);
@@ -2928,6 +2948,29 @@ function enforceTicketVetting(tool, input) {
     return blockTicketVetting({ target: sc.target, reason: 'bad-record', ids: sc.ids });
   }
 
+  // GEN-508 second-review fix: findTicketPassFile matched the hash against its OWN read of this file
+  // and then returned only the path, so every field trusted below comes from the SECOND read above.
+  // Re-assert the binding here: without it, a file rewritten between the two reads is trusted on
+  // fields that were never matched against this write's hash. On the PASS branch ticketTokenVerdict
+  // re-checks sc.hash against the reviewer's token and largely closes this; on the WAIVED branch
+  // nothing did, which is exactly where a mismatch is cheapest to exploit.
+  //
+  // Re-assert with ticketRecordMatches, NOT a bare `!==`. The first version of this guard used
+  // `rec.contentHash !== sc.hash`, which the review after it caught as two defects in one line:
+  //   1. STRICTER than the matcher above (2765 compares `.trim().toLowerCase()`), so a record whose
+  //      hash carries the trailing newline `ticketHashCli` prints -- exactly what the trim exists to
+  //      absorb -- matched the finder and then failed here as `bad-record`, whose remedy text says to
+  //      re-run /vet-ticket. That regenerates an identical record, so it was a closed lockout loop
+  //      whose only exit was break-glass. A re-assert must re-assert the SAME predicate.
+  //   2. NOT null-safe. `JSON.parse('null')` succeeds, so `rec` can be null and `rec.contentHash`
+  //      throws -- uncaught, i.e. exit 1, i.e. a silent approve. This line was the FIRST dereference
+  //      of `rec`, so the bare form moved the crash site earlier rather than closing it.
+  // ticketRecordMatches returns false on a null record, so one call fixes both.
+  if (!ticketRecordMatches(rec, sc.hash)) {
+    logTicketGateEvent({ event: 'block', tool: tool, surface: sc.surface, target: sc.target, reason: 'bad-record' });
+    return blockTicketVetting({ target: sc.target, reason: 'bad-record', ids: sc.ids });
+  }
+
   // Cheap pre-filter -- fail fast before opening a large transcript. TWO values, not three:
   // adjudication is no longer a hook input at all. These fields are NOT the authority; the token is.
   const waived = rec.waived === true;
@@ -3297,12 +3340,15 @@ process.stdin.on('end', () => {
   // through. Target-anchored (fail-safe), same as enforceVetting.
   enforceCheckDue(tool, input.tool_input, input.tool_input && input.tool_input.command, input.cwd);
 
-  // GEN-508: ticket-quality gate for Notion writes -- the four MCP write tools AND raw REST/curl.
+  // GEN-508: ticket-quality gate for Notion writes -- the four MCP write tools ONLY. Piece 1a: the
+  // raw REST/curl arm (§4.5) is present in this file but UNWIRED, so nothing here reaches it. An
+  // earlier version of this comment said "AND raw REST/curl", which described the pre-narrowing
+  // build and would have told whoever wires piece 2 that the work was already done.
   // Runs before the allow-list so an allow entry cannot bypass it; consumes a one-time review
   // record on match (approve), hard-blocks (exit 2) on an in-scope write with no usable record,
   // falls through otherwise. Takes the WHOLE envelope, not just tool_input: it needs
-  // `transcript_path` to verify the named reviewer's own sub-agent transcript, and `cwd` for the
-  // REST script-token scan.
+  // `transcript_path` to verify the named reviewer's own sub-agent transcript. (`cwd` is passed for
+  // the REST script-token scan, which piece 2 reconnects; under piece 1a it is unused.)
   enforceTicketVetting(tool, input);
 
   // Already allow-listed by settings (bare names) => no action, no log.

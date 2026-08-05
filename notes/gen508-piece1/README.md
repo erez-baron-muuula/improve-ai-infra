@@ -19,10 +19,10 @@ the artifacts it refers to.
 | File | What it is |
 |------|-----------|
 | `design-scoping-v3.md` | **Retired as a normative source** (2026-08-03, v6): it was merged into `design-converged.md`, because the two-document split was itself the defect three `/check` lenses diagnosed. Kept only for its §1 corpus-shape table and §3 measurements, which are cited from the design. **Do not build from it.** |
-| `auto-approve.working.js` | Full working copy of the hook with the `enforceTicketVetting` arm, **rebuilt against design v8 on 2026-08-05, then narrowed to the MCP surface the same day** (§4.5 present but unwired). Purely additive against the live hook: 6 hunks, 1,558 lines added, **0 removed** — the narrowing removed only lines this change had itself added, so it deletes nothing live. Passes `node --check`. **Re-based on the live hook of 2026-08-05 09:14** — it had changed mid-session (GEN-641's `blockUnreadableGatedCommand`), so an earlier copy would have silently dropped that guard; re-check for drift before any install. |
+| `auto-approve.working.js` | Full working copy of the hook with the `enforceTicketVetting` arm, **rebuilt against design v8 on 2026-08-05, then narrowed to the MCP surface the same day** (§4.5 present but unwired). Purely additive against the live hook: 7 hunks, 1,603 lines added, **0 removed** — the narrowing removed only lines this change had itself added, so it deletes nothing live. **The 7th hunk (live `auto-approve.js:637`) is the only one that touches pre-existing code**, and it is an insertion, not a rewrite: a one-line guard in the shared `findPassInDir` before the original line, which is untouched. The second code review found that reader fail-OPEN on a pass file containing the literal `null` — see "Second code review" below. Passes `node --check`. **Re-based on the live hook of 2026-08-05 09:14** — it had changed mid-session (GEN-641's `blockUnreadableGatedCommand`), so an earlier copy would have silently dropped that guard; re-check for drift before any install. |
 | `notion-rest-write.ps1` | The script that will be the only permitted route for a raw Notion REST write (design §4.5). **Deferred to piece 2 with the arm — it is NOT installed and its path is no longer in `PROTECTED_FILES`**, so piece 2 can create it. Its sha256 is still pinned in the hook. **LF line endings, no BOM** — a CRLF normalisation breaks the pin and blocks every gated REST write (fail-closed, reason `rest-script-mismatch`). Pin: `38897e5b4aa874ed…`, computed from the code block in `design-converged.md` §4.5, not from this file. Install it BEFORE re-adding its path to `PROTECTED_FILES`, not after. |
 | `gen508-hook.diff` | The same change as a unified diff against the live hook, for review. Regenerated 2026-08-05. |
-| `test-gen508-v8-arm.js` | **The suite that gates the install, and it must be GREEN: 27 assertions, 0 failing.** Runs the hook as a real PreToolUse process (JSON on stdin, exit code as the verdict). Covers the MCP surface, the `--ticket-hash` CLI, the full record path, latency, and three assertions that the REST arm really is unwired. **Not** the deliverable-8 rebuild: it has no fail-open corpus sweep. |
+| `test-gen508-v8-arm.js` | **The suite that gates the install, and it must be GREEN: 38 assertions, 0 failing.** Runs the hook as a real PreToolUse process (JSON on stdin, exit code as the verdict). Covers the MCP surface, the `--ticket-hash` CLI, the full record path, latency, and three assertions that the REST arm really is unwired. **Not** the deliverable-8 rebuild: it has no fail-open corpus sweep. |
 | `test-gen508-rest-parked.js` | The REST assertions, **parked for piece 2**: 25 assertions, of which **19 fail by design** while §4.5 is unwired. It exits 0 at exactly that baseline and non-zero if the number moves either way — fewer means someone rewired the arm and this file must move back into the suite above; more means something else broke. Failures here are NOT a regression. |
 | `test-gen508-harness.js` | Shared harness for both suites (hook spawn, helpers, fixtures, cleanup). Extracted at the split so the two files cannot drift the way the housekeeping list once did. It also fixes the bug that made the old suite unrunnable: it spawned `working-v8.js`, a filename not in this folder, so every assertion failed at spawn. |
 | `test-gen508.js` | The OLD behavioural suite, written against the pre-collapse layer. **Stale** — it exercises the resolver and cache the collapse deleted. Superseded pending the deliverable-8 rebuild. |
@@ -36,9 +36,17 @@ the artifacts it refers to.
 node test-gen508-v8-arm.js
 ```
 
-**27 assertions, all passing, exit 0** — verified 2026-08-05 against the unwired hook. This is the
-suite that gates the install. It spawns the hook as a real PreToolUse process, so what it tests is
-what will run, and it needs no corpus and no network.
+**38 assertions, all passing, exit 0** — verified 2026-08-05 against the unwired hook, after the
+second code review's fixes. This is the suite that gates the install. It spawns the hook as a real
+PreToolUse process, so what it tests is what will run, and it needs no corpus and no network.
+
+Eleven of those 38 are the second review's regression guards, in three groups:
+- A pass file containing `null`, `[]`, `0`, `false` or `"str"` must REFUSE rather than crash. Only
+  `null` ever crashed; the other four are there so a later narrowing cannot silently reopen them.
+- A record whose `contentHash` carries the trailing newline `--ticket-hash` prints, or differs in case,
+  must still APPROVE — the guard against the lockout the review's own first fix introduced.
+- `duplicate-page` / `move-pages` / `create-pages` with a housekeeping-shaped payload must be GATED,
+  and `update-page` housekeeping must STILL fall through, so the tool-scoping cannot be over-applied.
 
 ```bash
 node test-gen508-rest-parked.js
@@ -53,9 +61,10 @@ up — so they can be run from anywhere. The parked suite additionally creates `
 **copy** of the pinned script (the path the hook resolves for it) and removes it afterwards, so the pin
 tests tamper with the copy rather than with this folder's own script, whose bytes the pin is taken over.
 
-An earlier version of this section claimed 48 assertions all passing. The count was right — 27 + 25 is
-52 today only because the split added four new assertions — but that run was not reproducible from the
-committed files, because the suite spawned a hook filename that is not in this folder.
+An earlier version of this section claimed 48 assertions all passing. The count was right — 38 + 25 is
+63 today only because the split added four new assertions and the second code review added eleven — but
+that run was not reproducible from the committed files, because the suite spawned a hook filename that
+is not in this folder.
 
 The rest of this section describes the **stale** suite (`test-gen508.js`), kept until the
 deliverable-8 rebuild lands. It was written against the pre-collapse layer and exercises the resolver
@@ -86,8 +95,9 @@ Last run: **97 passed, 0 failed**; 0 unexplained out-of-scope verdicts across 1,
 ## What changed when the REST arm was parked (2026-08-05, later the same day)
 
 Five attachment points removed, so §4.5 became unreachable. All five sit inside the block this change
-adds, so the diff against the live hook is **still purely additive: 1,558 lines added, 0 removed**,
-across the same 6 hunks.
+adds, so the diff against the live hook stayed **purely additive: 0 removed**. (The line counts in
+this section were 1,558 across 6 hunks at the time of the parking; the second code review's fixes
+took them to 1,581 across 7 hunks. Still 0 removed.)
 
 - `enforceTicketVetting` no longer treats shell tools as in scope (`isShell` gone). That single change
   is what makes the whole arm unreachable; the rest close side doors.
@@ -156,9 +166,123 @@ that matter, and all three belong to the parked REST arm or its docs:
 - Nothing writes `ticket-gate-exempt-pages.txt`: the skill has no GEN-58 lane, so the exemption list
   stays empty and each new log volume needs a full review, against the standing "log immediately" rule.
 
-**Still to do:** the second `/code-review` (Erez must launch it — and the change has moved substantially
-since the first, so it reviews a different diff), then `/vet-code` steps 4–8: live verification, the
-Step 1b vetting record, the card, the mint, the install, and the post-install check.
+**Second code review is DONE** (2026-08-05). Three cold reviewers, each blind to the first pass, to each
+other, and to every document in this folder — they were given the diff, the working file, and the goal
+verbatim, nothing else. **Procedural caveat: it did NOT run on the strongest tier.** `/vet-code` Step 3
+requires Pass B pinned to the top model; that tier returned 529 Overloaded on five consecutive attempts
+across the whole session, so the panel ran one tier down and was then re-run on Opus 5 at Erez's explicit
+direction ("re-run the review on this model, and not the highest"). That is a deliberate, recorded
+deviation from Step 3, not an oversight.
+
+Three fixes applied and verified live:
+
+- **`findPassInDir` failed OPEN on a pass file containing the literal `null`.** `null` is valid JSON, so
+  the reader's own try/catch never fired and `pass.expires` threw a TypeError nothing caught — a non-2
+  exit, which is not a refusal. The gated write went through, and would have kept going through on every
+  gated call until the file was deleted by hand. Reproduced live (exit 1, no refusal), fixed, re-verified
+  (refusal restored), and guarded by five new assertions. **This was PRE-EXISTING live code**, shared with
+  the staging, vetting and check-due pass dirs, so the fail-open was live in three already-installed gates
+  — including the one guarding this hook's own code. Fixing it here means the fix reaches the live hook
+  only when piece 1a installs; a sooner fix needs its own `/vet-code`.
+- **The matched record was trusted on a second read that never re-checked its `contentHash`.**
+  `findTicketPassFile` matches on its own read and returns only a path. Now re-asserted. Defence-in-depth
+  with no test behind it — the branch needs a concurrent rewrite of the same filename to reach, which a
+  single-process suite cannot drive. Said so in the suite rather than implying coverage.
+- **The wiring comment claimed the gate covers "the four MCP write tools AND raw REST/curl."** It does
+  not — REST is unwired in piece 1a. That comment is what whoever wires piece 2 would have read.
+
+**Open, and Erez's call — the waive lane.** Two reviewers independently flagged that a waive skips the
+entire reviewer-verification block, which is by design (the skill documents it). What is NOT by design:
+
+- `/vet-ticket` says the mint write into `~/.claude-staging/ticket-passes/` "prompts him", and calls that
+  prompt the waive's "second, deliberate confirmation". **It does not prompt.** Verified against the live
+  hook: that write falls through, and this design's own §2 established that a fall-through in Erez's
+  permission mode is a silent approve. So the waive's second confirmation does not exist. This is a skill
+  and doc fix, not a hook fix — and it is the same class as §2's original premise correction, reintroduced.
+- The skill writes `expires` as now + 15 min, but the hook only checks `expires < now` — never an upper
+  bound. A record with a far-future expiry is honoured indefinitely (verified: 2099 approves). The 15-min
+  discipline is advisory, not enforced. A cap belongs in the hook, per the same "one definition, called by
+  both" argument the design already makes for the hash.
+
+Not fixed pending that decision, because both touch how a waive is justified rather than how it is read.
+
+**Corrected from this review's own first write-up:** the cross-session waive-reuse risk was initially
+graded CRITICAL on the reasoning that a leftover waive lets an unreviewed write through. That reasoning
+was wrong — the record binds to the content hash, so a stale waive can only clear a write of the exact
+content Erez waived. The harm is a duplicate write, not an unreviewed one. The severe finding in this
+area is the phantom mint prompt above, which only surfaced on reading the skill.
+
+**Also confirmed, and out of scope by the stated threat model:** all four pass directories are writable
+with no gate at all (verified against the live hook, with a control proving the test valid). Minting
+yourself a pass is deliberate evasion, which §1's threat model explicitly excludes. It is recorded here
+because the design believed the dir being outside `~/.claude` bought a prompt, and it does not — so the
+mitigation counted on is absent. Belongs in its own ticket about the shared pass mechanism, not here.
+
+### Round two — re-run on Opus 5, and what it found
+
+Erez directed the re-run explicitly: *"fix the confirmed defects now, then re-run the review on this model,
+and not the highest."* So Pass B ran on **Opus 5**, not Fable 5. Per `notes/effort-model-reference.md` the
+two are within ~0.5 pt on coding at half the cost, so this is a defensible reading of Step 3's
+"strongest available" — but it is Erez's call on the record, not the skill's default.
+
+**The tier difference was not marginal.** The Opus panel found nine findings the lower-tier panel missed
+entirely, and caught **two defects in the lower-tier round's own fixes**. That is direct evidence for
+Step 3's tier requirement; worth remembering next time capacity pressure makes a substitution look fine.
+
+**Fixed in round two** (all three verified live, suite green at 38):
+
+- **The round-one hash re-assert was itself two defects.** Written as a bare `rec.contentHash !== sc.hash`,
+  it was *stricter* than the matcher it re-asserted (`ticketRecordMatches` trims and lower-cases), so a
+  record carrying the trailing newline `--ticket-hash` prints matched the finder and then failed the
+  re-assert as `bad-record` — whose remedy text says re-run `/vet-ticket`, which regenerates an identical
+  record. A closed lockout loop escapable only by break-glass. It was also the first dereference of `rec`,
+  and `JSON.parse('null')` succeeds, so it moved a crash site *earlier* than the null guard added one edit
+  before. Now `if (!ticketRecordMatches(rec, sc.hash))` — same predicate, null-safe. Logged to GEN-58
+  (class D, new element; Vol. 8).
+- **The housekeeping exemption was not tool-scoped**, so `notion-duplicate-page` with
+  `{page_id, properties:{Status}}` returned `out` — and a duplicate **spawns a live ticket**, i.e. a create
+  reaching Notion with no record. Now scoped to `update-page`, matching the GEN-58 carve-out below it,
+  which was already scoped that way and is what flagged this as the oversight.
+
+**Open, and NOT fixed — these need decisions or careful work, not blind one-liners:**
+
+- **Break-glass skips the whole gate, session-wide, logging nothing** (both reviewers, independently, HIGH).
+  `if (configUnlocked()) return;` sits before `ticketScope`, so it is the one branch that neither blocks,
+  approves, nor logs. Reachable by following a *sibling gate's own written remedy* for an unrelated command.
+  The precedent cuts the other way: `enforceStaging` deliberately has **no** global break-glass, because
+  "a pass-MISS must stay unbreakable, since that is Erez's content approval" — which is the same argument
+  here. Also, the reaper's alarm text says four locks; this makes it five and was not updated.
+- **The waive is bound to the content hash and nothing else**, and the hook enforces no *ceiling* on
+  `expires` — the skill's 15-minute discipline is advisory. Plus the skill's claim that the mint write
+  "prompts him" is false (verified), so the waive's documented second confirmation does not exist.
+- **The verdict token is accepted from a `thinking` block** (HIGH, CONFIRMED against live transcripts).
+  The scan `JSON.stringify`s the whole assistant record with no block-type filter, so reasoning the
+  reviewer chose *not* to deliver counts as its verdict — including a rehearsed PASS it then talked itself
+  out of. Related: "last" is last-in-*file*, not the last delivered message.
+- **A create into a second or rotated Team-Tasks data source returns `out`** → silent approve, with no
+  event-log row either. `containerTeamTasks` is computed and returned but read nowhere. The guard above it
+  tests *unreadable*, not *unrecognised*. Fixing this properly is a design call: blocking every
+  unrecognised container would gate non-Team-Tasks creates workspace-wide.
+- **The GEN-58 carve-out never fires for `update_content`.** Real payloads carry edits in
+  `content_updates[]`, which is absent from `TICKET_EXEMPT_ROOT_KEYS`, so **every edit to existing GEN-58
+  log text hard-blocks** — against the standing "log immediately" rule. (Demonstrated the same session:
+  this review's own GEN-58 write would have been refused.) And the obvious one-line fix opens a data-loss
+  path, because clause 4 only inspects root-level `new_str` and cannot see the ones nested in
+  `content_updates[]` — so an emptying edit would become exempt. Any fix must recurse.
+- **The sub-agent path is broken in both directions.** If PreToolUse does not fire for sub-agent calls, the
+  gate is bypassed entirely. If it does, `ticketSessionDir` on a sub-agent transcript yields
+  `…/subagents/agent-<self>`, so `ticketReviewerVerified` looks for a sidecar that cannot exist and every
+  legitimately minted record blocks as `reviewer-unverified`.
+- **`~/.claude/skills/vet-ticket/` does not exist.** Installing the hook alone hard-blocks every gated
+  write with a remedy naming a skill that cannot be run — and the only escape is the unlogged break-glass
+  above. This is an apply-order constraint for `/vet-code` step 8, not a code defect.
+- Smaller: the hash assembly is copy-pasted between `ticketScope` and `ticketHashCli` rather than shared
+  (the comment claims the skill "CANNOT drift"); the CLI's NOTE about a matchable raw-input fallback is
+  wrong for the `normalise-threw` case, which blocks before any record is read; and the
+  `exempt-list-overflow` refusal forbids trimming, which is the only in-band fix for it.
+
+**Still to do:** decide the open items above, then `/vet-code` steps 4–8: live verification, the Step 1b
+vetting record, the card, the mint, the install, and the post-install check.
 
 Two named gaps that must not be lost, both carried into the piece-2/piece-3 tickets when they are
 filed:
