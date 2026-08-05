@@ -56,17 +56,25 @@ including a move **out**, which de-lists a row and **drops every database proper
 most destructive ticket write these tools can make.
 
 NOT gated, and you do not need this skill for them:
-- **Housekeeping-only property edits** — `Status`, `Assignee`, `Project`, `Type`, `Reason`,
-  `Due Date`, `Remind me (days before)`, `Date Created`, `ID`, `Parent item`. Substance is a
-  deny-list: anything NOT in that set counts as substance, so a renamed or new property is gated by
-  default rather than silently exempt. The exemption is a closed shape — it applies only to a payload
-  whose top level carries nothing but a page id, `command: "update_properties"`, and `properties`
-  holding plain values. Anything else about the payload, recognised or not, is gated.
+- **Housekeeping-only property edits** — `Status`, `Assignee`, `Project`, `Type`, `Reason`. **FIVE
+  fields, not ten**: `Due Date`, `Remind me (days before)`, `Date Created`, `ID` and `Parent item` were
+  moved to SUBSTANCE in the v8 hook and are gated. (Corrected 2026-08-05 — this list still named all
+  ten, so it told you five gated edits were free. The hook fails closed, so the cost was a confusing
+  refusal rather than an unreviewed write, but a skill that is looser than its gate sends you round a
+  loop.) Substance is a deny-list: anything NOT in that set counts as substance, so a renamed or new
+  property is gated by default rather than silently exempt. The exemption is a closed shape — it
+  applies only to a `notion-update-page` call whose top level carries nothing but a page id,
+  `command: "update_properties"`, and `properties` holding plain values (`icon`, `cover`, `is_skill`
+  and `allow_async` may ride along). Anything else about the payload, recognised or not, is gated —
+  and it is **tool-scoped**: the same shape sent to `notion-duplicate-page`, `notion-move-pages` or
+  `notion-create-pages` IS gated, because a duplicate spawns a live ticket.
 - **Content writes inside the GEN-58 subtree** — the GEN-58 ticket page and its log-volume child
   pages. A standing rule requires reasoning-failure log writes to happen immediately and exempts them
   from the approval pause. A **property** edit on the GEN-58 row is still a ticket-property edit and
   stays gated. (This replaces an earlier command-name rule that covered only 5% of real GEN-58
-  writes.)
+  writes.) The exemption reads the real payload shape: `update_content` carries its edits in
+  `content_updates: [{old_str, new_str}]`, and **an edit whose `new_str` is empty or whitespace-only is
+  gated wherever it sits in the payload** — emptying existing log text is not a log append.
 - Comments, views, attachments, and any page outside Team-Tasks.
 
 **If a page cannot be resolved, the write is blocked, not waved through** (no token, Notion
@@ -170,9 +178,21 @@ anything this skill writes.** Brief the reviewer on all four rules:
 - `<hash>` is the Step-1 `contentHash`, all 64 hex characters, copied verbatim. A wrong or truncated
   hash reads exactly like no review at all.
 - The verdict word must agree with `STATUS`. The hook only accepts `PASS`.
-- The reviewer must **not** write the prefix `TICKET-REVIEW-VERDICT:` anywhere else in its reply — not
-  when quoting this instruction, not when explaining itself. The hook takes the **last** occurrence in
-  the transcript, so a trailing mention overrides the real verdict and the write blocks.
+- The reviewer must **not** write the prefix `TICKET-REVIEW-VERDICT:` anywhere else in that final
+  reply — not when quoting this instruction, not when explaining itself. The hook takes the **last**
+  occurrence, so a trailing mention overrides the real verdict and the write blocks.
+
+**Where the hook looks, exactly** (realigned 2026-08-05 — it previously read wider than this, and the
+description here read wider still): the reviewer's **final delivered reply** — the last assistant
+message in its transcript that delivered any text, skipping harness-authored API-error records — and
+within that message, the **last** occurrence of the prefix. Two consequences worth briefing:
+
+- Only **delivered text** counts. A token that appears solely in the reviewer's internal reasoning, or
+  in the arguments of a tool call it made, is not a verdict. So a reviewer *may* reason about the token
+  format privately without breaking its own sign-off — but nothing it did not say out loud will clear
+  the gate.
+- Only the **final message** counts. A PASS delivered mid-review and then not repeated at the end is
+  not a verdict. Brief the reviewer to sign off in its concluding reply, not along the way.
 
 Why the token rather than the record's own `verdict` field: the hook's whole purpose is not to trust
 this skill. The token establishes three facts at once that a skill-written field cannot — this agent
@@ -300,10 +320,15 @@ waive is scoped to this one write and never touches the global break-glass.
   `timestamp` across all lines of the `.jsonl` is `<= draftedUtc`. Read `$CLAUDE_SESSION_ID` via the
   Bash tool (it is not exported to PowerShell), and find the `<project-slug>` folder by listing
   `~/.claude/projects/` for the one containing that session id — do not hand-derive the slug.
-- **The token is present, correct, and last.** In that same `.jsonl`, confirm the final
-  `TICKET-REVIEW-VERDICT:` occurrence among the `"type":"assistant"` records reads
-  `PASS <contentHash>` for this hash. This is the one precondition that mirrors exactly what the hook
-  will do, so failing it here costs a re-review instead of an unexplained block after the mint.
+- **The token is present, correct, and the reviewer's last delivered word.** In that same `.jsonl`,
+  find the LAST `"type":"assistant"` record that has a `text` block in `message.content` and is not
+  flagged `isApiErrorMessage` — that is the reviewer's final delivered reply. Within that record's
+  `text` blocks only (**not** its `thinking` blocks, **not** its `tool_use` arguments), confirm the last
+  `TICKET-REVIEW-VERDICT:` occurrence reads `PASS <contentHash>` for this hash. This precondition must
+  mirror exactly what the hook does, so failing it here costs a re-review instead of an unexplained
+  block after the mint — and a *looser* check here is worse than none, because it reports agreement the
+  hook will not honour. (Before 2026-08-05 this step said to scan all assistant records flat, which was
+  looser than the hook is now.)
 - Re-run `--ticket-hash` on the payload and confirm it still prints the `contentHash` in the record
   (nothing edited since review). Re-running it, rather than trusting the recorded value, is the point.
 - `verdict === 'PASS'` **or** `waived === true`, checked on the pass file.
