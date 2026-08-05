@@ -1,5 +1,7 @@
---- C:/Users/Erez/.claude/hooks/auto-approve.js	2026-08-05 09:14:34.670202700 +0300
-+++ "C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen508-piece1/auto-approve.working.js"	2026-08-05 11:04:10.931219300 +0300
+diff --git a/C:/Users/Erez/.claude/hooks/auto-approve.js b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen508-piece1/auto-approve.working.js
+index fa648a4..4dd0428 100644
+--- a/C:/Users/Erez/.claude/hooks/auto-approve.js
++++ b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen508-piece1/auto-approve.working.js	
 @@ -33,6 +33,7 @@
  const fs = require('fs');
  const os = require('os');
@@ -8,7 +10,7 @@
  
  const HOOK_DIR = __dirname;
  const LOG_FILE = path.join(HOOK_DIR, 'deferred-calls.jsonl');
-@@ -210,6 +211,10 @@
+@@ -210,6 +211,10 @@ const PROTECTED_FILES = new Set([
    'c:\\users\\erez\\.claude\\claude.md',
    'c:\\users\\erez\\.claude\\hooks\\auto-approve.js',
    'c:\\users\\erez\\.claude\\scripts\\notion-ticket-lookup.ps1',
@@ -19,7 +21,24 @@
  ]);
  const BLOCK_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
  // Break-glass override tokens. These are the SOLE durable home for the override
-@@ -1521,6 +1526,1540 @@
+@@ -637,6 +642,16 @@ function findPassInDir(dir, matchFn, exclude) {
+     if (exclude && exclude.includes(full)) continue;
+     let pass;
+     try { pass = JSON.parse(fs.readFileSync(full, 'utf8').replace(/^﻿/, '')); } catch (e) { continue; }
++    // GEN-508 second-review fix: `null` is valid JSON, so the parse above SUCCEEDS and leaves
++    // `pass === null`; `pass.expires` then throws a TypeError that nothing on this path catches. An
++    // uncaught throw here exits non-2, which is not a refusal -- the gated call proceeds, and keeps
++    // proceeding for every call this gate covers until the file is deleted by hand. Verified live
++    // before this fix (exit 1, no refusal on stderr) and after (refusal restored). `[]`, `0` and
++    // `false` never threw: they box or return undefined, so only `null` reaches the TypeError.
++    // This guard is the one line in this change that touches PRE-EXISTING code, deliberately: the
++    // same reader serves the staging, vetting and check-due pass dirs, so the fail-open was live in
++    // all three before GEN-508 added a fourth caller.
++    if (!pass || typeof pass !== 'object') continue;
+     const exp = Date.parse(pass.expires || '');
+     if (!exp || exp < now) continue;
+     if (matchFn(pass)) return full;
+@@ -1521,6 +1536,1736 @@ function findCheckPassFile(matchFn, exclude) {
    return findPassInDir(CHECK_PASS_DIR, matchFn, exclude);
  }
  
@@ -168,13 +187,37 @@
 +]);
 +// The GEN-58 exemption's clause 5: root keys permitted on an exempt CONTENT write -- the stage-2 set
 +// plus the fields the four content commands carry.
++//
++// `content_updates` WAS MISSING, and its absence was a hard block on every real edit. Checked against
++// the live notion-update-page schema on 2026-08-05: `update_content` carries its edits in
++// `content_updates: [{old_str, new_str, replace_all_matches?}]`, and root `new_str` belongs to
++// `replace_content` ALONE -- a command clause 2 already refuses. So a real GEN-58 log edit failed
++// clause 5 on an unrecognised root key and was refused outright, against the standing rule that
++// reasoning-failure entries are logged immediately. Demonstrated on the working hook: all three real
++// `content_updates` shapes blocked, while the root `old_str`/`new_str` shape the suite had been
++// asserting -- a shape the tool cannot receive -- fell through. An assertion over a fictional payload
++// is worse than none: it is what let this survive two review rounds.
++//
++// Root `old_str` and `selection_with_ellipsis` are NOT in today's schema either, and are kept here
++// only because removing them narrows the exemption on a surface this change did not review. Narrowing
++// is the safe direction, so it is a separate change, not a silent one.
 +const TICKET_EXEMPT_ROOT_KEYS = new Set([
 +  'page_id', 'pageId', 'id', 'command', 'properties', 'icon', 'cover', 'is_skill', 'allow_async',
-+  'content', 'old_str', 'new_str', 'selection_with_ellipsis', 'position'
++  'content', 'old_str', 'new_str', 'selection_with_ellipsis', 'position', 'content_updates'
 +]);
++// `content_updates` is admitted as a CLOSED shape, for the same reason the root key set is closed: an
++// unrecognised member is not evidence of harmlessness. Keys are the live schema's three; `old_str` and
++// `new_str` are required there, and an element carrying neither cannot be checked for emptiness.
++const TICKET_CU_KEYS = new Set(['old_str', 'new_str', 'replace_all_matches']);
 +// The four content commands the GEN-58 carve-out admits. `replace_content` is NOT among them: it is
 +// the exact form in which a real payload emptied a 6,138-character block, and clause 3 below refuses
 +// the flag that makes a whole-subtree wipe reachable.
++//
++// NOTE, 2026-08-05: only `insert_content` and `update_content` exist in today's notion-update-page
++// command enum -- `insert_content_after` and `insert_content_before` do not, so two of these four
++// admit a name the tool cannot currently send. Harmless today (such a payload fails at Notion), but it
++// pre-exempts whatever semantics a future schema attaches to those names. Narrowing the set is the
++// safe direction and is left as its own reviewed change rather than folded into this one.
 +const TICKET_CONTENT_COMMANDS = new Set([
 +  'insert_content', 'insert_content_after', 'insert_content_before', 'update_content'
 +]);
@@ -481,17 +524,64 @@
 +  return false;
 +}
 +
++// Clause 4, over the WHOLE normalised tree rather than the root. Written this way because naming a
++// field path is the precise mistake that produced this defect, and the same mistake the 2026-08-03
++// scoping rebuild already removed from stage 1: root `new_str` is unreachable for all four admitted
++// commands, so the original root-only test could never fire once, while the emptying edit it existed
++// to catch sat one level down in `content_updates[]`. Adding `content_updates` to the permitted root
++// keys WITHOUT this would have made an emptying edit exempt -- a wipe path opened by the fix for a
++// block. The two must change together.
++//
++// Any nesting a future schema invents is covered, and the walk fails CLOSED on anything it cannot
++// read, including its own depth guard. Termination is not an assumption: this walks the normaliser's
++// OUTPUT, which is bounded to TN_MAX_DEPTH deep and TN_MAX_NODES wide and is a freshly-built tree
++// (every node is a new object), so it cannot carry a cycle from the input.
++function ticketNoEmptyNewStr(node, depth) {
++  if (depth > TN_MAX_DEPTH + 2) return false;
++  if (Array.isArray(node)) {
++    for (const v of node) if (!ticketNoEmptyNewStr(v, depth + 1)) return false;
++    return true;
++  }
++  if (node && typeof node === 'object') {
++    for (const k of Object.keys(node)) {
++      const v = node[k];
++      if (k === 'new_str' && (typeof v !== 'string' || v.trim() === '')) return false;
++      if (!ticketNoEmptyNewStr(v, depth + 1)) return false;
++    }
++    return true;
++  }
++  return true;                                                    // scalar: nothing to check
++}
++
++// Clause 6. Absent `content_updates` is fine (`insert_content` does not carry it); present, it must be
++// the exact live-schema shape. An `update_content` with no `content_updates` at all is malformed for
++// the tool and unrecognised here, so it gates -- the carve-out exempts a shape it recognises, never a
++// shape it merely failed to reject.
++function ticketContentUpdatesOk(R) {
++  const has = Object.prototype.hasOwnProperty.call(R, 'content_updates');
++  if (!has) return R.command !== 'update_content';
++  const cu = R.content_updates;
++  if (!Array.isArray(cu) || cu.length === 0) return false;
++  for (const el of cu) {
++    if (!el || typeof el !== 'object' || Array.isArray(el)) return false;
++    for (const k of Object.keys(el)) if (!TICKET_CU_KEYS.has(k)) return false;
++    if (typeof el.old_str !== 'string' || typeof el.new_str !== 'string') return false;
++  }
++  return true;
++}
++
 +// The GEN-58 closed shape. Exempt iff ALL hold -- so anything unrecognised gates.
 +//  1  EVERY extracted id is the hardcoded GEN-58 id or a valid line in the file. *Every*, not *any*:
 +//     `any` would let a payload naming both a volume and a live ticket escape the gate. Zero of 273
 +//     subtree writes carry an id outside the subtree, so `every` is free.
 +//  2  `command` is present and is one of the four content commands.
 +//  3  no destructive key appears anywhere.
-+//  4  `new_str`, where present, is not empty or whitespace-only. Costs 1 write in 273 (0.37%) -- one
-+//     real write legitimately empties a 6,138-character block -- so this is a genuine cost, not a
-+//     free win, and its escape is one /vet-ticket run. (A clause refusing a merely SHORTER new_str
-+//     was considered and rejected: shrinking is ordinary editing here.)
++//  4  no `new_str` ANYWHERE in the payload is empty or whitespace-only. Costs 1 write in 273 (0.37%)
++//     -- one real write legitimately empties a 6,138-character block -- so this is a genuine cost,
++//     not a free win, and its escape is one /vet-ticket run. (A clause refusing a merely SHORTER
++//     new_str was considered and rejected: shrinking is ordinary editing here.)
 +//  5  every root key is in the permitted set.
++//  6  `content_updates`, the shape `update_content` really takes, matches the live schema exactly.
 +function ticketIsGen58Exempt(norm, pageIds, exempt) {
 +  if (pageIds.length === 0) return false;
 +  for (const id of pageIds) if (!ticketIdIsExempt(id, exempt)) return false;      // 1
@@ -499,11 +589,9 @@
 +  if (!R || typeof R !== 'object' || Array.isArray(R)) return false;
 +  if (!TICKET_CONTENT_COMMANDS.has(R.command)) return false;                      // 2
 +  if (ticketHasDestructiveKey(norm)) return false;                                // 3
-+  if (Object.prototype.hasOwnProperty.call(R, 'new_str')) {                       // 4
-+    const ns = R.new_str;
-+    if (typeof ns !== 'string' || ns.trim() === '') return false;
-+  }
++  if (!ticketNoEmptyNewStr(R, 0)) return false;                                   // 4
 +  for (const k of Object.keys(R)) if (!TICKET_EXEMPT_ROOT_KEYS.has(k)) return false; // 5
++  if (!ticketContentUpdatesOk(R)) return false;                                   // 6
 +  return true;
 +}
 +
@@ -645,15 +733,29 @@
 +//
 +// PURE: no network, no subprocess, no fs write. Its caller wraps it in a catch and treats a throw as
 +// a BLOCK.
++// THE content-hash assembly, in ONE place, called by the gate and by the CLI the skill runs.
++//
++// It used to be stated twice, in byte-identical copies here and in ticketHashCli -- while the comment
++// above that CLI argued that reproducing shared logic "would guarantee the drift" and that "one
++// definition, called by both, removes the failure mode instead of documenting it". The normaliser was
++// shared; this was not, so the comment overstated what the code did. A copy is not a definition, and
++// what is duplicated here is a DECISION, not a formula: which value gets hashed when the payload could
++// not be read end to end. If the two copies ever disagreed on that, no record the skill mints would
++// match, and break-glass is the only escape from that state.
++//
++// When ok === false the hash is taken over the RAW parsed input instead, by the same stableStringify.
++// This matters: an earlier version emitted hash '' on an unreadable payload, so NO record could ever
++// match and break-glass was the only door.
++function ticketContentHash(norm, ti) {
++  return norm.ok
++    ? sha256Hex(stableStringify(norm.root === undefined ? null : norm.root))
++    : sha256Hex(stableStringify(ti === undefined ? null : ti));
++}
++
 +function ticketScope(tool, ti) {
 +  // Stage 1.
 +  const norm = ticketNormalise(ti);
-+  // When ok === false the hash is taken over the RAW parsed input instead, by the same
-+  // stableStringify. This matters: an earlier version emitted hash '' on an unreadable payload, so
-+  // NO record could ever match and break-glass was the only door.
-+  const hash = norm.ok
-+    ? sha256Hex(stableStringify(norm.root === undefined ? null : norm.root))
-+    : sha256Hex(stableStringify(ti === undefined ? null : ti));
++  const hash = ticketContentHash(norm, ti);
 +  if (!norm.ok) {
 +    return { scope: 'block', surface: 'notion-mcp', reason: 'unreadable-payload', why: norm.why,
 +             target: ticketLabel(tool, []), hash: hash, ids: [] };
@@ -661,7 +763,17 @@
 +
 +  // Stage 2 -- free, and BEFORE the exemption file is opened at all, so a housekeeping-only property
 +  // edit can never be blocked by anything about that file.
-+  if (ticketIsHousekeepingOnly(norm.root)) return { scope: 'out' };
++  //
++  // TOOL-SCOPED to update-page, which the first version of this line was not. The exemption exists for
++  // a pure property edit (status / labels / assignee) on an EXISTING row; it is not a property about
++  // the payload shape alone. Unscoped, it was also offered to notion-duplicate-page, where
++  // `{page_id, properties:{Status}}` satisfies every clause and returned 'out' -- and a duplicate
++  // SPAWNS A LIVE TICKET, which is squarely inside Erez's "create and edit" decision and is the
++  // hazard the global CLAUDE.md calls out by name. create-pages and move-pages fail clause 1 on their
++  // real payload shapes anyway (`parent`/`pages` and `page_or_database_ids`/`new_parent`), so this
++  // scoping strictly narrows the exemption and cannot introduce a false block. The GEN-58 carve-out
++  // below was already tool-scoped the same way, which is what flagged this one as the oversight.
++  if (tool === NOTION_UPDATE_TOOL && ticketIsHousekeepingOnly(norm.root)) return { scope: 'out' };
 +
 +  const split = ticketSplitIds(norm.idish);
 +  const label = ticketLabel(tool, split.pageIds);
@@ -1169,13 +1281,34 @@
 +// ("never show the token filled in"), which was the deeper error: a standing rule says to prefer a
 +// guard the system executes over prose nobody re-reads, and the transcript format itself carries the
 +// fix.
++//
++// A FOURTH WAY, found 2026-08-05 and closed in ticketDeliveredText: restricting the scan to
++// assistant-authored RECORDS is not the same as restricting it to what the reviewer DELIVERED. An
++// assistant record also carries `thinking` and `tool_use` blocks, so the reviewer's private reasoning
++// and its own grep arguments were being read as its verdict. The record boundary is the wrong unit;
++// the block type is the right one.
 +const TICKET_TOKEN_PREFIX = 'TICKET-REVIEW-VERDICT:';
 +
 +// Derive the session directory from `transcript_path` by stripping `.jsonl`, NEVER from a hand-built
 +// project slug -- GEN-518's lesson was that a hand-derived slug was wrong on Windows.
++//
++// AND CLIMB OUT OF `subagents` WHEN THE CALLER IS ITSELF A SUB-AGENT. A sub-agent's transcript_path is
++// `<sessionDir>/subagents/agent-<self>.jsonl`, so stripping alone yielded
++// `<sessionDir>/subagents/agent-<self>` -- one level too deep. Every sidecar lookup then resolved to
++// `<...>/agent-<self>/subagents/agent-<reviewer>.meta.json`, a path that cannot exist, so a
++// legitimately minted record was refused as `reviewer-unverified`: a block with a remedy that could
++// not clear it, on the sub-agent path specifically. Verified against the real layout in this project
++// (1,206 transcripts, all `<sessionDir>/subagents/agent-<id>.jsonl`).
++//
++// Whether PreToolUse fires for sub-agent-originated calls at all is still unverified and belongs to
++// /vet-code's live verification step. This makes the path CORRECT if it fires; it does not settle it.
 +function ticketSessionDir(transcriptPath) {
 +  if (typeof transcriptPath !== 'string' || transcriptPath === '') return '';
-+  return transcriptPath.replace(/\.jsonl$/i, '');
++  const stripped = transcriptPath.replace(/\.jsonl$/i, '');
++  if (path.basename(path.dirname(stripped)).toLowerCase() === 'subagents') {
++    return path.dirname(path.dirname(stripped));
++  }
++  return stripped;
 +}
 +
 +// The sidecar carries `agentType` -- so this hook can require check-reviewer -- and NEVER a verdict,
@@ -1190,12 +1323,46 @@
 +  } catch (e) { return false; }
 +}
 +
++// Pull the DELIVERED text out of one assistant transcript record: the `text` blocks of
++// `message.content`, in order, and nothing else. Returns null when the record delivered no text.
++//
++// AN ALLOW-LIST, DELIBERATELY. The previous version re-serialised the whole record and scanned that,
++// which read the reviewer's `thinking` blocks as if they were its verdict -- confirmed against real
++// transcripts, whose assistant records carry exactly `text`, `thinking` and `tool_use` blocks. So
++// reasoning the reviewer chose NOT to deliver counted as the verdict, including a rehearsed PASS it
++// then talked itself out of; and a `tool_use` input mentioning the token (a reviewer grepping for its
++// own format) counted too, and being later in the record would have WON the last-occurrence rule.
++// Naming the one block type that is delivered output closes both, and closes every block type a future
++// schema adds -- `redacted_thinking` and anything after it are excluded by construction rather than by
++// a deny-list somebody must remember to extend.
++function ticketDeliveredText(rec) {
++  const c = rec && rec.message && rec.message.content;
++  if (typeof c === 'string') return c;                 // older single-string form: all of it delivered
++  if (!Array.isArray(c)) return null;
++  const parts = [];
++  for (const b of c) {
++    if (b && b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
++  }
++  return parts.length === 0 ? null : parts.join('\n');
++}
++
 +// -> 'ok' | 'no-token' | 'bad-record' | 'transcript-too-large'
-+// Search ONLY assistant-authored content; collect every occurrence of the prefix in it; require at
-+// least one, and require THE LAST ONE to read exactly `PASS <contentHash>`. Last-occurrence defeats
-+// the self-explaining-reviewer case: a reviewer may mention the form, but its verdict is what it ends
-+// on. A cap-exceeded transcript is a DISTINCT diagnosis from a missing token and must not be logged
-+// as one.
++// The verdict is read from the reviewer's FINAL DELIVERED MESSAGE -- the last assistant record that
++// delivered any text -- and the LAST token occurrence within it must read exactly `PASS <contentHash>`.
++//
++// "Final message", not "last occurrence in the file", which is what this did before. The refusal text
++// has always said the transcript must "END on" the token, and the design comment above says a
++// reviewer's "verdict is what it ends on"; last-in-file did not mean that. It let a reviewer emit PASS
++// early and then wander -- or, with the block filter above, put its real verdict in an earlier message
++// and something else last. Message granularity is what the skill actually instructs: end your reply
++// with the token. Now the code, the comment and the refusal text all say the same thing.
++//
++// Grounded rather than assumed: across all 1,206 sub-agent transcripts in this project, 1,204 end with
++// an `assistant [text]` record and nothing after it. Harness-authored assistant records are skipped
++// (`isApiErrorMessage`), because all 14 of those in this project DO carry a text block -- API Error
++// 529s from this very session -- and one landing after a valid verdict would otherwise shadow it.
++//
++// A cap-exceeded transcript is a DISTINCT diagnosis from a missing token and must not be logged as one.
 +function ticketTokenVerdict(sessionDir, agentId, hash) {
 +  if (!sessionDir || typeof agentId !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(agentId)) return 'bad-record';
 +  const file = path.join(sessionDir, 'subagents', 'agent-' + agentId + '.jsonl');
@@ -1206,27 +1373,28 @@
 +    text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
 +  } catch (e) { return 'bad-record'; }
 +
-+  let last = null;
-+  let count = 0;
++  let final = null;
 +  for (const line of text.split('\n')) {
 +    if (line.trim() === '') continue;
 +    let rec;
 +    try { rec = JSON.parse(line); } catch (e) { continue; }   // a partial trailing line is not fatal
-+    if (!rec || rec.type !== 'assistant') continue;
-+    // Re-serialise the assistant record and scan THAT: the prefix contains no character JSON
-+    // escapes, so it survives stringification intact, and this reads every content block without
-+    // having to know the block schema.
-+    const hay = JSON.stringify(rec);
-+    let from = 0;
-+    for (;;) {
-+      const at = hay.indexOf(TICKET_TOKEN_PREFIX, from);
-+      if (at === -1) break;
-+      count++;
-+      last = hay.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128);
-+      from = at + TICKET_TOKEN_PREFIX.length;
-+    }
++    if (!rec || rec.type !== 'assistant' || rec.isApiErrorMessage === true) continue;
++    const delivered = ticketDeliveredText(rec);
++    if (delivered !== null) final = delivered;
 +  }
-+  if (count === 0 || last === null) return 'no-token';
++  if (final === null) return 'no-token';
++
++  // Last occurrence WITHIN the final message: a reviewer may quote the form while explaining itself,
++  // but what it signs off with is the verdict.
++  let last = null;
++  let from = 0;
++  for (;;) {
++    const at = final.indexOf(TICKET_TOKEN_PREFIX, from);
++    if (at === -1) break;
++    last = final.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128);
++    from = at + TICKET_TOKEN_PREFIX.length;
++  }
++  if (last === null) return 'no-token';
 +  const m = last.match(/^\s*(PASS|REVISE)\s+([0-9a-f]{64})/i);
 +  if (!m) return 'no-token';
 +  if (m[1].toUpperCase() !== 'PASS') return 'no-token';
@@ -1289,10 +1457,12 @@
 +    why = ' The record names a reviewer whose sub-agent sidecar is missing, or whose agentType is' +
 +          ' not check-reviewer. The reviewer must be the independent read-only agent type.';
 +  } else if (reason === 'no-token') {
-+    why = ' The named reviewer\'s own transcript does not END on' +
++    why = ' The named reviewer\'s FINAL DELIVERED REPLY does not end on' +
 +          ' "TICKET-REVIEW-VERDICT: PASS <hash>" for THIS content. A record is not evidence; the' +
-+          ' reviewer\'s last assistant-authored verdict is. If the content changed after the review,' +
-+          ' re-review it -- reviewed-then-edited content has not been reviewed.';
++          ' reviewer\'s own sign-off is. Only delivered text counts -- a token that appears solely in' +
++          ' the reviewer\'s internal reasoning, in a tool call, or in an earlier message is NOT a' +
++          ' verdict, so have the reviewer end its reply with the token. If the content changed after' +
++          ' the review, re-review it -- reviewed-then-edited content has not been reviewed.';
 +  } else if (reason === 'bad-record') {
 +    why = ' The reviewer transcript could not be read at all. Re-run /vet-ticket, which rewrites the' +
 +          ' record.';
@@ -1308,9 +1478,17 @@
 +          ' shape. Re-run /vet-ticket on the payload you are actually about to send. Do not' +
 +          ' hand-edit the record.';
 +  } else if (reason === 'exempt-list-overflow') {
-+    why = ' The GEN-58 exemption list is over its ' + TICKET_EXEMPT_CAP + '-id cap. Nothing prunes it' +
-+          ' automatically, and reaching the cap means something is appending ids that are not log' +
-+          ' volumes -- find that bug rather than trimming the list.';
++    // The old wording ended "find that bug rather than trimming the list", which named no fix at all:
++    // nothing prunes the list automatically, so while it is over-cap EVERY in-scope write is refused,
++    // and the one route the text left open was break-glass. Trimming is ordinary, in-band and safe --
++    // the file is a plain id list in the staging dir, not a data store -- so the message now says to do
++    // both: find the appender, then trim. Diagnose first, but never leave the gate wedged.
++    why = ' The GEN-58 exemption list is over its ' + TICKET_EXEMPT_CAP + '-id cap, so this gate is' +
++          ' refusing every in-scope write until the list reads clean again. The cap is a tripwire, not' +
++          ' a quota: nothing prunes the list automatically, so reaching it means something is appending' +
++          ' ids that are not log volumes -- find that first, because trimming without it just refills.' +
++          ' Then TRIM the list back to the real log volumes: that is the in-band fix, and it is an' +
++          ' ordinary edit of ' + TICKET_EXEMPT_FILE + '. Do not reach for break-glass for this.';
 +  } else if (reason === 'exempt-list-unreadable') {
 +    why = ' The GEN-58 exemption list could not be read. A gate that cannot read its own exemption' +
 +          ' list must stop rather than guess.';
@@ -1425,6 +1603,29 @@
 +    return blockTicketVetting({ target: sc.target, reason: 'bad-record', ids: sc.ids });
 +  }
 +
++  // GEN-508 second-review fix: findTicketPassFile matched the hash against its OWN read of this file
++  // and then returned only the path, so every field trusted below comes from the SECOND read above.
++  // Re-assert the binding here: without it, a file rewritten between the two reads is trusted on
++  // fields that were never matched against this write's hash. On the PASS branch ticketTokenVerdict
++  // re-checks sc.hash against the reviewer's token and largely closes this; on the WAIVED branch
++  // nothing did, which is exactly where a mismatch is cheapest to exploit.
++  //
++  // Re-assert with ticketRecordMatches, NOT a bare `!==`. The first version of this guard used
++  // `rec.contentHash !== sc.hash`, which the review after it caught as two defects in one line:
++  //   1. STRICTER than the matcher above (2765 compares `.trim().toLowerCase()`), so a record whose
++  //      hash carries the trailing newline `ticketHashCli` prints -- exactly what the trim exists to
++  //      absorb -- matched the finder and then failed here as `bad-record`, whose remedy text says to
++  //      re-run /vet-ticket. That regenerates an identical record, so it was a closed lockout loop
++  //      whose only exit was break-glass. A re-assert must re-assert the SAME predicate.
++  //   2. NOT null-safe. `JSON.parse('null')` succeeds, so `rec` can be null and `rec.contentHash`
++  //      throws -- uncaught, i.e. exit 1, i.e. a silent approve. This line was the FIRST dereference
++  //      of `rec`, so the bare form moved the crash site earlier rather than closing it.
++  // ticketRecordMatches returns false on a null record, so one call fixes both.
++  if (!ticketRecordMatches(rec, sc.hash)) {
++    logTicketGateEvent({ event: 'block', tool: tool, surface: sc.surface, target: sc.target, reason: 'bad-record' });
++    return blockTicketVetting({ target: sc.target, reason: 'bad-record', ids: sc.ids });
++  }
++
 +  // Cheap pre-filter -- fail fast before opening a large transcript. TWO values, not three:
 +  // adjudication is no longer a hook input at all. These fields are NOT the authority; the token is.
 +  const waived = rec.waived === true;
@@ -1468,7 +1669,8 @@
 +// WHY A CLI RATHER THAN A CITED FORMULA: the skill must use the SAME normaliser and the same hash
 +// assembly as the hook, and skill/hook drift is a failure whose only escape is break-glass. The
 +// normaliser is ~100 lines; reproducing it by hand would guarantee the drift. One definition, called
-+// by both, removes the failure mode instead of documenting it.
++// by both, removes the failure mode instead of documenting it -- and as of 2026-08-05 that is true of
++// the ASSEMBLY too, via ticketContentHash. It previously was not: this function held its own copy.
 +//
 +// Read-only by construction: parse a file, hash, print, exit. No fs write, no network.
 +function ticketHashCli(argv) {
@@ -1484,15 +1686,28 @@
 +    process.stderr.write('ticket-hash: cannot read ' + file + ' as JSON.\n');
 +    return process.exit(3);
 +  }
-+  let norm;
-+  try { norm = ticketNormalise(ti); } catch (e) { norm = { ok: false, why: 'normalise-threw' }; }
-+  // ok === false is NOT an error here: the hook hashes the raw input in that case, so a payload we
-+  // could not fully read is still a payload a review can be bound to. Exiting non-zero would leave
-+  // break-glass as the only door, which was a reviewed defect.
-+  const h = norm.ok
-+    ? sha256Hex(stableStringify(norm.root === undefined ? null : norm.root))
-+    : sha256Hex(stableStringify(ti === undefined ? null : ti));
++  let norm, threw = false;
++  try { norm = ticketNormalise(ti); } catch (e) { threw = true; norm = { ok: false, why: 'normalise-threw' }; }
++
++  // A THROW AND A BUDGET BUST ARE DIFFERENT CASES, and the NOTE below was written as if they were one.
++  // On a bust the normaliser RETURNS ok:false, the hook's ticketScope returns scope 'block' carrying a
++  // hash, and the flow then reads the record directory -- so a record really can clear it, exactly as
++  // the NOTE promises. On a throw, ticketScope itself throws, its caller catches, and the write is
++  // refused as `internal-error` BEFORE any record is read: nothing can clear it. Printing a hash for
++  // that case invites a full reviewer run that buys nothing, and then an unexplained block afterwards.
++  // Refuse to print one, on the same reasoning ticketHashShellCli already uses for the surfaces its arm
++  // will not hash: a refusal now beats a wasted review and a mystery later.
++  if (threw) {
++    process.stderr.write('ticket-hash: the normaliser THREW on this payload (' + (norm.why || 'unknown') +
++      '). That is a bug in the gate, not in your payload: the hook refuses such a write as' +
++      ' internal-error BEFORE it reads any record, so no record can clear it and there is nothing worth' +
++      ' minting. Report it against GEN-508 -- re-running /vet-ticket will not help.\n');
++    return process.exit(3);
++  }
++
++  const h = ticketContentHash(norm, ti);
 +  if (!norm.ok) {
++    // Reachable only for a genuine budget bust now, which is the case this text is true of.
 +    process.stderr.write('ticket-hash: NOTE this payload could not be read end to end (' +
 +      (norm.why || 'unknown') + '); the hook will hard-block it with reason unreadable-payload, and' +
 +      ' this hash is the raw-input fallback that a record CAN match. Prefer re-issuing the call in' +
@@ -1560,7 +1775,7 @@
  // ---- GEN-488: advisory redirect-target nudge (prevention, NOT a safety mechanism) ----
  // Fires a one-line additionalContext warning when a shell command's redirect target
  // LITERALLY resolves to a junk-prone directory (GEN-373 evidence: top-level strays):
-@@ -1707,6 +3246,15 @@
+@@ -1707,6 +3452,15 @@ function redirectNudgeContext(input, tool, cmd) {
  
  // ---- main ------------------------------------------------------------------
  
@@ -1576,22 +1791,25 @@
  let raw = '';
  process.stdin.setEncoding('utf8');
  process.stdin.on('data', d => { raw += d; });
-@@ -1749,6 +3297,14 @@
+@@ -1749,6 +3503,17 @@ process.stdin.on('end', () => {
    // through. Target-anchored (fail-safe), same as enforceVetting.
    enforceCheckDue(tool, input.tool_input, input.tool_input && input.tool_input.command, input.cwd);
  
-+  // GEN-508: ticket-quality gate for Notion writes -- the four MCP write tools AND raw REST/curl.
++  // GEN-508: ticket-quality gate for Notion writes -- the four MCP write tools ONLY. Piece 1a: the
++  // raw REST/curl arm (§4.5) is present in this file but UNWIRED, so nothing here reaches it. An
++  // earlier version of this comment said "AND raw REST/curl", which described the pre-narrowing
++  // build and would have told whoever wires piece 2 that the work was already done.
 +  // Runs before the allow-list so an allow entry cannot bypass it; consumes a one-time review
 +  // record on match (approve), hard-blocks (exit 2) on an in-scope write with no usable record,
 +  // falls through otherwise. Takes the WHOLE envelope, not just tool_input: it needs
-+  // `transcript_path` to verify the named reviewer's own sub-agent transcript, and `cwd` for the
-+  // REST script-token scan.
++  // `transcript_path` to verify the named reviewer's own sub-agent transcript. (`cwd` is passed for
++  // the REST script-token scan, which piece 2 reconnects; under piece 1a it is unused.)
 +  enforceTicketVetting(tool, input);
 +
    // Already allow-listed by settings (bare names) => no action, no log.
    if (bareAllowList().has(tool)) return defer();
  
-@@ -1761,6 +3317,7 @@
+@@ -1761,6 +3526,7 @@ process.stdin.on('end', () => {
      if (isSafeSyncFromClaude(cmd)) return approve('Auto-approved: config-sync (From-Claude)');
      if (isSafeNotionTicketLookup(cmd)) return approve('Auto-approved: notion-ticket-lookup.ps1 (GEN-316)');
      if (isSafeLoggateTouch(cmd)) return approve('Auto-approved: compact-gate marker (GEN-348)');

@@ -170,9 +170,21 @@ anything this skill writes.** Brief the reviewer on all four rules:
 - `<hash>` is the Step-1 `contentHash`, all 64 hex characters, copied verbatim. A wrong or truncated
   hash reads exactly like no review at all.
 - The verdict word must agree with `STATUS`. The hook only accepts `PASS`.
-- The reviewer must **not** write the prefix `TICKET-REVIEW-VERDICT:` anywhere else in its reply — not
-  when quoting this instruction, not when explaining itself. The hook takes the **last** occurrence in
-  the transcript, so a trailing mention overrides the real verdict and the write blocks.
+- The reviewer must **not** write the prefix `TICKET-REVIEW-VERDICT:` anywhere else in that final
+  reply — not when quoting this instruction, not when explaining itself. The hook takes the **last**
+  occurrence, so a trailing mention overrides the real verdict and the write blocks.
+
+**Where the hook looks, exactly** (realigned 2026-08-05 — it previously read wider than this, and the
+description here read wider still): the reviewer's **final delivered reply** — the last assistant
+message in its transcript that delivered any text, skipping harness-authored API-error records — and
+within that message, the **last** occurrence of the prefix. Two consequences worth briefing:
+
+- Only **delivered text** counts. A token that appears solely in the reviewer's internal reasoning, or
+  in the arguments of a tool call it made, is not a verdict. So a reviewer *may* reason about the token
+  format privately without breaking its own sign-off — but nothing it did not say out loud will clear
+  the gate.
+- Only the **final message** counts. A PASS delivered mid-review and then not repeated at the end is
+  not a verdict. Brief the reviewer to sign off in its concluding reply, not along the way.
 
 Why the token rather than the record's own `verdict` field: the hook's whole purpose is not to trust
 this skill. The token establishes three facts at once that a skill-written field cannot — this agent
