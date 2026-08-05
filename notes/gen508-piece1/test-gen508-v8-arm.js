@@ -50,19 +50,31 @@ console.log('\n== A. the MCP surface ==');
   check('truncated id -> bad-target', blocked(r, 'target is unreadable'), 'err=' + r.err.slice(0, 160));
 }
 {
-  // The GEN-58 subtree carve-out, keyed on the hardcoded page id.
-  const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', old_str: 'a', new_str: 'b' });
-  check('GEN-58 content write is exempt', fellThrough(r), 'code=' + r.code + ' err=' + r.err.slice(0, 120));
+  // The GEN-58 subtree carve-out, keyed on the hardcoded page id, IN THE SHAPE THE TOOL ACTUALLY
+  // SENDS. Until 2026-08-05 this assertion used `{command:'update_content', old_str, new_str}` at the
+  // root -- a shape the live notion-update-page schema cannot produce, since update_content carries
+  // its edits in `content_updates[]` and root new_str belongs to replace_content alone. So the suite
+  // was green on a fictional payload while every real GEN-58 log edit hard-blocked, which is how the
+  // defect survived two review rounds. An assertion over a payload the tool cannot send is worse than
+  // no assertion at all: it reports coverage it does not have.
+  const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content',
+                                        content_updates: [{ old_str: 'a', new_str: 'b' }] });
+  check('GEN-58 content write is exempt (real content_updates[] shape)', fellThrough(r),
+        'code=' + r.code + ' err=' + r.err.slice(0, 160));
 }
 {
   // ...but NOT with a destructive key present.
-  const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', old_str: 'a', new_str: 'b', allow_deleting_content: true });
+  const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content',
+                                        content_updates: [{ old_str: 'a', new_str: 'b' }],
+                                        allow_deleting_content: true });
   check('GEN-58 + allow_deleting_content is NOT exempt', r.code === 2, 'code=' + r.code);
 }
 {
-  // ...nor with an empty new_str (the one clause that costs a real write).
-  const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', old_str: 'a', new_str: '   ' });
-  check('GEN-58 + whitespace-only new_str is NOT exempt', r.code === 2, 'code=' + r.code);
+  // ...nor with an empty new_str (the one clause that costs a real write). NESTED, which is the only
+  // place a real one can appear -- and the whole reason clause 4 had to become a recursive walk.
+  const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content',
+                                        content_updates: [{ old_str: 'a', new_str: '   ' }] });
+  check('GEN-58 + whitespace-only nested new_str is NOT exempt', r.code === 2, 'code=' + r.code);
 }
 {
   // replace_content is not one of the four content commands.
@@ -171,7 +183,7 @@ console.log('\n== D. the record path end to end ==');
 
   writeTranscript('REVISE'); writeRecord();
   const rRevise = callWith();
-  check('a REVISE token does NOT clear the gate', blocked(rRevise, 'does not END on'), 'code=' + rRevise.code + ' err=' + rRevise.err.slice(0, 200));
+  check('a REVISE token does NOT clear the gate', blocked(rRevise, 'does not end on'), 'code=' + rRevise.code + ' err=' + rRevise.err.slice(0, 200));
 
   writeTranscript('PASS'); writeRecord({ verdict: 'REVISE' });
   const rBadVerdict = callWith();
@@ -205,6 +217,386 @@ console.log('\n== D. the record path end to end ==');
   const rNested = callWith();
   check('a nested targets[] record does NOT match (the v7 skill shape)',
         blocked(rNested, 'no usable ticket review record'), 'code=' + rNested.code + ' err=' + rNested.err.slice(0, 160));
+
+  // Regression guard for the fail-open the SECOND code review found (2026-08-05). A pass file whose
+  // entire content is the literal `null` parses without throwing -- `null` IS valid JSON -- so the
+  // reader's own try/catch never fires, and `pass.expires` then threw a TypeError that nothing on
+  // that path caught. An uncaught throw exits non-2, which is NOT a refusal: the gated write went
+  // through, and kept going through on every gated call until the file was deleted by hand.
+  // Confirmed live before the fix (exit 1, no refusal on stderr) and after (refusal restored).
+  //
+  // The five values below are every JSON scalar/shape that survives JSON.parse but is not a usable
+  // record. Only `null` ever threw; the rest are here so a future "simplify" of the guard cannot
+  // narrow it back to a null-only check and silently reopen the others.
+  //
+  // This guard is worth more than its own gate: the reader it protects (findPassInDir) is shared with
+  // the staging, vetting and check-due pass dirs, so the same fail-open was live in three ALREADY
+  // INSTALLED gates -- including the one guarding this hook's own code.
+  for (const junk of ['null', '[]', '0', 'false', '"str"']) {
+    fs.writeFileSync(path.join(passDir, 'rec.json'), junk, 'utf8');
+    const rJunk = callWith();
+    check('a pass file containing ' + junk + ' refuses instead of crashing',
+          blocked(rJunk, 'no usable ticket review record'),
+          'code=' + rJunk.code + ' err=' + rJunk.err.slice(0, 120));
+  }
+  fs.rmSync(path.join(passDir, 'rec.json'), { force: true });
+
+  // Regression guard for a LOCKOUT the second review's own first fix introduced. That fix re-asserted
+  // the hash after the record's second read using a bare `rec.contentHash !== sc.hash` -- stricter than
+  // ticketRecordMatches, which compares `.trim().toLowerCase()`. Since `--ticket-hash` prints the digest
+  // with a trailing newline, a skill that captures stdout without stripping produces exactly the record
+  // the trim exists to absorb: it matched the finder, then failed the re-assert as `bad-record`, whose
+  // remedy text says re-run /vet-ticket -- which regenerates an identical record. A closed loop whose
+  // only exit was break-glass. The re-assert now calls ticketRecordMatches, so it re-asserts the SAME
+  // predicate. This must APPROVE.
+  writeTranscript('PASS'); writeRecord({ contentHash: hash + '\n' });
+  const rTrailingNl = callWith();
+  check('a record whose contentHash has the CLI trailing newline still APPROVES (no lockout)',
+        rTrailingNl.code === 0 && rTrailingNl.out.indexOf('review record consumed') !== -1,
+        'code=' + rTrailingNl.code + ' err=' + rTrailingNl.err.slice(0, 160));
+
+  writeTranscript('PASS'); writeRecord({ contentHash: hash.toUpperCase() });
+  const rUpper = callWith();
+  check('an upper-case contentHash still APPROVES (matcher and re-assert agree)',
+        rUpper.code === 0 && rUpper.out.indexOf('review record consumed') !== -1,
+        'code=' + rUpper.code + ' err=' + rUpper.err.slice(0, 160));
+}
+
+console.log('\n== A2. the housekeeping exemption is TOOL-SCOPED ==');
+{
+  // Regression guard for a silent approve the second review found: the housekeeping exemption was not
+  // tool-scoped, so notion-duplicate-page with a property-edit-shaped payload returned 'out'. A
+  // duplicate SPAWNS A LIVE TICKET, so that is a create reaching Notion with no review record.
+  const hkShape = { page_id: PAGE, properties: { Status: 'Done' } };
+
+  const rDup = mcp('notion-duplicate-page', hkShape);
+  check('duplicate-page with a housekeeping-shaped payload is GATED, not exempt',
+        rDup.code === 2, 'code=' + rDup.code + ' err=' + rDup.err.slice(0, 160));
+
+  const rMove = mcp('notion-move-pages', hkShape);
+  check('move-pages with a housekeeping-shaped payload is GATED, not exempt',
+        rMove.code === 2, 'code=' + rMove.code + ' err=' + rMove.err.slice(0, 160));
+
+  const rCreate = mcp('notion-create-pages', hkShape);
+  check('create-pages with a housekeeping-shaped payload is GATED, not exempt',
+        rCreate.code === 2, 'code=' + rCreate.code + ' err=' + rCreate.err.slice(0, 160));
+
+  // The genuine housekeeping case must still fall through -- the scoping narrowed the exemption and
+  // must not have removed it. `update_properties` on Status is the case the exemption exists for.
+  const rKeep = mcp('notion-update-page',
+                    { page_id: PAGE, command: 'update_properties', properties: { Status: 'Done' } });
+  check('update-page housekeeping STILL falls through (exemption not lost)', fellThrough(rKeep),
+        'code=' + rKeep.code + ' err=' + rKeep.err.slice(0, 160));
+
+  // NOT asserted, deliberately, so nobody reads this suite as covering it: the same review added a
+  // re-check that the matched record's contentHash still equals this write's hash after the SECOND
+  // read of the file (findTicketPassFile matches on its own read, then returns only a path). That
+  // branch is unreachable without a concurrent rewrite of the same filename between the two reads,
+  // so it cannot be driven from a single-process suite. It is defence-in-depth with no test behind
+  // it -- if a future change makes the two reads diverge by any means a test CAN reach, assert it.
+}
+
+// ---------------------------------------------------------------------------------------------------
+// The four sections below are the THIRD review round's regression guards (2026-08-05). Each one is a
+// defect that was CONFIRMED against live code or a live schema before being fixed, not a hypothesis.
+// ---------------------------------------------------------------------------------------------------
+
+// Shared builder for the token sections: a transcript whose assistant records have exactly the block
+// structure real ones do (`text`, `thinking`, `tool_use`), so the block filter is tested against the
+// real schema rather than a simplification of it.
+function tokenFixture(agentId, sessionDir) {
+  const subs = path.join(sessionDir, 'subagents');
+  fs.mkdirSync(subs, { recursive: true });
+  fs.mkdirSync(PASS_DIR, { recursive: true });
+  fs.writeFileSync(path.join(subs, 'agent-' + agentId + '.meta.json'),
+    JSON.stringify({ agentType: 'check-reviewer', model: 'opus' }), 'utf8');
+  return {
+    // `recs` is an array of assistant content-block arrays, written in order. A leading user record
+    // carrying the PASS form is always included: it is the original trap and must stay covered.
+    write: function (recs) {
+      const lines = [JSON.stringify({ type: 'user',
+        message: { content: 'end with TICKET-REVIEW-VERDICT: PASS <hash>' } })];
+      for (const blocks of recs) lines.push(JSON.stringify({ type: 'assistant', message: { content: blocks } }));
+      fs.writeFileSync(path.join(subs, 'agent-' + agentId + '.jsonl'), lines.join('\n') + '\n', 'utf8');
+    },
+    writeRaw: function (lines) {
+      fs.writeFileSync(path.join(subs, 'agent-' + agentId + '.jsonl'), lines.join('\n') + '\n', 'utf8');
+    },
+    record: function (hash, over) {
+      const f = path.join(PASS_DIR, 'rec.json');
+      fs.writeFileSync(f, JSON.stringify(Object.assign({
+        kind: 'ticket', surface: 'notion-mcp', contentHash: hash, reviewerAgentId: agentId,
+        verdict: 'PASS', waived: false, target: 'page ' + PAGE,
+        expires: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+      }, over || {})), 'utf8');
+      return f;
+    }
+  };
+}
+
+console.log('\n== F. the verdict token is read from DELIVERED text only ==');
+{
+  // CONFIRMED against real transcripts before the fix: the scan JSON.stringify'd the whole assistant
+  // record with no block-type filter, so a reviewer's `thinking` blocks -- reasoning it chose NOT to
+  // deliver -- counted as its verdict, as did the arguments of its own `tool_use` calls. Both are
+  // reachable without any forgery: a reviewer that rehearses a PASS and then talks itself out of it,
+  // or one that greps for its own token format, produces exactly these transcripts.
+  const sessionDir = path.join(DIR, 'sess');
+  const agentId = 'a2222222222222222';
+  const fx = tokenFixture(agentId, sessionDir);
+
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const hash = cli(['--ticket-hash', p]).out.trim();
+  const tok = v => 'TICKET-REVIEW-VERDICT: ' + v + ' ' + hash;
+  const callWith = () => run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                               transcript_path: sessionDir + '.jsonl' });
+
+  fx.write([[{ type: 'thinking', thinking: 'I could write ' + tok('PASS') + ' here.' },
+             { type: 'text', text: 'Findings below.\n\n' + tok('REVISE') }]]);
+  fx.record(hash);
+  let r = callWith();
+  check('a PASS in a thinking block does NOT override a delivered REVISE',
+        blocked(r, 'does not end on'), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  fx.write([[{ type: 'thinking', thinking: 'Verdict: ' + tok('PASS') },
+             { type: 'text', text: 'Findings below. No verdict line here.' }]]);
+  fx.record(hash);
+  r = callWith();
+  check('a PASS in a thinking block alone is NOT a verdict',
+        blocked(r, 'does not end on'), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  fx.write([[{ type: 'text', text: 'Let me check the format.' },
+             { type: 'tool_use', name: 'Grep', input: { pattern: tok('PASS') } }]]);
+  fx.record(hash);
+  r = callWith();
+  check('a PASS inside a tool_use argument is NOT a verdict',
+        blocked(r, 'does not end on'), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  // "Last delivered message", not "last occurrence in the file": a token in an EARLIER message is not
+  // the reviewer's sign-off, which is what the refusal text and the skill both say it must be.
+  fx.write([[{ type: 'text', text: 'Preliminary: ' + tok('PASS') }],
+            [{ type: 'text', text: 'On reflection there are two blockers. Details above.' }]]);
+  fx.record(hash);
+  r = callWith();
+  check('a PASS in an earlier message does not clear a final message without one',
+        blocked(r, 'does not end on'), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  // The converse must still work, or the fix would have created a lockout: an early REVISE followed by
+  // a final PASS is a reviewer that changed its mind, and the last DELIVERED word is the verdict.
+  fx.write([[{ type: 'text', text: 'First read: ' + tok('REVISE') }],
+            [{ type: 'thinking', thinking: 'the second finding was mine, not the code\'s' },
+             { type: 'text', text: 'Corrected. ' + tok('PASS') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('a final delivered PASS after an earlier REVISE APPROVES',
+        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  // Grounded in this project's own transcripts: all 14 isApiErrorMessage records carry a text block
+  // (API Error 529s), so one landing after a valid verdict would shadow it under a strict
+  // "final text-bearing record" rule. Harness-authored records are skipped for exactly this case.
+  fx.writeRaw([
+    JSON.stringify({ type: 'user', message: { content: 'brief' } }),
+    JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Done. ' + tok('PASS') }] } }),
+    JSON.stringify({ type: 'assistant', isApiErrorMessage: true,
+                     message: { content: [{ type: 'text', text: 'API Error: 529 Overloaded.' }] } })
+  ]);
+  fx.record(hash);
+  r = callWith();
+  check('a trailing API-error record does not shadow a valid verdict',
+        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  // A final message may deliver several text blocks; the token in any of them is delivered output.
+  fx.write([[{ type: 'text', text: 'Summary first.' },
+             { type: 'thinking', thinking: 'anything here is not delivered' },
+             { type: 'text', text: tok('PASS') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('a multi-text-block final message is read whole', r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  // LAST occurrence WITHIN the final message. Without this, taking the FIRST occurrence would pass
+  // every other assertion in this section -- and this is the rule that stops a reviewer which restates
+  // the required format after signing off from overriding its own delivered verdict. It is also the
+  // exact trap the token design was built around, so it must be asserted rather than assumed.
+  fx.write([[{ type: 'text', text: 'Draft verdict: ' + tok('PASS') + '\n\nOn reflection: ' + tok('REVISE') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('within one final message the LAST occurrence wins (PASS then REVISE blocks)',
+        blocked(r, 'does not end on'), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  fx.write([[{ type: 'text', text: 'Quoting the form ' + tok('REVISE') + '\n\nActual: ' + tok('PASS') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('...and REVISE then PASS approves (not first-occurrence)',
+        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  // An empty or whitespace-only trailing record must NOT become "the final message" and shadow a real
+  // verdict behind it. Real transcripts write roughly one content block per record, so a near-empty
+  // trailing text record is an ordinary shape, not an exotic one. Failure direction was a false refusal
+  // whose remedy was an unexplained re-review.
+  fx.write([[{ type: 'text', text: 'Done. ' + tok('PASS') }],
+            [{ type: 'text', text: '   \n ' }]]);
+  fx.record(hash);
+  r = callWith();
+  check('a whitespace-only trailing record does not shadow the verdict',
+        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+}
+
+console.log('\n== G. the caller\'s transcript path resolves when the caller is a sub-agent ==');
+{
+  // Before the fix ticketSessionDir only stripped `.jsonl`, so a SUB-AGENT caller -- whose
+  // transcript_path is `<sessionDir>/subagents/agent-<self>.jsonl` -- resolved one directory too deep.
+  // Every sidecar lookup then pointed at `<...>/agent-<self>/subagents/...`, which cannot exist, so a
+  // legitimately minted record was refused as `reviewer-unverified`: a block whose stated remedy could
+  // not clear it. (Whether PreToolUse fires for sub-agent calls at all is a separate open question for
+  // /vet-code's live verification; this asserts the path is right IF it does.)
+  const sessionDir = path.join(DIR, 'sess');
+  const agentId = 'a3333333333333333';
+  const fx = tokenFixture(agentId, sessionDir);
+
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'x', new_str: 'y' }] };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const hash = cli(['--ticket-hash', p]).out.trim();
+  fx.write([[{ type: 'text', text: 'TICKET-REVIEW-VERDICT: PASS ' + hash }]]);
+
+  // The caller is a DIFFERENT sub-agent in the same session, so its own transcript sits beside the
+  // reviewer's -- the exact layout the strip-only version could not climb out of.
+  const callerPath = path.join(sessionDir, 'subagents', 'agent-a4444444444444444.jsonl');
+  fx.record(hash);
+  const rSub = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                     transcript_path: callerPath });
+  check('a sub-agent caller resolves the reviewer sidecar and APPROVES',
+        rSub.code === 0 && rSub.out.indexOf('review record consumed') !== -1,
+        'code=' + rSub.code + ' err=' + rSub.err.slice(0, 200));
+
+  // The main-session path must not have regressed: the climb fires only inside a `subagents` dir.
+  fx.write([[{ type: 'text', text: 'TICKET-REVIEW-VERDICT: PASS ' + hash }]]);
+  fx.record(hash);
+  const rMain = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                      transcript_path: sessionDir + '.jsonl' });
+  check('the main-session transcript path still resolves',
+        rMain.code === 0 && rMain.out.indexOf('review record consumed') !== -1,
+        'code=' + rMain.code + ' err=' + rMain.err.slice(0, 200));
+
+  fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+}
+
+console.log('\n== H. the GEN-58 carve-out reads the shape update_content really takes ==');
+{
+  // Confirmed against the live notion-update-page schema AND against the working hook: every real
+  // GEN-58 log edit blocked, because `content_updates` was not a permitted root key. The naive fix --
+  // permit the key -- would have opened a wipe path, because the emptiness clause only inspected root
+  // `new_str` and could not see the ones nested inside the array. Both halves are asserted here, and
+  // the emptying cases are the reason clause 4 became a recursive walk.
+  const ok = cu => mcp('notion-update-page', { page_id: GEN58, command: 'update_content', content_updates: cu });
+
+  let r = ok([{ old_str: 'a', new_str: 'b' }, { old_str: 'c', new_str: 'd' }]);
+  check('a multi-edit GEN-58 log write is exempt', fellThrough(r), 'code=' + r.code + ' err=' + r.err.slice(0, 160));
+
+  r = ok([{ old_str: 'a', new_str: 'b', replace_all_matches: true }]);
+  check('replace_all_matches is a permitted element key', fellThrough(r), 'code=' + r.code + ' err=' + r.err.slice(0, 160));
+
+  r = ok([{ old_str: 'a 6000-char block', new_str: '' }]);
+  check('an EMPTYING nested edit is NOT exempt (the wipe path the fix must not open)', r.code === 2, 'code=' + r.code);
+
+  r = ok([{ old_str: 'a', new_str: 'b' }, { old_str: 'c', new_str: '  \n ' }]);
+  check('one whitespace-only edit among several is NOT exempt', r.code === 2, 'code=' + r.code);
+
+  r = ok([{ old_str: 'a', new_str: 'b', unexpected_key: 1 }]);
+  check('an unrecognised element key is NOT exempt (closed shape)', r.code === 2, 'code=' + r.code);
+
+  r = ok([{ new_str: 'b' }]);
+  check('an element with no old_str is NOT exempt', r.code === 2, 'code=' + r.code);
+
+  r = ok([]);
+  check('an empty content_updates array is NOT exempt', r.code === 2, 'code=' + r.code);
+
+  r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', content_updates: 'nope' });
+  check('a non-array content_updates is NOT exempt', r.code === 2, 'code=' + r.code);
+
+  r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', old_str: 'a', new_str: 'b' });
+  check('update_content with no content_updates is NOT exempt (malformed, not exempt)', r.code === 2, 'code=' + r.code);
+
+  // insert_content is the OTHER real command, and it carries no content_updates at all -- so clause 6
+  // must not demand one. This is the assertion that would have caught an over-strict fix.
+  r = mcp('notion-update-page', { page_id: GEN58, command: 'insert_content', content: '## Vol. 9', position: { type: 'end' } });
+  check('insert_content (real shape) is still exempt', fellThrough(r), 'code=' + r.code + ' err=' + r.err.slice(0, 160));
+
+  // A nested new_str is checked ANYWHERE, not only under content_updates -- the walk is over the tree,
+  // because naming a field path is the mistake that produced this defect in the first place.
+  r = mcp('notion-update-page', { data: JSON.stringify({ page_id: GEN58, command: 'update_content',
+                                                         content_updates: [{ old_str: 'a', new_str: '' }] }) });
+  check('an emptying edit inside an ENVELOPE is still caught', r.code === 2, 'code=' + r.code);
+
+  // And a live ticket is still gated in the real shape: the carve-out is keyed on the page, not on the
+  // payload shape, so widening the shape must not have widened the exemption.
+  r = mcp('notion-update-page', { page_id: PAGE, command: 'update_content',
+                                  content_updates: [{ old_str: 'a', new_str: 'b' }] });
+  check('the same real shape on a LIVE ticket is still gated', r.code === 2, 'code=' + r.code);
+}
+
+console.log('\n== I. the two refusal texts that named no usable fix ==');
+{
+  // The exempt-list-overflow message used to end "find that bug rather than trimming the list", which
+  // left break-glass as the only route out of a wedged gate -- nothing prunes the list automatically,
+  // so while it is over-cap EVERY in-scope write is refused. It now names the in-band fix as well.
+  const exemptFile = path.join(DIR, '..', '..', '.claude-staging', 'ticket-gate-exempt-pages.txt');
+  fs.mkdirSync(path.dirname(exemptFile), { recursive: true });
+  const lines = [];
+  for (let i = 0; i < 4200; i++) lines.push(i.toString(16).padStart(32, '0'));
+  fs.writeFileSync(exemptFile, lines.join('\n'), 'utf8');
+
+  const r = mcp('notion-update-page', { page_id: PAGE, command: 'update_content',
+                                        content_updates: [{ old_str: 'a', new_str: 'b' }] });
+  check('an over-cap exemption list blocks', blocked(r, 'over its'), 'code=' + r.code + ' err=' + r.err.slice(0, 200));
+  check('...and the refusal now names trimming as the in-band fix',
+        r.err.indexOf('TRIM the list') !== -1 && r.err.indexOf('Do not reach for break-glass') !== -1,
+        'err=' + r.err.slice(0, 400));
+  fs.rmSync(exemptFile, { force: true });
+}
+{
+  // The hash ASSEMBLY is now one function called by both the gate and the CLI; it used to be two
+  // byte-identical copies, while the CLI's own comment argued that one definition called by both is
+  // what removes skill/hook drift. What was duplicated is a DECISION -- which value is hashed when the
+  // payload cannot be read end to end -- so the assertion that matters is that a record minted from the
+  // CLI's FALLBACK digest clears the gate's block. If the two ever diverge on that branch, no record
+  // can match and break-glass is the only escape.
+  const sessionDir = path.join(DIR, 'sess');
+  const agentId = 'a5555555555555555';
+  const fx = tokenFixture(agentId, sessionDir);
+
+  const ti = { data: '{"page_id": "unterminated' };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const c = cli(['--ticket-hash', p]);
+  check('the CLI still prints a fallback digest for an unreadable payload',
+        c.code === 0 && /^[0-9a-f]{64}$/.test(c.out.trim()) && c.err.indexOf('raw-input fallback') !== -1,
+        'code=' + c.code + ' out=' + c.out.slice(0, 80));
+
+  fx.write([[{ type: 'text', text: 'TICKET-REVIEW-VERDICT: PASS ' + c.out.trim() }]]);
+  fx.record(c.out.trim());
+  const r = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                  transcript_path: sessionDir + '.jsonl' });
+  check('a record minted from that digest clears the unreadable-payload block (both sites agree)',
+        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        'code=' + r.code + ' err=' + r.err.slice(0, 200));
+  fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+
+  // NOT asserted, deliberately: the CLI's new `normalise-threw` branch, which now exits non-zero
+  // instead of printing a hash the hook's internal-error block could never honour. ticketNormalise is
+  // written not to throw on anything JSON.parse can produce -- no getters, no cycles, every budget
+  // checked rather than trusted -- so there is no input a file-driven suite can hand it to reach that
+  // branch. It is a guard against a future bug in the normaliser, and saying so is better than
+  // implying coverage, which is the same call this suite already makes for the hash re-assert.
 }
 
 console.log('\n== E. latency ==');
