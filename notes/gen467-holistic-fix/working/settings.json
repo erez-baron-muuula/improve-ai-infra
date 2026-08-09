@@ -1,0 +1,277 @@
+{
+  "model": "opus",
+  "permissions": {
+    "allow": [
+      "Edit(C:\\Users\\Erez\\.claude\\*)",
+      "Write(C:\\Users\\Erez\\.claude\\*)",
+      "WebFetch",
+      "WebSearch",
+      "Read",
+      "Glob",
+      "Grep",
+      "ToolSearch",
+      "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-fetch",
+      "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-search",
+      "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-get-comments",
+      "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-get-users",
+      "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-get-teams",
+      "mcp__ad11ec05-9322-406d-a216-82b609f5efef__search_threads",
+      "mcp__ad11ec05-9322-406d-a216-82b609f5efef__get_thread",
+      "mcp__ad11ec05-9322-406d-a216-82b609f5efef__list_labels",
+      "mcp__ad11ec05-9322-406d-a216-82b609f5efef__list_drafts",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_read_channel",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_read_thread",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_read_canvas",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_read_user_profile",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_search_channels",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_search_public",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_search_public_and_private",
+      "mcp__ee781d17-0ee1-4573-b0c9-81cacb12ca45__slack_search_users",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getJiraIssue",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__search",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__searchJiraIssuesUsingJql",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getVisibleJiraProjects",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getJiraProjectIssueTypesMetadata",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getTransitionsForJiraIssue",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getJiraIssueTypeMetaWithFields",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getJiraIssueRemoteIssueLinks",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__atlassianUserInfo",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__lookupJiraAccountId",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getAccessibleAtlassianResources",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getConfluencePage",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getConfluenceSpaces",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getPagesInConfluenceSpace",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__searchConfluenceUsingCql",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getConfluencePageDescendants",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getConfluencePageFooterComments",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getConfluencePageInlineComments",
+      "mcp__9da13451-799f-4bf6-9a8f-58fe25fc6c80__getIssueLinkTypes",
+      "mcp__29434d4d-f523-42ae-803a-2fb8d7bd3ee2__read_file_content",
+      "mcp__29434d4d-f523-42ae-803a-2fb8d7bd3ee2__search_files",
+      "mcp__29434d4d-f523-42ae-803a-2fb8d7bd3ee2__get_file_metadata",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "mcp__ccd_session_mgmt__list_sessions",
+      "mcp__ccd_session__mark_chapter",
+      "PowerShell(Test-Path *)",
+      "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-query-data-sources",
+      "mcp__29434d4d-f523-42ae-803a-2fb8d7bd3ee2__download_file_content",
+      "TaskOutput",
+      "ReportFindings",
+      "mcp__scheduled-tasks__list_scheduled_tasks"
+    ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/inject-notion-refs.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/inject-jira-refs.js\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/auto-approve.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/confirm-send.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/notion-schema-guard.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/inject-shell-refs.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/inject-edit-refs.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/deny-askuserquestion.js\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__46ff9446-421e-4358-809c-6b8b01e661b2__notion-fetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/notion-fetch-staleness.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/posttooluse-signal-detect.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/posttooluse-foryou-released.js\""
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/permission-denied-log.js\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/stop-cred-denial-surface.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/stop-foryou-nudge.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/stop-claim-linter.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/stop-signal-surface.js\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/sessionstart-loggate.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/sessionstart-backup-spawner.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/sessionstart-configunlock-reaper.js\""
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/precompact-loggate.js\""
+          }
+        ]
+      }
+    ]
+  },
+  "alwaysThinkingEnabled": true,
+  "autoUpdatesChannel": "latest",
+  "theme": "dark",
+  "defaultMode": "auto",
+  "agentPushNotifEnabled": true,
+  "skipWorkflowUsageWarning": true,
+  "switchModelsOnFlag": false
+}
