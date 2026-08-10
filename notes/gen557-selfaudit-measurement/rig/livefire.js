@@ -1,10 +1,12 @@
 // End-to-end live-fire of the working copy + the file's own MAINTENANCE fixture
 // ("the guard's own reason strings must never match any pattern" -- the
 // MAINTENANCE note in the hook's header).
-// REPOINTED 2026-08-09 (GEN-467 fix pass): WORK now targets the REAL working
-// copy in the gen467-holistic-fix apply set -- the old __dirname-relative
-// working.js was a stale local copy that silently diverged from what would
-// ship. NOTE: the hook's logs are written relative to ITS __dirname, so runs
+// REPOINTED 2026-08-09 (GEN-467 fix pass): WORK targeted the gen467-holistic-fix
+// apply set -- the old __dirname-relative working.js was a stale local copy that
+// silently diverged from what would ship.
+// REPOINTED AGAIN 2026-08-10: the holistic-fix set was superseded by the
+// gen467-recut batch, INSTALLED 2026-08-10 (working copy byte-identical to the
+// live hook); WORK now targets the recut working copy. NOTE: the hook's logs are written relative to ITS __dirname, so runs
 // deposit *.jsonl files beside the working copy. This script now removes those
 // itself (see SELF-CLEAN at the bottom) -- deleting ONLY what the run deposited,
 // measured against a snapshot taken before the first run.
@@ -13,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const F = require('./fixtures.js');
 
-const WORK = path.resolve(__dirname, '..', '..', 'gen467-holistic-fix', 'working', 'stop-claim-linter.js');
+const WORK = path.resolve(__dirname, '..', '..', 'gen467-recut', 'working', 'stop-claim-linter.js');
 // Pre-run snapshot, for the SELF-CLEAN at the bottom of this file. Taken BEFORE any
 // run so the cleanup can delete only what THIS run deposited. Do NOT replace this with
 // an unconditional wildcard delete of *.jsonl in the directory: that also removes
@@ -67,14 +69,14 @@ const START = 'const SELF_AUDIT_PATTERNS = [';
 const END = '// Durable, append-only log of self-audit detections';
 const src = fs.readFileSync(WORK, 'utf8');
 const findSelfAudit = new Function(src.slice(src.indexOf(START), src.indexOf(END)) + '\n; return findSelfAudit;')();
-// arm1Reason: extracted from the working copy and invoked, not retyped.
-const a1 = src.indexOf('function arm1Reason() {');
-const a1end = src.indexOf('\n}', a1);
-const arm1Reason = new Function(src.slice(a1, a1end + 2) + '\n; return arm1Reason;')();
+// arm1Reason was DELETED in the gen467-recut (Arm 1's decision:block retired to
+// log-only), so the guard no longer injects any reason text of its own; the
+// only self-injected text left to test is the nudge the hook itself emits.
 
 console.log('\n--- MAINTENANCE guard-reason fixture (the hook header\'s MAINTENANCE note) ---');
-const targets = [['arm1Reason()', arm1Reason()]];
+const targets = [];
 if (injected) targets.push(['the self-audit nudge text it injects', injected]);
+else console.log('  FAIL  no nudge was captured above, so there is nothing to test -- vacuous');
 for (const [label, t] of targets) {
   const hits = findSelfAudit(t);
   console.log('  ' + (hits.length === 0 ? 'PASS' : 'FAIL') + '  ' + label +

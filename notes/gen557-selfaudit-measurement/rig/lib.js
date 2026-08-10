@@ -73,9 +73,11 @@ function build(addPatterns, quoteGuard) {
 // all-clear; oldonly.js's loud "old patterns lost" probe was satisfied by the
 // literal "came back clean" inside a buildSuppressionMask comment). Partition
 // by the g557:true MEMBERSHIP TAG the hook's own array now carries (GEN-467
-// batch) -- self-describing, no cross-repo regex list to hand-sync. FALLBACK
-// for the pre-tag live hook (until the batch applies): source-string
-// membership against GEN557_SOURCES below. Either way the 10/6 counts are
+// batch) -- self-describing, no cross-repo regex list to hand-sync. NOTE: the
+// installed hook is the 2026-08-10 RE-CUT, built on the live base WITHOUT the
+// tags (the tagged v4 batch was superseded), so the source-string fallback
+// against GEN557_SOURCES below is the standing mode until tags ever ship.
+// Either way the 10/6 counts are
 // asserted loudly; a pattern added to the hook later changes them -- that is
 // the desired loud failure; tag it g557 (or update the expected counts) in
 // the same session.
@@ -138,25 +140,26 @@ function corpus() {
   return fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
 }
 
-// Production reachability: Phase 2 exits before Phase 1 on any message whose
-// stripped text carries a RECOGNISED opener (every guard branch exits without
-// the Phase-1 scan, including the release-skipped-tail path).
+// Production reachability: since the GEN-467 re-cut (installed 2026-08-10),
+// Phase 1 is skipped on any message whose stripped text matches
+// WIDE_OPENER_RE (the phase1-skip-blockform site) -- a superset of the narrow
+// BLOCK_OPENER_RE, so the wide regex alone defines Phase-1 reachability.
 // DERIVED FROM THE HOOK SOURCE, never a hand-typed copy (code-review
 // 2026-08-10: a forward-synced copy here made the rig measure a HYBRID regime
 // -- post-apply reachability gating a pre-apply detector -- with no drift
 // detector; deriving honors this file's own header: every number reflects
 // shipped logic). Reads the same file hookSource() slices, so reachability
-// and detector always describe the SAME regime, pre- or post-apply. Fails
-// loudly if the declaration moves.
+// and detector always describe the SAME regime. Fails loudly if the
+// declaration moves.
 function hookOpenerRe() {
   const s = fs.readFileSync(HOOK, 'utf8');
-  const m = s.match(/const BLOCK_OPENER_RE = (\/.*\/[a-z]*);/);
-  if (!m) throw new Error('BLOCK_OPENER_RE declaration not found in ' + HOOK + ' -- re-derive');
+  const m = s.match(/const WIDE_OPENER_RE = (\/.*\/[a-z]*);/);
+  if (!m) throw new Error('WIDE_OPENER_RE declaration not found in ' + HOOK + ' -- re-derive');
   return new Function('return ' + m[1] + ';')();
 }
-const BLOCK_OPENER_RE = hookOpenerRe();
+const WIDE_OPENER_RE = hookOpenerRe();
 function stripFences(t) { return t.replace(/```[\s\S]*?(?:```|$)/g, ''); }
-function reachable(t) { return !BLOCK_OPENER_RE.test(stripFences(t)); }
+function reachable(t) { return !WIDE_OPENER_RE.test(stripFences(t)); }
 
 const MAX_SCAN_CHARS = 200000;
 function scanText(t) { return t.length > MAX_SCAN_CHARS ? t.slice(0, MAX_SCAN_CHARS) : t; }

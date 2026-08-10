@@ -3,22 +3,22 @@ const fs = require('fs'), path = require('path');
 const ROOT = 'C:/Users/Erez/.claude/projects';
 const CUTOFF = new Date('2026-07-19T00:00:00Z');
 const LOOSE = /\u{1F4CC}\s*\*{0,2}\s*For you/u;
-// Guard's opener + tail window: DERIVED from the TARGET file's source, never
-// hand-copied (code-review 2026-08-10 -- the hand copy needed a manual re-sync
-// on every regex change and carried no drift detector). TARGET is the working
-// copy until the GEN-467 batch applies; after apply the working copy and the
-// live hook are identical, and once the working dir is retired, point TARGET
-// at the live hook. guardSees/guardReleases in openers.json are computed with
-// THESE values -- regenerate openers.json after any TARGET change, never mix
-// old rows with a new recogniser.
-const TARGET = 'C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen467-holistic-fix/working/stop-claim-linter.js';
+// Guard's opener: DERIVED from the TARGET file's source, never hand-copied
+// (code-review 2026-08-10 -- the hand copy needed a manual re-sync on every
+// regex change and carried no drift detector). TARGET repointed at the LIVE
+// hook 2026-08-10: the gen467-recut batch is installed and the holistic-fix
+// working dir it previously read is superseded. The recut also REMOVED the
+// tail window -- markReleased is now unconditional on a narrow-recognised
+// finished message -- so guardReleases below equals guardSees.
+// guardSees/guardReleases in openers.json are computed with THESE values --
+// regenerate openers.json after any TARGET change, never mix old rows with a
+// new recogniser.
+const TARGET = 'C:/Users/Erez/.claude/hooks/stop-claim-linter.js';
 const targetSrc = fs.readFileSync(TARGET, 'utf8');
 const reM = targetSrc.match(/const BLOCK_OPENER_RE = (\/.*\/[a-z]*);/);
-const winM = targetSrc.match(/const RELEASE_TAIL_WINDOW = (\d+);/);
-if (!reM || !winM) throw new Error('BLOCK_OPENER_RE or RELEASE_TAIL_WINDOW not found in TARGET -- re-derive');
+if (!reM) throw new Error('BLOCK_OPENER_RE not found in TARGET -- re-derive');
 const GUARD_OPENER = new Function('return ' + reM[1] + ';')();
 const GUARD_OPENER_G = new RegExp(GUARD_OPENER.source, GUARD_OPENER.flags + 'g');
-const RELEASE_TAIL_WINDOW = parseInt(winM[1], 10);
 const stripFences = t => t.replace(/```[\s\S]*?(?:```|$)/g, '');
 
 let files = [];
@@ -86,17 +86,16 @@ for (const p of files) {
     const key = o.uuid;
     if (seen.has(key)) continue; seen.add(key);
     forms[form] = (forms[form] || 0) + 1;
-    // guardSees = the guard RECOGNISES an opener; guardReleases = it would
-    // also RELEASE-RECORD it (last opener within RELEASE_TAIL_WINDOW of the
-    // stripped end) -- the two differ for out-of-window openers, where the
-    // shipped guard logs release-skipped-tail and Arm 1 stays inert
-    // (code-review 2026-08-10: guardSees alone overstated release coverage).
+    // guardSees = the guard RECOGNISES an opener. Under the installed recut
+    // (2026-08-10) release-recording is unconditional on recognition -- the
+    // tail window is gone -- so guardReleases now equals guardSees; the field
+    // is kept so old openers.json consumers keep working.
     GUARD_OPENER_G.lastIndex = 0;
     let gm, gLast = -1;
     while ((gm = GUARD_OPENER_G.exec(t)) !== null) { gLast = gm.index; }
     openerMsgs.push({ file: p, turnKey, turnTs, ts: o.timestamp, uuid: o.uuid, form,
       guardSees: gLast >= 0,
-      guardReleases: gLast >= 0 && (t.length - gLast) <= RELEASE_TAIL_WINDOW,
+      guardReleases: gLast >= 0,
       head: raw.slice(Math.max(0, raw.search(LOOSE) - 60), raw.search(LOOSE) + 160).replace(/\s+/g, ' ') });
   }
 }
