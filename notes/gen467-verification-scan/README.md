@@ -6,6 +6,13 @@ scan). Banked so the numbers are re-derivable rather than only readable.
 Run with plain `node`; no dependencies. They read this machine's own session transcripts under
 `~/.claude/projects/` and the guard's event log at `~/.claude/hooks/foryou-guard-events.jsonl`.
 
+**Regime note (2026-08-10):** the GEN-467 re-cut was INSTALLED into the live hooks on
+2026-08-10T14:03Z. Every figure below was measured under the PRE-re-cut regime; `scan2.js`
+now derives its recogniser from the live (re-cut) hook, so a re-run measures the new regime
+and its guard-sees/guard-releases split no longer applies (release-recording is unconditional
+on recognition since the re-cut). Post-install verification belongs to the scheduled scan at
+`~/.claude/scheduled-tasks/gen467-block-after-check-verify/SKILL.md`, not to this rig.
+
 ## Read this before quoting any number back
 
 **A re-run will NOT reproduce the figures below**, and that is expected, not a bug: the corpus
