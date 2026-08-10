@@ -1,0 +1,438 @@
+diff --git "a/C:\\Users\\Erez\\.claude\\hooks\\stop-claim-linter.js" "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen467-recut\\working\\stop-claim-linter.js"
+index 94eed7a..7ea5dfc 100644
+--- "a/C:\\Users\\Erez\\.claude\\hooks\\stop-claim-linter.js"
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen467-recut\\working\\stop-claim-linter.js"	
+@@ -54,12 +54,14 @@
+  * block-carrying message "costs one visible forced redo, not just a nudge". That was
+  * true only while the Arm-2 content gate existed; GEN-467 v2.2 removed it, so a pattern
+  * false positive no longer costs a forced redo -- weigh the nudge cost, not a redo cost.
+- * (Arm 1 still emits decision:'block' once per prompt_id, but on the duplicate-block
+- * condition alone; it never consults either detector.) Do not upgrade that
+- * into "block-carrying messages are never scanned": the Phase-2 guard skips only what
+- * BLOCK_OPENER_RE RECOGNISES, which excludes the "## <pin> For you" heading form (78 of
+- * 4,356 real turns, 2026-08-02) and is bypassed entirely when session_id/prompt_id is
+- * missing. Required in-block report vocabulary can still reach a pattern by those paths.
++ * (Since the GEN-467 re-cut, 2026-08-10, NO arm emits decision:'block' at all --
++ * see the re-cut AMENDMENT banner below.) As of that re-cut, block-form messages
++ * do not reach Phase 1: the WIDE_OPENER_RE skip (see the Phase-1 skip site) covers
++ * every observed opener form including the "## <pin> For you" heading form, and runs
++ * even when session_id/prompt_id is missing. The one remaining path for a block-
++ * carrying message to reach a Phase-1 pattern is the fence-swallow edge: an odd
++ * number of ``` markers can swallow a trailing opener during fence-stripping,
++ * hiding it from the skip test (and from the Phase-2 guard identically).
+  *
+  * ============================================================================
+  * SELF-AUDIT STAGE (GEN-507) -- a SECOND, independent detector in this same file
+@@ -113,6 +115,28 @@
+  * nudging now rides ONLY the non-blocking pre-block channels (Phase-1 note +
+  * stop-foryou-nudge.js). See the record-on-release site below for the full note.
+  * ============================================================================
++ * AMENDMENT (GEN-467 re-cut, 2026-08-10): Arm 1's decision:block was RETIRED and
++ * Phase 1 was SUPPRESSED for block-form messages. The v2.1/v2.2 text below still
++ * describes Arm 1 as a live blocking mechanism; it is retained as the historical
++ * design record, but the CURRENT behavior is:
++ *  - NO arm emits decision:block. A block-carrying message sighted AFTER this
++ *    turn's release now logs an 'arm1-sighting' event and releases silently.
++ *    Why: a Stop decision:block cannot retract a displayed message -- it can
++ *    only force a THIRD rendition of the same content, which is what Arm 1's
++ *    single production fire did (2026-08-03). Retiring it also defuses the
++ *    false-release channel (a stray release record can no longer kill a real
++ *    block; see KNOWN RESIDUALS -- now log-only).
++ *  - Phase 1 never notes a block-form message: the WIDE_OPENER_RE skip (all
++ *    observed opener forms, incl. heading + doubled-pin) exits before Phase 1,
++ *    WITHOUT writing a release record. A Phase-1 note firing on an
++ *    unrecognized-form block message was the measured provocation of the
++ *    2026-08-05 duplicate (the note spawns a promptless continuation that
++ *    re-emits the block). A form the skip regex misses degrades to the
++ *    previous behavior, no worse.
++ *  - Record-on-release, the samemsg-release dedup, and all guard-event logging
++ *    are KEPT (consumer: the gen467-block-after-check-verify scheduled scan's
++ *    bars). arm1Reason()/tryClaimArm() were removed with the block (dead code).
++ * ============================================================================
+  * PHASE-2 GUARD (GEN-467; v2.1 2026-07-23 shipped two arms, v2.2 2026-07-26
+  * removed Arm 2 -- see the AMENDMENT banner above). CURRENT design: ONE arm
+  * (duplicate-kill), one decision object, per-turn state keyed on session_id +
+@@ -158,14 +182,15 @@
+  *  design) -- though fence detection is parity-based, so a stray unpaired ```
+  *  in prose flips it; a BARE line-start quoted opener outside fences still trips
+  *  -- if the message is otherwise a first block it wrongly consumes
+- *  record-on-release, and a later genuine second block could then be missed by
+- *  Arm 1 (v2.2: it can no longer force the real block into plain prose -- that
+- *  was an arm-2 effect) -- rare, bounded, disclosed at approval. On the guard's
++ *  record-on-release, which since the re-cut (2026-08-10) affects only the
++ *  event log (a later genuine second block draws an 'arm1-sighting' row
++ *  instead of 'release-clean'; nothing is blocked) -- rare, bounded,
++ *  user-invisible. On the guard's
+  *  first-Stop leg (flag false), stop-signal-surface may co-fire additionalContext
+  *  on the same event; harmless here (the guard's first-block path is now a silent
+  *  record-and-exit, not a block). A PERSISTENT STATE_DIR failure leaves the guard
+- *  inert for its duration (release recorded nowhere, so Arm 1 cannot fire) --
+- *  today's pre-guard behavior. End-of-session last-turn edge (no next pass
++ *  inert for its duration (release recorded nowhere, so post-release sightings
++ *  log as fresh releases) -- pre-guard behavior. End-of-session last-turn edge (no next pass
+  *  exists) is shared with stop-cred-denial-surface.js's accepted edge.
+  * ============================================================================
+  */
+@@ -560,15 +585,17 @@ function buildSuppressionMask(text) {
+ // Phase 1 reaches this function, so a message the guard RECOGNISES as block-carrying
+ // is not scanned at all (1,771 of 4,356 real turns, 40.7%, measured 2026-08-02).
+ // The stale wording itself is tracked on GEN-584.
+-// Do NOT read the 40.7% as "no block-carrying message reaches here". At least three paths
+-// let one through, and this list is not claimed to be exhaustive: BLOCK_OPENER_RE does not
+-// recognise the markdown-heading form "## <pin> For you" (78 of those 4,356 turns, measured
+-// 2026-08-02); the guard is skipped outright when session_id or prompt_id is missing; and
+-// the opener test runs on stripFences(msg), so an odd number of fence markers can swallow
+-// a trailing opener along with the unpaired fence. Those are NOT part of GEN-584 -- they were
+-// found 2026-08-02, after it was filed -- and as of that date they have no ticket of their
+-// own; they are written up in the GEN-557 rig README under "Found on the way". Confirm
+-// before assuming either is tracked anywhere. The
++// Do NOT read the 40.7% as "no block-carrying message reaches here" -- but since the
++// GEN-467 re-cut (2026-08-10) the reachable set is much smaller: the WIDE_OPENER_RE
++// Phase-1 skip covers every observed opener form (heading + doubled-pin included) and
++// runs even when session_id/prompt_id is missing, so of the three bypass paths
++// documented before the re-cut, ONE remains: the opener test runs on stripFences(msg),
++// so an odd number of ``` markers can swallow a trailing opener along with the
++// unpaired fence -- hiding the block from the skip test (and from the Phase-2 guard
++// identically) and letting the message reach these patterns. That edge predates the
++// re-cut, is disclosed in the re-cut banner, and has no ticket of its own; it is
++// written up in the GEN-557 rig README under "Found on the way". Confirm
++// before assuming it is tracked anywhere. The
+ // hook does NOT try to decide whether the line is a permitted correction vs a
+ // banned self-audit; that semantic call is handed to the model receiving the nudge
+ // (which has full turn context this hook lacks).
+@@ -658,6 +685,29 @@ function logSelfAudit(sessionId, promptId, hits) {
+ // backtrack quadratically on the full-length scan (Pass B round 2).
+ const BLOCK_OPENER_RE = /^[ \t]{0,3}\*{0,2}\u{1F4CC}[ \t]*\*{0,2}[ \t]*For you/imu;
+ 
++// WIDE opener recognizer (GEN-467 re-cut, 2026-08-10; this exact regex was
++// reviewed in the 2026-08-09/10 code-review passes as the "widened" form).
++// Matches ALL observed block-opener forms -- the narrow three above PLUS the
++// markdown-heading prefix ("## <pin> For you", any #{1,6}) and repeated pins,
++// which were 106 of 403 real block-carrying messages since 07-28 (26%) and
++// invisible to BLOCK_OPENER_RE; the 2026-08-05 duplicate escaped through
++// exactly that blindness. USED ONLY by the Phase-1 skip below -- it never
++// feeds record-on-release or the Phase-2 guard, so a match here can never
++// create a release record. Line-anchored (a quoted opener mid-prose must not
++// match) and fence-stripped by the caller. Whitespace runs are [ \t] only and
++// BOUNDED at {0,16} -- both load-bearing (code-review 2026-08-09): \s would
++// join across blank lines, and the UNBOUNDED [ \t]* form backtracks
++// quadratically when adjacent runs compete over one long same-line space run
++// (measured: a pin + 40K spaces ~2s in .test(), extrapolating ~45s at the 190K
++// full-length scan; the bounded form is ~0ms at 190K and matches all 407 real
++// openers since 07-28, m-widen2.js corpus). The leading indent keeps {0,3}
++// (markdown's indented-code cutoff). Do not describe this regex as "linear" --
++// it is bounded-backtracking, safe because the runs are capped.
++// stop-signal-surface.js carries a NAMED COPY of this regex + stripFences for
++// its suppression self-test -- keep the two files in sync (this file is the
++// canonical copy).
++const WIDE_OPENER_RE = /^[ \t]{0,3}(?:#{1,6}[ \t]{0,16})?\*{0,2}(?:\u{1F4CC}[ \t]{0,16})+\*{0,2}[ \t]{0,16}For you/imu;
++
+ // Fenced code spans are stripped before the opener test: a block opener quoted
+ // inside ``` fences (drafts, examples -- common in this project) must neither
+ // trip the guard NOR poison record-on-release (Pass B finding 1: a released
+@@ -670,8 +720,8 @@ function stripFences(t) {
+ 
+ // Durable, append-only guard-event log (sibling of selfaudit-nudges.jsonl; same
+ // accepted unbounded-growth stance). One line per guard decision on a block-
+-// carrying message. Consumer: the gen467-block-after-check-verify scheduled scan
+-// + /wrap counts. Fail-open: a write error never affects the decision.
++// carrying message. Consumer: the gen467-block-after-check-verify scheduled
++// scan (the sole reader). Fail-open: a write error never affects the decision.
+ const GUARD_LOG = path.join(__dirname, 'foryou-guard-events.jsonl');
+ function logGuardEvent(sessionId, promptId, event, detail) {
+   try {
+@@ -686,31 +736,16 @@ function logGuardEvent(sessionId, promptId, event, detail) {
+   } catch (e) { /* fail open */ }
+ }
+ 
+-// Per-turn guard state: three PRESENCE files beside the note-dedup markers in
+-// STATE_DIR, swept by the same TTL prune. guard.<sid>.<pid>.arm1 / .arm2 mark
+-// "that arm fired this turn"; guard.<sid>.<pid>.released marks RECORD-ON-
+-// RELEASE ("a block-carrying message was released this turn" -- set only on
+-// release, never on a rejected sight; see the header block for the trace).
+-// Presence files instead of a read-modify-write JSON blob: an arm CLAIM is an
+-// exclusive create (flag 'wx'), which is atomic -- two racing invocations of
+-// the same Stop event cannot both win the claim, so the per-arm cap holds even
+-// under a concurrent double-fire (code-review Pass A state-machine finding).
++// Per-turn guard state: ONE PRESENCE file beside the note-dedup markers in
++// STATE_DIR, swept by the same TTL prune. guard.<sid>.<pid>.released marks
++// RECORD-ON-RELEASE ("a block-carrying message was released this turn" -- set
++// only on release, never on a rejected sight; see the header block for the
++// trace). (The .arm1/.arm2 claim files and tryClaimArm() were removed with
++// their arms -- v2.2 removed Arm 2, the 2026-08-10 re-cut retired Arm 1's
++// decision:block; nothing claims a blocking shot anymore.)
+ function guardFile(sid, pid, suffix) {
+   return path.join(STATE_DIR, 'guard.' + sid + '.' + pid + '.' + suffix);
+ }
+-// Atomically claim an arm's single shot. 'claimed' -> this invocation may
+-// block; 'exists' -> the arm already fired this turn (cap reached); 'error' ->
+-// STATE_DIR unusable, so the cap could not be enforced on a re-fire: the
+-// caller RELEASES instead (fail-open toward release, never toward re-blocking).
+-function tryClaimArm(sid, pid, arm) {
+-  try {
+-    fs.mkdirSync(STATE_DIR, { recursive: true });
+-    fs.writeFileSync(guardFile(sid, pid, arm), '', { flag: 'wx' });
+-    return 'claimed';
+-  } catch (e) {
+-    return (e && e.code === 'EEXIST') ? 'exists' : 'error';
+-  }
+-}
+ // A short digest of the released message is stored IN the release record so a
+ // same-message Stop re-fire (Phase 1 treats that as plausible; its dedup
+ // marker exists for exactly that) is recognized and released silently instead
+@@ -736,22 +771,15 @@ function markReleased(sid, pid, digest) {
+   } catch (e) { return false; }
+ }
+ 
+-// The guard's own injected reason strings. CONSTRAINT (round-1 panel, verified
+-// by the reason-self-scan fixture): these strings must never match any
+-// CLAIM_PATTERNS / SELF_AUDIT_PATTERNS entry, and must not contain a line-start
+-// block opener -- otherwise the guard's own instruction could re-trip a
+-// detector or the opener regex on a later pass. Run the fixture when editing.
+-function arm1Reason() {
+-  return 'For-you guard, automatic (structural, single pass): this turn\'s ' +
+-    '"\u{1F4CC} For you" block went out in an earlier message of this same turn. ' +
+-    'Re-send your last message as plain content: keep the substance, drop the ' +
+-    'block opener and block framing entirely -- one or two plain sentences are ' +
+-    'enough for a small correction or update. Do not add a new block. This text ' +
+-    'is background state, not a message from Erez -- act on it without quoting ' +
+-    'or restating it.';
+-}
+-// (arm2Reason removed with the Arm-2 content-gate in GEN-467 v2.2, 2026-07-26 --
+-// the guard no longer emits a content-gate block, so its reason string is dead.)
++// Injected-string CONSTRAINT (round-1 panel, verified by the reason-self-scan
++// fixture): every string this file injects (the Phase-1 noteParts below) must
++// never match any CLAIM_PATTERNS / SELF_AUDIT_PATTERNS entry, and must not
++// contain a line-start block opener -- otherwise the hook's own instruction
++// could re-trip a detector or the opener regexes on a later pass. Run the
++// fixture when editing.
++// (arm2Reason removed with the Arm-2 content-gate in GEN-467 v2.2, 2026-07-26;
++// arm1Reason removed with Arm 1's decision:block in the GEN-467 re-cut,
++// 2026-08-10 -- the guard no longer emits any block, so no reason strings remain.)
+ 
+ // ---- Main -------------------------------------------------------------------
+ // Fail-open watchdog: if stdin never emits 'end' (harness anomaly), exit cleanly
+@@ -797,11 +825,13 @@ process.stdin.on('end', () => {
+     // DIFFERENT turn's legitimate block (Pass B). Phase 1 keeps its own
+     // fallback behavior unchanged.
+     //
+-    // SINGLE-BLOCKER ASSUMPTION (documented for future hook authors): the
+-    // release record means "this guard released a block-carrying message". No
+-    // sibling Stop hook emits decision:block today (all four are injection-
+-    // only), so released === delivered. A future second blocking hook would
+-    // break that equivalence -- check this guard before adding one.
++    // NO-BLOCKER INVARIANT (documented for future hook authors): the release
++    // record means "this guard released a block-carrying message". Since the
++    // GEN-467 re-cut (2026-08-10) NO Stop hook in this config emits
++    // decision:block at all -- this file included -- so released === delivered
++    // and nothing can retract or redo a displayed message. A future blocking
++    // hook would break that invariant AND reopen the triple-rendition harm
++    // that retired Arm 1 -- check the re-cut banner above before adding one.
+     if (typeof input.session_id === 'string' && input.session_id &&
+         typeof input.prompt_id === 'string' && input.prompt_id &&
+         BLOCK_OPENER_RE.test(stripFences(input.last_assistant_message))) {
+@@ -814,17 +844,16 @@ process.stdin.on('end', () => {
+           logGuardEvent(sid, pid, 'arm1-samemsg-release');
+           process.exit(0);
+         }
+-        // A block-carrying message AFTER this turn's block was already
+-        // released: the GEN-467 duplicate. Arm 1 fires once per turn.
+-        const claim1 = tryClaimArm(sid, pid, 'arm1');
+-        if (claim1 === 'claimed') {
+-          logGuardEvent(sid, pid, 'arm1-block');
+-          process.stdout.write(JSON.stringify({ decision: 'block', reason: arm1Reason() }));
+-          process.exit(0);
+-        }
+-        // 'exists' -> cap exhausted: release (logged escape), never re-block.
+-        // 'error' -> cap unenforceable on a re-fire: release (fail-open).
+-        logGuardEvent(sid, pid, claim1 === 'exists' ? 'arm1-escape' : 'arm1-stateless-release');
++        // A DIFFERENT block-carrying message AFTER this turn's block was
++        // already released: the GEN-467 duplicate shape. Since the re-cut
++        // (2026-08-10) this is a SIGHTING, not a block: a Stop decision:block
++        // cannot retract the displayed message -- it can only force a third
++        // rendition of the same content (Arm 1's one production fire,
++        // 2026-08-03). Log it for the scheduled scan's bars and release.
++        // Duplicate prevention now happens at the injectors (the Phase-1 skip
++        // below + stop-signal-surface.js's suppression), which stop the
++        // provoking note before the continuation exists.
++        logGuardEvent(sid, pid, 'arm1-sighting');
+         process.exit(0);
+       }
+       // First (not-yet-released) block-carrying message of the turn: RELEASE
+@@ -850,23 +879,42 @@ process.stdin.on('end', () => {
+       // note below + stop-foryou-nudge.js), which inject into the continuation
+       // BEFORE the block is written and have never produced a duplicate.
+       //
+-      // What is DELIBERATELY KEPT: this record-on-release write. Arm 1 (the
+-      // duplicate-kill arm above) fires only when readReleased() returns
+-      // non-null, i.e. only after a block-carrying message was released and
+-      // recorded HERE. Removing this write would silently disable Arm 1 too and
+-      // reopen the post-block-correction duplicate Arm 1 exists to kill. The
++      // What is DELIBERATELY KEPT: this record-on-release write. The sighting
++      // path above fires only when readReleased() returns non-null, i.e. only
++      // after a block-carrying message was released and recorded HERE. The
++      // record also feeds the samemsg-release dedup and the scheduled scan's
++      // exposure counting -- removing this write would blind all three. The
+       // former content-gate's own clean path already ended in exactly this
+-      // markReleased()/log; with the gate gone, it becomes unconditional for the
+-      // turn's first block-carrying message. Post-removal liveness:
++      // markReleased()/log; with the gate gone, it is unconditional for the
++      // turn's first block-carrying message. Post-re-cut liveness:
+       // findNakedClaims/findSelfAudit/MAX_SCAN_CHARS remain used by the Phase-1
+       // note path below; BLOCK_OPENER_RE/stripFences/readReleased/markReleased/
+-      // msgDigest/arm1Reason remain used by Arm 1; only arm2Reason and the
+-      // 'arm2'/arm2-* events became unreachable and were removed with the gate.
++      // msgDigest remain used by the guard + sighting path; WIDE_OPENER_RE is
++      // used by the Phase-1 skip; arm1Reason/tryClaimArm and the arm1-block/
++      // arm1-escape/arm1-stateless-release events were removed with Arm 1's
++      // decision:block (2026-08-10), as arm2Reason/arm2-* were with v2.2.
+       const persisted = markReleased(sid, pid, msgDigest(input.last_assistant_message));
+       logGuardEvent(sid, pid, 'release-clean', { persisted: persisted });
+       process.exit(0);
+     }
+ 
++    // ---- PHASE-1 SKIP for block-form messages (GEN-467 re-cut, 2026-08-10).
++    // Any message carrying a recognisable block opener in ANY observed form is
++    // never Phase-1-noted: the note is the measured provocation of the
++    // duplicate (it spawns a promptless continuation that re-emits the block
++    // -- the 2026-08-05 chain). Skip-only: deliberately does NOT write a
++    // release record (a wide match must never arm the guard or the
++    // false-release channel). Runs on the FULL fence-stripped message (same
++    // rationale as the guard's opener test above) and does NOT require
++    // session/prompt ids -- the ids are only for the countable log row, where
++    // the sanitized fallbacks are fine. A form this regex misses degrades to
++    // the pre-re-cut behavior: the note fires, and its own text tells the
++    // model not to emit a second block.
++    if (WIDE_OPENER_RE.test(stripFences(input.last_assistant_message))) {
++      logGuardEvent(sid, pid, 'phase1-skip-blockform');
++      process.exit(0);
++    }
++
+     // ---- PHASE 1 (unchanged): the soft note path for non-block messages.
+     // LOAD-BEARING re-injection guard (probe-confirmed): the turn that RECEIVES an
+     // injection is marked stop_hook_active:true. Without this, the nudge would
+@@ -928,7 +976,7 @@ process.stdin.on('end', () => {
+       'correction. A clean result leaves nothing to surface. A correction or a ' +
+       'still-unverified claim is the only thing that surfaces: folded silently into ' +
+       'the "\u{1F4CC} For you" block this turn owes -- carried as though the fact ' +
+-      'had always read that way -- or, where no block is owed or one already went ' +
++      'had always read that way -- or, where no block is due or one already went ' +
+       'out, stated briefly as ordinary content. A claim that can\'t be verified ' +
+       'stays out of the block or appears only as an open question naming what would ' +
+       'resolve it. A mistake that was an executed action, not merely a wrong ' +
+diff --git "a/C:\\Users\\Erez\\.claude\\hooks\\stop-signal-surface.js" "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen467-recut\\working\\stop-signal-surface.js"
+index 84733b2..b61f026 100644
+--- "a/C:\\Users\\Erez\\.claude\\hooks\\stop-signal-surface.js"
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen467-recut\\working\\stop-signal-surface.js"	
+@@ -29,6 +29,16 @@
+  * correct only for turn-INDEPENDENT notes). Keep this note's text in sync with the
+  * global signal-surfacing rule.
+  *
++ * GEN-467 re-cut (2026-08-10): when the finished message itself already carries a
++ * recognisable block opener, this hook now SUPPRESSES its injection entirely (see
++ * the block-opener self-test below). An injection here always spawns the promptless
++ * continuation the duplicate rides on -- the 2026-08-03 duplicate was exactly this
++ * hook's note landing after the block was out -- and conditional wording was
++ * measured disobeyed on 1 of 3 recorded block-already-out exposures. The durable
++ * log stays complete: a suppressed turn still writes its paired "deliver" row,
++ * with decision 'suppressed-block-out' (counted by the gen467 scheduled scan as a
++ * block-already-out exposure).
++ *
+  * Safety stance (mirrors the three existing Stop hooks): fail-open throughout --
+  * watchdog timer w/ unref(), stdin error handler, try/catch around everything, any
+  * error / missing field / unparseable shape -> SILENT no-op, exit 0. NEVER emits
+@@ -105,6 +115,27 @@ const SIGNAL_CONTEXT = [
+   /\.(?:jsonl|log)\b/i,          // the store itself named inline
+ ];
+ 
++// ---- Block-opener self-test (GEN-467 re-cut, 2026-08-10) ---------------------
++// Named copies of stop-claim-linter.js's WIDE opener machinery -- keep the two
++// files in sync with that file (WIDE_OPENER_RE, stripFences; the claim-linter
++// is the canonical copy). Line-anchored and fence-stripped for the same reasons
++// documented there: a quoted opener mid-prose must not trip this, and [ \t]
++// runs are BOUNDED at {0,16} (never \s, never unbounded -- the unbounded form
++// measured quadratic on a long same-line space run; the canonical copy's
++// comment carries the measurement).
++// DELIBERATELY NO TAIL WINDOW (code-review 2026-08-10): for THIS hook's
++// suppress-or-inject choice the costs are asymmetric -- a false "block
++// already out" (a quoted opener at line start anywhere in the message)
++// suppresses one low-frequency nudge, while a false "not out" on a real block
++// the test missed actively invites the duplicate. So ANY recognised opener in
++// the fence-stripped message selects suppression. The test runs on the message
++// this hook ALREADY receives; a false result can only affect this hook's own
++// note.
++const WIDE_OPENER_RE = /^[ \t]{0,3}(?:#{1,6}[ \t]{0,16})?\*{0,2}(?:\u{1F4CC}[ \t]{0,16})+\*{0,2}[ \t]{0,16}For you/imu;
++function stripFences(t) {
++  return t.replace(/```[\s\S]*?(?:```|$)/g, '');
++}
++
+ function anyMatch(list, s) {
+   for (const re of list) { if (re.test(s)) return true; }
+   return false;
+@@ -183,25 +214,42 @@ process.stdin.on('end', () => {
+     const file = (markerData && markerData.file) || '(unknown)';
+     const willNudge = !showsSurfacingDesign(msg, file); // compute once
+ 
++    // Suppression self-test (GEN-467 re-cut, 2026-08-10): does the finished
++    // message itself appear to already carry this turn's block? Computed only
++    // when a nudge would otherwise go out. ANY recognised opener selects
++    // suppression -- no tail-window term; see the opener-machinery comment above.
++    const blockAppearsSent = willNudge ? WIDE_OPENER_RE.test(stripFences(msg)) : false;
++
+     // Append the paired "deliver" line to the durable log (append-only reconciliation),
+     // regardless of whether we end up nudging -- the pairing records that this turn's
+     // detect was HANDLED at Stop (so /wrap won't flag it as crash-orphaned). The
+-    // `decision` field records what this hook DECIDED, not that a nudge was confirmed
+-    // delivered -- a stdout write can still fail afterwards (fail-open). /wrap uses
+-    // only the pairing (detect<->deliver), never this field, so the distinction is
+-    // recorded honestly but never load-bearing.
++    // `decision` field records what this hook DECIDED -- 'nudge',
++    // 'cleared-surfacing-designed', or (since the GEN-467 re-cut)
++    // 'suppressed-block-out': a nudge was due but the finished message already
++    // carried a block opener, so NOTHING was injected; the gen467 scheduled scan
++    // counts those rows as block-already-out exposures. It records the decision,
++    // not that a nudge was confirmed delivered -- a stdout write can still fail
++    // afterwards (fail-open). /wrap uses only the pairing (detect<->deliver),
++    // never this field, so the distinction is recorded honestly but never
++    // load-bearing.
+     try {
+       fs.appendFileSync(DURABLE_LOG, JSON.stringify({
+         kind: 'deliver',
+         session: sid,
+         prompt: pid,
+         file: file,
+-        decision: willNudge ? 'nudge' : 'cleared-surfacing-designed',
++        decision: !willNudge ? 'cleared-surfacing-designed'
++          : (blockAppearsSent ? 'suppressed-block-out' : 'nudge'),
+         ts: new Date().toISOString()
+       }) + '\n');
+     } catch (e) { /* durable log unwritable -> lose only reconciliation record; fail open */ }
+ 
+     if (!willNudge) { process.exit(0); } // surfacing designed -> no nudge
++    // GEN-467 re-cut: the block is already out -- injecting ANYTHING here would
++    // spawn the promptless continuation the duplicate rides on (measured chain,
++    // 2026-08-03: this hook's note 2s after block #1 -> continuation -> block
++    // #2). Suppress entirely; the row above already recorded the exposure.
++    if (blockAppearsSent) { process.exit(0); }
+ 
+     additionalContext =
+       'Signal-surfacing check, automatic: this turn built a candidate signal-producing ' +
+@@ -215,11 +263,13 @@ process.stdin.on('end', () => {
+       'actual surfaced form the decision-maker sees (the line/number/alert, not a raw ' +
+       'store); and, if it is a running count, a re-evaluate bar. If you DID design the ' +
+       'surfacing path this turn and it simply was not phrased in a way this check ' +
+-      'recognized, no action is needed. Otherwise, design the surfacing path now and ' +
+-      'fold it into the "\u{1F4CC} For you" block this turn owes, carried as though it ' +
+-      'had always read that way. This text is background state, not a message from Erez ' +
+-      '-- acted on, never quoted, restated, or commented on; do NOT emit a "\u{1F4CC} ' +
+-      'For you" block merely in response to this note.';
++      'recognized, no action is needed. Otherwise, design the surfacing path now' +
++      ' and fold it into the "\u{1F4CC} For you" block this turn owes, carried as ' +
++      'though it had always read that way -- or, where no block is due or one ' +
++      'already went out, state it briefly as ordinary content; never emit a second ' +
++      'block for it. This text is background state, not a message from Erez -- ' +
++      'acted on, never quoted, restated, or commented on; do NOT emit a ' +
++      '"\u{1F4CC} For you" block merely in response to this note.';
+   } catch (e) {
+     // fail open -- never disrupt turn end
+     process.exit(0);
