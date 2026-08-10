@@ -1,5 +1,11 @@
-// Is the guard-reason fixture failure pre-existing, or introduced by this change?
-// Runs the LIVE detector over the claim-linter note text that the fixture flagged.
+// HISTORICAL PROBE (2026-08-02 era; banner added 2026-08-10) — DO NOT RERUN AS-IS.
+// It answered a one-time attribution question ("is the guard-reason fixture
+// failure pre-existing?") against that day's live hook and working copy. Its
+// hardcoded `clause` carries the pre-GEN-597 wording ('no block is owed'),
+// which the GEN-467 batch retires ('no block is due'), and its 'lines 740-742'
+// citation was stale even when written. After the batch applies, its note-region
+// comparison and clause test describe code that no longer exists — re-derive
+// both from the live file before any rerun, or treat its output as history.
 const fs = require('fs');
 const START = 'const SELF_AUDIT_PATTERNS = [';
 const END = '// Durable, append-only log of self-audit detections';

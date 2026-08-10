@@ -31,9 +31,10 @@
  * duplicate (its 3 recorded block-already-out exposures produced 1 duplicate,
  * vs 0/40 for the claim-linter's dual-branch text). Now the hook self-tests its
  * own last_assistant_message with the shared anchored opener regex
- * (fence-stripped, tail-windowed -- named copy of stop-claim-linter.js's
- * BLOCK_OPENER_RE semantics, no cross-file state read, hence no Stop-ordering
- * race): block apparently out -> a CONDITIONAL plain-prose instruction (the
+ * (fence-stripped, deliberately NOT tail-windowed -- see the opener-machinery
+ * comment; named copy of stop-claim-linter.js's BLOCK_OPENER_RE, no
+ * cross-file state read, hence no Stop-ordering race): block apparently
+ * out -> a CONDITIONAL plain-prose instruction (the
  * opener test has a known quoted-text false-positive channel, so the note tells
  * the model to trust its own context when the appearance is wrong -- a false
  * positive degrades to an ignored note, never a suppressed block); otherwise ->
@@ -119,34 +120,27 @@ const SIGNAL_CONTEXT = [
 ];
 
 // ---- Block-opener self-test (GEN-467 holistic fix Part 1, 2026-08-09) --------
-// Named copies of stop-claim-linter.js's opener machinery -- keep the four in
-// sync with that file (BLOCK_OPENER_RE, stripFences, RELEASE_TAIL_WINDOW,
-// lastOpenerOffset; the claim-linter is the canonical copy). Line-anchored and
-// fence-stripped for the same reasons documented there: a quoted opener
-// mid-prose must not trip this, [ \t] (never \s) to keep the scan linear, and
-// the tail window because a real block sits at the END of a message (measured
-// max 4,523 fence-stripped chars from the end across all 407 real opener
-// matches since 07-28; window = 6,000 for 1.33x margin -- m-widen2.js,
-// 2026-08-09). The test runs on the message this hook ALREADY receives, so a
-// false result can only mis-phrase this hook's own note -- and the note's
-// block-out branch is conditional precisely so that a false positive is inert.
-const BLOCK_OPENER_RE = /^[ \t]{0,3}(?:#{1,6}[ \t]*)?\*{0,2}(?:\u{1F4CC}[ \t]*)+\*{0,2}[ \t]*For you/imu;
-const RELEASE_TAIL_WINDOW = 6000;
+// Named copies of stop-claim-linter.js's opener machinery -- keep the two in
+// sync with that file (BLOCK_OPENER_RE, stripFences; the claim-linter is the
+// canonical copy). Line-anchored and fence-stripped for the same reasons
+// documented there: a quoted opener mid-prose must not trip this, and [ \t]
+// runs bounded at {0,16} (never \s, and never unbounded -- the unbounded form
+// measured quadratic on a long same-line space run; the canonical copy's
+// comment carries the measurement).
+// DELIBERATELY NO TAIL WINDOW HERE (code-review 2026-08-10; the first build
+// copied the canonical RELEASE_TAIL_WINDOW into this test): the window gates
+// the linter's RECORD-on-release at origin, but for THIS hook's note-branch
+// selection the costs are asymmetric -- a false "block-out" (quoted opener
+// anywhere in the message) degrades to an ignored conditional note, while a
+// false "fold-in" on a real block sitting beyond the window actively invites
+// a second block on exactly the turn class where the linter wrote no release
+// record and Arm 1 is inert. So ANY recognised opener in the fence-stripped
+// message selects the conditional block-out branch. The test runs on the
+// message this hook ALREADY receives, so a false result can only mis-phrase
+// this hook's own note.
+const BLOCK_OPENER_RE = /^[ \t]{0,3}(?:#{1,6}[ \t]{0,16})?\*{0,2}(?:\u{1F4CC}[ \t]{0,16})+\*{0,2}[ \t]{0,16}For you/imu;
 function stripFences(t) {
   return t.replace(/```[\s\S]*?(?:```|$)/g, '');
-}
-// Offset of the LAST opener match, or -1. Matching runs on the FULL stripped
-// string and the offset is compared to the window afterwards -- never on a
-// .slice(-N) copy, where the m-flag '^' would falsely anchor at a mid-line
-// slice boundary (round-3 panel advisory).
-function lastOpenerOffset(stripped) {
-  const g = new RegExp(BLOCK_OPENER_RE.source, 'gimu');
-  let m, last = -1;
-  while ((m = g.exec(stripped)) !== null) {
-    last = m.index;
-    if (m.index === g.lastIndex) { g.lastIndex++; }
-  }
-  return last;
 }
 
 function anyMatch(list, s) {
@@ -228,12 +222,20 @@ process.stdin.on('end', () => {
     const willNudge = !showsSurfacingDesign(msg, file); // compute once
 
     // State-aware branch (Part 1): does the finished message itself appear to
-    // carry this turn's block? Computed once, recorded in the deliver line so
-    // the scheduled scan can count block-already-out exposures from the logs
-    // alone (its Bar 4 denominator) without a transcript join.
-    const stripped = stripFences(msg);
-    const lastOff = lastOpenerOffset(stripped);
-    const blockAppearsSent = lastOff >= 0 && (stripped.length - lastOff) <= RELEASE_TAIL_WINDOW;
+    // carry this turn's block? ANY recognised opener selects block-out -- no
+    // tail-window term; see the opener-machinery comment for the asymmetric-
+    // cost rationale (code-review 2026-08-10). Computed ONLY when a note will
+    // actually go out, and the `branch` field is written ONLY on nudge rows
+    // (code-review 2026-08-09): a cleared turn delivered no note, so it is
+    // not an exposure -- a branch value there would inflate the scheduled
+    // scan's Bar-4 block-already-out exposure counts, which are read from
+    // these rows alone (no transcript join). branch:"block-out" therefore
+    // means "an opener was present in the finished message" -- including
+    // beyond-tail-window real blocks, which ARE genuine exposures.
+    let blockAppearsSent = false;
+    if (willNudge) {
+      blockAppearsSent = BLOCK_OPENER_RE.test(stripFences(msg));
+    }
 
     // Append the paired "deliver" line to the durable log (append-only reconciliation),
     // regardless of whether we end up nudging -- the pairing records that this turn's
@@ -243,15 +245,16 @@ process.stdin.on('end', () => {
     // only the pairing (detect<->deliver), never this field, so the distinction is
     // recorded honestly but never load-bearing.
     try {
-      fs.appendFileSync(DURABLE_LOG, JSON.stringify({
+      const row = {
         kind: 'deliver',
         session: sid,
         prompt: pid,
         file: file,
         decision: willNudge ? 'nudge' : 'cleared-surfacing-designed',
-        branch: blockAppearsSent ? 'block-out' : 'fold-in',
         ts: new Date().toISOString()
-      }) + '\n');
+      };
+      if (willNudge) { row.branch = blockAppearsSent ? 'block-out' : 'fold-in'; }
+      fs.appendFileSync(DURABLE_LOG, JSON.stringify(row) + '\n');
     } catch (e) { /* durable log unwritable -> lose only reconciliation record; fail open */ }
 
     if (!willNudge) { process.exit(0); } // surfacing designed -> no nudge
@@ -283,8 +286,10 @@ process.stdin.on('end', () => {
         'another block this turn. If you have NOT actually sent a block this turn, that ' +
         'appearance is a false positive from quoted text: disregard it and fold the ' +
         'design into the block when it is due, carried as though it had always read ' +
-        'that way. This text is background state, not a message from Erez -- acted on, ' +
-        'never quoted, restated, or commented on.';
+        'that way -- or, where no block is due, state it briefly as ordinary content. ' +
+        'This text is background state, not a message from Erez -- acted on, ' +
+        'never quoted, restated, or commented on; do NOT emit a "\u{1F4CC} For you" ' +
+        'block merely in response to this note.';
     } else {
       additionalContext = common +
         ' and fold it into the "\u{1F4CC} For you" block this turn owes, carried as ' +

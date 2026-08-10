@@ -7,8 +7,15 @@
 const fs = require('fs'), path = require('path');
 const ROOT = 'C:/Users/Erez/.claude/projects';
 const CUTOFF = new Date('2026-07-19T00:00:00Z');
-const WIDE = /^[ \t]{0,3}(?:#{1,6}[ \t]*)?\*{0,2}(?:\u{1F4CC}[ \t]*)+\*{0,2}[ \t]*For you/imu;
-const BARE_LINE = /^(?:#{1,6}[ \t]*)?\*{0,2}(?:\u{1F4CC}[ \t]*)+\*{0,2}[ \t]*For you\*{0,2}[ \t]*$/u;
+// SYNCED 2026-08-10 to the SHIPPED bounded form ([ \t]{0,16} runs; canonical
+// copy: stop-claim-linter.js BLOCK_OPENER_RE) -- the original unbounded [ \t]*
+// form measured a SUPERSET population, and the scheduled scan's Bar 5 mandates
+// re-running this tool to re-size RELEASE_TAIL_WINDOW, so it must count with
+// production's own recogniser. Re-sync on any canonical change. (The banked
+// 407-match figures of 2026-08-09 were collected with the unbounded form;
+// re-runs re-baseline, never compare.)
+const WIDE = /^[ \t]{0,3}(?:#{1,6}[ \t]{0,16})?\*{0,2}(?:\u{1F4CC}[ \t]{0,16})+\*{0,2}[ \t]{0,16}For you/imu;
+const BARE_LINE = /^(?:#{1,6}[ \t]{0,16})?\*{0,2}(?:\u{1F4CC}[ \t]{0,16})+\*{0,2}[ \t]{0,16}For you\*{0,2}[ \t]{0,16}$/u;
 const stripFences = t => t.replace(/```[\s\S]*?(?:```|$)/g, '');
 function textOf(o) {
   const c = o.message && o.message.content;
@@ -52,7 +59,7 @@ for (const p of files) {
       const st = stripFences(m.text);
       if (!WIDE.test(st)) return;
       // last match position + its full line + preceding non-empty line
-      const g = new RegExp(WIDE.source, 'gimu');
+      const g = new RegExp(WIDE.source, WIDE.flags + 'g'); // flags derived, never retyped
       let mm, lastOff = -1;
       while ((mm = g.exec(st)) !== null) { lastOff = mm.index; if (mm.index === g.lastIndex) g.lastIndex++; }
       const lineEnd = st.indexOf('\n', lastOff);

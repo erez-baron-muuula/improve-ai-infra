@@ -15,25 +15,15 @@
 //   near-miss at all.
 const lib = require('./lib.js');
 
-const src = lib.hookSource();
-
-// Split the array at the literal comment that opens the GEN-557 block: everything
-// before it is the ten pre-GEN-557 patterns, everything from it is the six new ones.
-const CUT = '  // -- GEN-557: verification-walkthrough narration.';
-const i = src.indexOf(CUT);
-if (i === -1) throw new Error('GEN-557 block-start comment not found — re-derive the cut');
-const j = src.indexOf('\n];', i);
-if (j === -1) throw new Error('array close not found after the cut');
-const oldOnly = src.slice(0, i) + src.slice(j + 1);
-
-// NEW-only: keep the six GEN-557 patterns, drop the ten older ones.
-const FIRST = '  { re: /\\bI (?:verified';
-const first = src.indexOf(FIRST);
-if (first === -1) throw new Error('first pre-GEN-557 pattern not found — re-derive the cut');
-const newOnly = src.slice(0, first) + src.slice(i);
-
-const findOld = lib.compile(oldOnly);
-const findNew = lib.compile(newOnly);
+// REPARTITIONED 2026-08-09 (GEN-467 fix pass): the previous comment-anchor text
+// slicing silently fabricated an EMPTY old set once the GEN-602 reorder put the
+// GEN-557 patterns first -- this script then reported both=0, a false all-clear.
+// lib.patternPartition() splits by compiled pattern-source membership
+// (order-independent) and throws loudly unless the counts are exactly 10 old /
+// 6 GEN-557.
+const { olds, news } = lib.patternPartition();
+const findOld = lib.buildFrom(olds);
+const findNew = lib.buildFrom(news);
 const rows = lib.corpus();
 
 let both = 0, worstCombined = 0, worstRow = null;

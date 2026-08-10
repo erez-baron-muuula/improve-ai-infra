@@ -1,13 +1,18 @@
 // End-to-end live-fire of the working copy + the file's own MAINTENANCE fixture
-// ("the guard's own reason strings must never match any pattern", hook lines 47-54).
-// Runs working.js as a real Stop hook over stdin. Its logs are __dirname-relative,
-// so they land in this scratchpad, never in ~/.claude/hooks/.
+// ("the guard's own reason strings must never match any pattern" -- the
+// MAINTENANCE note in the hook's header).
+// REPOINTED 2026-08-09 (GEN-467 fix pass): WORK now targets the REAL working
+// copy in the gen467-holistic-fix apply set -- the old __dirname-relative
+// working.js was a stale local copy that silently diverged from what would
+// ship. NOTE: the hook's logs are written relative to ITS __dirname, so runs
+// deposit *.jsonl files beside the working copy -- delete them before
+// regenerating combined.diff there.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const F = require('./fixtures.js');
 
-const WORK = path.join(__dirname, 'working.js');
+const WORK = path.resolve(__dirname, '..', '..', 'gen467-holistic-fix', 'working', 'stop-claim-linter.js');
 function run(payload) {
   const out = execFileSync(process.execPath, [WORK], {
     input: JSON.stringify(payload), encoding: 'utf8',
@@ -54,7 +59,7 @@ const a1 = src.indexOf('function arm1Reason() {');
 const a1end = src.indexOf('\n}', a1);
 const arm1Reason = new Function(src.slice(a1, a1end + 2) + '\n; return arm1Reason;')();
 
-console.log('\n--- MAINTENANCE guard-reason fixture (hook lines 47-54) ---');
+console.log('\n--- MAINTENANCE guard-reason fixture (the hook header\'s MAINTENANCE note) ---');
 const targets = [['arm1Reason()', arm1Reason()]];
 if (injected) targets.push(['the self-audit nudge text it injects', injected]);
 for (const [label, t] of targets) {
@@ -62,5 +67,11 @@ for (const [label, t] of targets) {
   console.log('  ' + (hits.length === 0 ? 'PASS' : 'FAIL') + '  ' + label +
               (hits.length ? ' -> MATCHES ' + JSON.stringify(hits) : ' -> no pattern matches'));
 }
-console.log('\nlogs written by this run (scratchpad, not ~/.claude/hooks): ' +
-  fs.readdirSync(__dirname).filter(f => f.endsWith('.jsonl') && f !== 'corpus.jsonl').join(', '));
+// SELF-CLEAN (2026-08-10): the hook writes its logs relative to ITS __dirname,
+// depositing them beside the apply-set working copy -- stale test logs there
+// would pollute combined.diff regeneration, so this run deletes what it wrote
+// instead of relying on a README instruction.
+const deposited = fs.readdirSync(path.dirname(WORK)).filter(f => f.endsWith('.jsonl'));
+for (const f of deposited) { fs.unlinkSync(path.join(path.dirname(WORK), f)); }
+console.log('\nlogs deposited beside the working copy and self-cleaned: ' +
+  (deposited.join(', ') || '(none)'));

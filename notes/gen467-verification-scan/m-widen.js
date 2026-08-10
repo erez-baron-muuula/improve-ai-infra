@@ -11,7 +11,10 @@ const fs = require('fs'), path = require('path');
 const ROOT = 'C:/Users/Erez/.claude/projects';
 const CUTOFF = new Date('2026-07-19T00:00:00Z');
 const CURRENT = /^[ \t]{0,3}\*{0,2}\u{1F4CC}[ \t]*\*{0,2}[ \t]*For you/imu;               // live :659
-const WIDE = /^[ \t]{0,3}(?:#{1,6}[ \t]*)?\*{0,2}(?:\u{1F4CC}[ \t]*)+\*{0,2}[ \t]*For you/imu; // proposed
+// SYNCED 2026-08-10 to the SHIPPED bounded form (see m-widen2.js's sync note;
+// canonical: stop-claim-linter.js BLOCK_OPENER_RE). Historical results in this
+// file's era were measured with the unbounded [ \t]* form -- re-baseline.
+const WIDE = /^[ \t]{0,3}(?:#{1,6}[ \t]{0,16})?\*{0,2}(?:\u{1F4CC}[ \t]{0,16})+\*{0,2}[ \t]{0,16}For you/imu;
 const stripFences = t => t.replace(/```[\s\S]*?(?:```|$)/g, '');
 function textOf(o) {
   const c = o.message && o.message.content;
@@ -66,7 +69,7 @@ for (const p of files) {
     const lastMatchIdx = matched[matched.length - 1].i;
     for (const x of matched) {
       // last opener match offset from end (on fence-stripped text)
-      const g = new RegExp(WIDE.source, 'gimu');
+      const g = new RegExp(WIDE.source, WIDE.flags + 'g'); // flags derived, never retyped
       let mm, lastOff = -1;
       while ((mm = g.exec(x.st)) !== null) { lastOff = mm.index; if (mm.index === g.lastIndex) g.lastIndex++; }
       const dist = x.st.length - lastOff;

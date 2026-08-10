@@ -16,20 +16,15 @@
 //   distribution {1:69, 2:4, 3:1, 4:1}; max 4 of a 5 budget.
 const lib = require('./lib.js');
 
-const src = lib.hookSource();
-const CUT_START = '  // -- GEN-557: verification-walkthrough narration.';
-const i = src.indexOf(CUT_START);
-const j = src.indexOf('\n];', i);
-if (i === -1 || j === -1) throw new Error('cut anchors not found');
-const oldOnly = src.slice(0, i) + src.slice(j + 1); // drop the GEN-557 comment + six patterns
-
-// sanity: the six new pattern sources must be gone, the old ten still present
-for (const probe of ['nothing to (?:correct|fix)', 'the complete set', 'holds as written']) {
-  if (oldOnly.indexOf(probe) !== -1) throw new Error('new pattern still present: ' + probe);
-}
-if (oldOnly.indexOf('came back clean') === -1) throw new Error('old patterns lost');
-
-const findOld = lib.compile(oldOnly);
+// REPARTITIONED 2026-08-09 (GEN-467 fix pass): the previous comment-anchor text
+// slicing produced an EMPTY old set after the GEN-602 reorder, and the old
+// "came back clean" presence probe was satisfied by that literal inside a
+// buildSuppressionMask COMMENT -- a loud check that had gone quietly vacuous.
+// lib.patternPartition() splits by compiled pattern-source membership and its
+// 10/6 count assertion replaces those probes (it cannot be satisfied by
+// comment text -- it counts evaluated array entries).
+const { olds } = lib.patternPartition();
+const findOld = lib.buildFrom(olds);
 const rows = lib.corpus();
 
 const distOld = {};
