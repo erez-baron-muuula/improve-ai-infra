@@ -5,14 +5,27 @@
 // copy in the gen467-holistic-fix apply set -- the old __dirname-relative
 // working.js was a stale local copy that silently diverged from what would
 // ship. NOTE: the hook's logs are written relative to ITS __dirname, so runs
-// deposit *.jsonl files beside the working copy -- delete them before
-// regenerating combined.diff there.
+// deposit *.jsonl files beside the working copy. This script now removes those
+// itself (see SELF-CLEAN at the bottom) -- deleting ONLY what the run deposited,
+// measured against a snapshot taken before the first run.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const F = require('./fixtures.js');
 
 const WORK = path.resolve(__dirname, '..', '..', 'gen467-holistic-fix', 'working', 'stop-claim-linter.js');
+// Pre-run snapshot, for the SELF-CLEAN at the bottom of this file. Taken BEFORE any
+// run so the cleanup can delete only what THIS run deposited. Do NOT replace this with
+// an unconditional wildcard delete of *.jsonl in the directory: that also removes
+// pre-existing evidence banked beside the apply set, and the blast radius follows WORK,
+// which has already been repointed once (see the header). Repointed at the installed
+// hook it would put ~/.claude/hooks/*.jsonl in range -- foryou-guard-events.jsonl (the
+// evidence base for every GEN-467 bar), signal-surface-pending.jsonl,
+// selfaudit-nudges.jsonl, and auto-approved-edits.jsonl (which a standing global rule
+// requires reading each turn to report silent project edits).
+const PRE_EXISTING_LOGS = new Set(
+  fs.readdirSync(path.dirname(WORK)).filter(f => f.endsWith('.jsonl'))
+);
 function run(payload) {
   const out = execFileSync(process.execPath, [WORK], {
     input: JSON.stringify(payload), encoding: 'utf8',
@@ -67,11 +80,16 @@ for (const [label, t] of targets) {
   console.log('  ' + (hits.length === 0 ? 'PASS' : 'FAIL') + '  ' + label +
               (hits.length ? ' -> MATCHES ' + JSON.stringify(hits) : ' -> no pattern matches'));
 }
-// SELF-CLEAN (2026-08-10): the hook writes its logs relative to ITS __dirname,
-// depositing them beside the apply-set working copy -- stale test logs there
-// would pollute combined.diff regeneration, so this run deletes what it wrote
-// instead of relying on a README instruction.
-const deposited = fs.readdirSync(path.dirname(WORK)).filter(f => f.endsWith('.jsonl'));
+// SELF-CLEAN (2026-08-10; NARROWED same day after code review): the hook writes its
+// logs relative to ITS __dirname, depositing them beside the apply-set working copy --
+// stale test logs there would pollute combined.diff regeneration. Delete only the set
+// difference against PRE_EXISTING_LOGS (snapshotted before the first run), never every
+// *.jsonl in the directory: the first form could not tell what this run wrote from what
+// was already there, while claiming in its own output that it had.
+const nowLogs = fs.readdirSync(path.dirname(WORK)).filter(f => f.endsWith('.jsonl'));
+const deposited = nowLogs.filter(f => !PRE_EXISTING_LOGS.has(f));
 for (const f of deposited) { fs.unlinkSync(path.join(path.dirname(WORK), f)); }
-console.log('\nlogs deposited beside the working copy and self-cleaned: ' +
-  (deposited.join(', ') || '(none)'));
+const keptLogs = nowLogs.filter(f => PRE_EXISTING_LOGS.has(f));
+console.log('\nlogs deposited by THIS run and self-cleaned: ' +
+  (deposited.join(', ') || '(none)') +
+  (keptLogs.length ? '\npre-existing *.jsonl left untouched: ' + keptLogs.join(', ') : ''));
