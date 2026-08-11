@@ -1,3 +1,7 @@
+// HISTORICAL (GEN-679, 2026-08-11): this rig copies the pre-GEN-679 recut hook from
+// notes/gen467-recut/working/stop-signal-surface.js (line ~20), which NO LONGER matches the
+// live hook after the GEN-679 install. Re-runs here exercise the pre-GEN-679 recut regime,
+// NOT the live hook — re-point WORK at the live hook (or a fresh copy) to test current behavior.
 // GEN-467 re-cut — Step-4 live-fire fixture suite.
 // Copies the working hooks into a fixture dir (so __dirname logs land here),
 // pipes real Stop payloads via stdin (the hooks' REAL caller shape), and
