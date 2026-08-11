@@ -1,0 +1,209 @@
+diff --git a/C:/Users/Erez/.claude/hooks/stop-signal-surface.js b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/46d53865-4d29-46cc-af15-9ba2c3d36c0c/scratchpad/gen679/stop-signal-surface.js
+index 525eaed..7fdc1d2 100644
+--- a/C:/Users/Erez/.claude/hooks/stop-signal-surface.js
++++ b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/46d53865-4d29-46cc-af15-9ba2c3d36c0c/scratchpad/gen679/stop-signal-surface.js
+@@ -29,6 +29,16 @@
+  * correct only for turn-INDEPENDENT notes). Keep this note's text in sync with the
+  * global signal-surfacing rule.
+  *
++ * CONTINUATION-STATE etiquette (GEN-679 lesson, for the next Stop-hook author): the
++ * injection etiquette above is only half the doctrine. The other half is what a
++ * Stop hook does with its own STATE on a continuation turn (stop_hook_active true):
++ * turn-INDEPENDENT session-scoped pending state defers with an mtime refresh (the
++ * stop-cred-denial-surface.js pattern); turn-KEYED state with a durable
++ * reconciliation ledger, like this file's markers, must be CONSUMED AND PAIRED
++ * before the flag exit -- a guard exit that strands a ledgered marker manufactures
++ * permanent false crash-orphans in the ledger (this file shipped 2026-08-10 with
++ * exactly that bug; GEN-679 fixed it).
++ *
+  * GEN-467 re-cut (2026-08-10): when the finished message itself already carries a
+  * recognisable block opener, this hook now SUPPRESSES its injection entirely (see
+  * the block-opener self-test below). An injection here always spawns the promptless
+@@ -43,19 +53,36 @@
+  * watchdog timer w/ unref(), stdin error handler, try/catch around everything, any
+  * error / missing field / unparseable shape -> SILENT no-op, exit 0. NEVER emits
+  * decision:block, so there is ZERO Stop-loop risk by construction. Guards
+- * stop_hook_active === true -> exit silently (no re-nudge on the injection-
+- * continuation turn). Marker consumed (deleted) on read so it nudges once per turn.
++ * stop_hook_active === true -> never nudges on the injection-continuation turn;
++ * since GEN-679 the marker is still consumed and PAIRED there (decision
++ * 'skipped-continuation') before the exit -- see the re-fire guard below.
+  *
+  * DURABLE-LOG RECONCILIATION: on consuming a marker this hook appends a paired
+- * "deliver" line to signal-surface-pending.jsonl (APPEND-ONLY, never line-deleted --
+- * and /wrap never rewrites it either; the log grows unbounded like its sibling
+- * credential-denials.jsonl, which is accepted). /wrap reconciles detect/deliver
+- * PAIRS and reports only unpaired "detect" lines (crash-orphaned -- the session died
+- * before this Stop fired). ACCEPTED EDGE (mirrors stop-cred-denial-surface.js): a
+- * marker whose Stop never fires (mid-turn crash) is TTL-pruned from the temp dir; its
+- * durable "detect" line stays for /wrap to surface. ACCEPTED narrow race: if the
++ * "deliver" line to signal-surface-pending.jsonl via appendDeliver() (APPEND-ONLY,
++ * never line-deleted -- and /wrap never rewrites it either; the log grows unbounded
++ * like its sibling credential-denials.jsonl, which is accepted). /wrap's
++ * detect/deliver reconciliation step (Step 3b at this writing) pairs by
++ * session+prompt and reports unpaired "detect" lines (crash-orphaned); since
++ * GEN-679 it ALSO reports un-acked 'skipped-continuation' deliver rows -- a detect
++ * consumed on a continuation turn was never judged and never nudged (nudging is
++ * structurally forbidden there), so those rows carry the same needs-a-human-look
++ * status as orphans and are retired the same way (ack). GEN-679 exists because the
++ * pre-2026-08-11 code exited on stop_hook_active BEFORE consuming: a detect whose
++ * turn wrote no other same-key deliver then stayed unpaired forever (a permanent
++ * false crash-orphan at every /wrap). NOTE the "no other same-key deliver" scoping:
++ * pairing is by session+prompt, so one deliver masks ALL detects sharing the key --
++ * a continuation detect on a turn whose main Stop delivered was already
++ * masked-paired (observed in the live log, 2026-08-03), and a multi-file turn's
++ * single marker (last-write-wins in the detector) pairs away sibling-file detects
++ * unjudged. That file-granularity gap is a documented residual of the two-hook
++ * protocol, not something this file can close alone.
++ * ACCEPTED EDGES: a marker whose Stop never fires (mid-turn crash) is TTL-pruned;
++ * its durable "detect" line stays for /wrap to surface -- UNLESS a same-key deliver
++ * exists or later arrives (including a continuation's 'skipped-continuation' row
++ * consuming a crashed main Stop's leftover marker), in which case the orphan is
++ * masked -- a mislabeling residual, bounded by the /wrap reporting above. If the
+  * process dies between deleting the marker and appending the "deliver" line, /wrap
+- * re-reports an already-handled detect (a harmless stale report, never a silent miss).
++ * re-reports an already-handled detect (a stale report, not a silent miss).
+  */
+ 
+ const fs = require('fs');
+@@ -65,6 +92,23 @@ const path = require('path');
+ const STATE_DIR = path.join(os.tmpdir(), 'claude-signal-surface-state');
+ const DURABLE_LOG = path.join(__dirname, 'signal-surface-pending.jsonl');
+ 
++// Single writer for paired "deliver" rows (GEN-679; the sibling stop-claim-linter.js
++// factors its durable-log appends the same way -- logGuardEvent). The try/catch
++// lives INSIDE so a failed log write never suppresses a nudge the turn still owes:
++// losing the reconciliation record is the accepted cost, losing the nudge is not.
++function appendDeliver(sid, pid, fileVal, decision) {
++  try {
++    fs.appendFileSync(DURABLE_LOG, JSON.stringify({
++      kind: 'deliver',
++      session: sid,
++      prompt: pid,
++      file: fileVal,
++      decision: decision,
++      ts: new Date().toISOString()
++    }) + '\n');
++  } catch (e) { /* durable log unwritable -> lose only reconciliation record; fail open */ }
++}
++
+ // Surfacing-design detection. If the finished message shows the model DID design how
+ // the signal reaches Erez, the surfacing path is present -> no nudge.
+ //
+@@ -190,29 +234,63 @@ process.stdin.on('end', () => {
+   try {
+     const input = JSON.parse(raw || '{}');
+ 
+-    // Re-fire guard (LOAD-BEARING, probe-confirmed): the turn RECEIVING an injection
+-    // is marked stop_hook_active:true. Exit silently so the nudge never re-fires.
+-    if (input.stop_hook_active === true) { process.exit(0); }
+-
+     const sid = String(input.session_id || 'nosession').replace(/[^\w.-]/g, '_');
+     const pid = String(input.prompt_id || 'noprompt').replace(/[^\w.-]/g, '_');
+ 
+-    // Read + CONSUME this turn's marker. If none, the detector didn't flag this turn.
++    // Read + CONSUME this turn's marker. If none, the detector didn't flag this
++    // turn. GEN-679 ordering constraint: this consume MUST stay above the
++    // stop_hook_active re-fire guard below -- see the CONTINUATION-STATE etiquette
++    // paragraph in the header for why (a guard exit that strands a ledgered marker
++    // manufactures permanent false crash-orphans).
++    // markerData semantics: null = no marker consumed; object = marker consumed
++    // (possibly {} when the content was unreadable/non-object -- still paired,
++    // with file '(unknown)').
+     let markerData = null;
+     const marker = path.join(STATE_DIR, sid + '.' + pid);
+     try {
+       if (fs.existsSync(marker)) {
+-        try { markerData = JSON.parse(fs.readFileSync(marker, 'utf8') || '{}'); }
+-        catch (e) { markerData = {}; }
++        try {
++          const parsed = JSON.parse(fs.readFileSync(marker, 'utf8') || '{}');
++          // Coerce non-objects to {}: a falsy-but-valid JSON literal
++          // (null/false/0/"") or a bare string/number must still count as a
++          // CONSUMED marker, or the unlink below would eat it with no paired row
++          // (the unpaired-detect class this file exists to prevent). typeof null
++          // === 'object', hence the truthiness term; a truthy array passes
++          // through unflattened -- harmless, .file reads undefined ->
++          // '(unknown)'.
++          markerData = (parsed && typeof parsed === 'object') ? parsed : {};
++        } catch (e) { markerData = {}; }
+         fs.unlinkSync(marker); // consume: nudge at most once per turn
+       }
+-    } catch (e) { /* state unreadable -> treat as no marker; fail open */ }
++    } catch (e) {
++      // readFileSync or unlinkSync failed (e.g. a transient AV/indexer lock on
++      // the marker; existsSync itself never throws): the marker was NOT consumed
++      // -- reset so no row and no nudge are emitted from unconsumed state. The
++      // surviving marker is handled by a later same-key Stop, or TTL-prunes into
++      // a visible /wrap orphan (the accepted fail-open direction: a stale
++      // report, never a silent miss).
++      markerData = null;
++    }
++
++    // Re-fire guard (LOAD-BEARING, probe-confirmed): the turn RECEIVING an injection
++    // is marked stop_hook_active:true. NEVER nudge here -- exiting before any
++    // willNudge/stdout work keeps re-nudge structurally impossible. GEN-679: a
++    // marker consumed above is paired FIRST with decision 'skipped-continuation'
++    // (consumed on a continuation turn; no judgment ran, nudging forbidden). The
++    // row's reader is /wrap's reconciliation step, which reports un-acked rows of
++    // this decision alongside orphaned detects -- see the header.
++    if (input.stop_hook_active === true) {
++      if (markerData) {
++        appendDeliver(sid, pid, markerData.file || '(unknown)', 'skipped-continuation');
++      }
++      process.exit(0);
++    }
+ 
+     if (!markerData) { process.exit(0); } // nothing detected this turn -> silent
+ 
+     // A signal WAS built this turn. Did the finished message design its surfacing?
+     const msg = typeof input.last_assistant_message === 'string' ? input.last_assistant_message : '';
+-    const file = (markerData && markerData.file) || '(unknown)';
++    const file = markerData.file || '(unknown)';
+     const willNudge = !showsSurfacingDesign(msg, file); // compute once
+ 
+     // Suppression self-test (GEN-467 re-cut, 2026-08-10): does the finished
+@@ -221,29 +299,20 @@ process.stdin.on('end', () => {
+     // suppression -- no tail-window term; see the opener-machinery comment above.
+     const blockAppearsSent = willNudge ? WIDE_OPENER_RE.test(stripFences(msg)) : false;
+ 
+-    // Append the paired "deliver" line to the durable log (append-only reconciliation),
+-    // regardless of whether we end up nudging -- the pairing records that this turn's
+-    // detect was HANDLED at Stop (so /wrap won't flag it as crash-orphaned). The
+-    // `decision` field records what this hook DECIDED -- 'nudge',
+-    // 'cleared-surfacing-designed', or (since the GEN-467 re-cut)
+-    // 'suppressed-block-out': a nudge was due but the finished message already
+-    // carried a block opener, so NOTHING was injected; the gen467 scheduled scan
+-    // counts those rows as block-already-out exposures. It records the decision,
+-    // not that a nudge was confirmed delivered -- a stdout write can still fail
+-    // afterwards (fail-open). /wrap uses only the pairing (detect<->deliver),
+-    // never this field, so the distinction is recorded honestly but never
+-    // load-bearing.
+-    try {
+-      fs.appendFileSync(DURABLE_LOG, JSON.stringify({
+-        kind: 'deliver',
+-        session: sid,
+-        prompt: pid,
+-        file: file,
+-        decision: !willNudge ? 'cleared-surfacing-designed'
+-          : (blockAppearsSent ? 'suppressed-block-out' : 'nudge'),
+-        ts: new Date().toISOString()
+-      }) + '\n');
+-    } catch (e) { /* durable log unwritable -> lose only reconciliation record; fail open */ }
++    // Append the paired "deliver" row (see appendDeliver + the header) regardless
++    // of whether we end up nudging -- the pairing records that this turn's detect
++    // was HANDLED at Stop. The `decision` field records what this hook DECIDED --
++    // 'nudge', 'cleared-surfacing-designed', 'suppressed-block-out' (nudge due but
++    // the message already carried a block opener; counted by the gen467 scheduled
++    // scan as a block-already-out exposure), or 'skipped-continuation' (written
++    // only by the re-fire guard branch above). It records the decision, not that
++    // a nudge was confirmed delivered -- a stdout write can still fail afterwards
++    // (fail-open). /wrap's pairing uses session+prompt only; the decision field's
++    // sole /wrap consumer is the skipped-continuation report described in the
++    // header.
++    appendDeliver(sid, pid, file,
++      !willNudge ? 'cleared-surfacing-designed'
++        : (blockAppearsSent ? 'suppressed-block-out' : 'nudge'));
+ 
+     if (!willNudge) { process.exit(0); } // surfacing designed -> no nudge
+     // GEN-467 re-cut: the block is already out -- injecting ANYTHING here would
