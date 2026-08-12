@@ -1635,6 +1635,30 @@ const NOTION_CREATE_TOOL = NOTION_MCP_PREFIX + 'notion-create-pages';
 const NOTION_UPDATE_TOOL = NOTION_MCP_PREFIX + 'notion-update-page';
 const NOTION_DUPLICATE_TOOL = NOTION_MCP_PREFIX + 'notion-duplicate-page';
 const NOTION_MOVE_TOOL = NOTION_MCP_PREFIX + 'notion-move-pages';
+// GEN-508 BLOCKING 2: the content hash folds a canonical, prefix-independent TOOL TAG, so a record
+// minted for one tool cannot be spent on the same payload under another. This is load-bearing rather
+// than tidy: notion-duplicate-page SPAWNS a live ticket, and both duplicate-page and update-page
+// declare additionalProperties:{} and require only their own keys, so one object is schema-valid for
+// both -- an update record cleared a duplicate write until the tool entered the hash. The tag is the
+// SHORT operation name, not the full mcp__<uuid>__ tool string, so (a) /vet-ticket can name it without
+// knowing the server id, and (b) the --ticket-hash allow-list regex can pin it to a fixed enum with no
+// metacharacters. ticketToolTag maps the hook's full tool name; the --ticket-hash CLI takes the tag
+// directly (validated against TICKET_TOOL_TAGS). ONE tag string is folded by both call sites, so the
+// hook and the skill cannot drift on it -- the same one-definition-called-by-both argument the hash
+// assembly already makes.
+const TICKET_TOOL_TAG = {
+  [NOTION_CREATE_TOOL]: 'create',
+  [NOTION_UPDATE_TOOL]: 'update',
+  [NOTION_DUPLICATE_TOOL]: 'duplicate',
+  [NOTION_MOVE_TOOL]: 'move'
+};
+const TICKET_TOOL_TAGS = new Set(['create', 'update', 'duplicate', 'move']);
+// Full tool name -> canonical tag. The hook only ever calls this for the four gated tools (isMcp is
+// checked first), but an unmapped value falls back to its raw string so it still produces a DISTINCT
+// hash rather than silently colliding with a canonical tag.
+function ticketToolTag(tool) {
+  return TICKET_TOOL_TAG[tool] || String(tool == null ? '' : tool);
+}
 // The four gated tools are the complete set of Notion MCP tools that can create or materially change
 // a Team-Tasks ROW. The other six mutating tools are scoped out with a stated reason rather than left
 // unnoticed: notion-update-data-source is schema-only (its grammar is ADD/DROP/RENAME/ALTER COLUMN
@@ -2237,19 +2261,24 @@ function ticketLabel(tool, ids) {
 // not be read end to end. If the two copies ever disagreed on that, no record the skill mints would
 // match, and break-glass is the only escape from that state.
 //
-// When ok === false the hash is taken over the RAW parsed input instead, by the same stableStringify.
+// When ok === false the BODY is taken over the RAW parsed input instead, by the same stableStringify.
 // This matters: an earlier version emitted hash '' on an unreadable payload, so NO record could ever
 // match and break-glass was the only door.
-function ticketContentHash(norm, ti) {
-  return norm.ok
-    ? sha256Hex(stableStringify(norm.root === undefined ? null : norm.root))
-    : sha256Hex(stableStringify(ti === undefined ? null : ti));
+//
+// GEN-508 BLOCKING 2: the digest is taken over {surface, tool:<tag>, root:<body>}, NOT the body alone,
+// so the hash binds the TOOL as well as the payload. The tag MUST be folded on BOTH the ok and the
+// !norm.ok paths, or the fallback digest reopens the cross-tool hole on the unreadable-payload branch.
+function ticketContentHash(norm, ti, tag) {
+  const body = norm.ok
+    ? (norm.root === undefined ? null : norm.root)
+    : (ti === undefined ? null : ti);
+  return sha256Hex(stableStringify({ surface: 'notion-mcp', tool: String(tag == null ? '' : tag), root: body }));
 }
 
 function ticketScope(tool, ti) {
   // Stage 1.
   const norm = ticketNormalise(ti);
-  const hash = ticketContentHash(norm, ti);
+  const hash = ticketContentHash(norm, ti, ticketToolTag(tool));
   if (!norm.ok) {
     return { scope: 'block', surface: 'notion-mcp', reason: 'unreadable-payload', why: norm.why,
              target: ticketLabel(tool, []), hash: hash, ids: [] };
@@ -3171,7 +3200,7 @@ function enforceTicketVetting(tool, input) {
 }
 
 // ---- the shared content-hash CLIs ------------------------------------------
-// `node auto-approve.js --ticket-hash <payload.json>`        -> the MCP-surface hash
+// `node auto-approve.js --ticket-hash <payload.json> --tool <create|update|duplicate|move>` -> MCP hash
 // `node auto-approve.js --ticket-hash-shell <command.txt>`   -> the REST-surface hash
 //
 // WHY A CLI RATHER THAN A CITED FORMULA: the skill must use the SAME normaliser and the same hash
@@ -3183,8 +3212,14 @@ function enforceTicketVetting(tool, input) {
 // Read-only by construction: parse a file, hash, print, exit. No fs write, no network.
 function ticketHashCli(argv) {
   const file = argv[argv.indexOf('--ticket-hash') + 1];
-  if (!file) {
-    process.stderr.write('ticket-hash: usage: node auto-approve.js --ticket-hash <payload.json>\n');
+  // GEN-508 BLOCKING 2: --tool is REQUIRED and folded into the hash, so a record can only clear a write
+  // under the SAME tool. It is validated against the fixed tag enum here, and the allow-list regex
+  // (isSafeTicketHash) pins the same enum, so the self-approved invocation can carry nothing else.
+  const tIdx = argv.indexOf('--tool');
+  const tag = tIdx !== -1 ? argv[tIdx + 1] : undefined;
+  if (!file || !tag || !TICKET_TOOL_TAGS.has(tag)) {
+    process.stderr.write('ticket-hash: usage: node auto-approve.js --ticket-hash <payload.json>' +
+      ' --tool <create|update|duplicate|move>\n');
     return process.exit(3);
   }
   let ti;
@@ -3213,7 +3248,7 @@ function ticketHashCli(argv) {
     return process.exit(3);
   }
 
-  const h = ticketContentHash(norm, ti);
+  const h = ticketContentHash(norm, ti, tag);
   if (!norm.ok) {
     // Reachable only for a genuine budget bust now, which is the case this text is true of.
     process.stderr.write('ticket-hash: NOTE this payload could not be read end to end (' +
@@ -3316,8 +3351,11 @@ function isSafeTicketHash(command) {
   // surface this hook does not gate, which is the "a record exists for a write nothing checked" shape
   // the gate exists to refuse. The literal `--ticket-hash` cannot match `--ticket-hash-shell`,
   // because the `\s+` after it requires whitespace where that form has a hyphen.
+  // The trailing `--tool <tag>` is REQUIRED and pinned to the fixed enum (GEN-508 BLOCKING 2): the tag
+  // carries no shell metacharacter, and the `$` anchor with no `m` flag keeps it the LAST token, so a
+  // self-approved invocation can carry nothing chained, expanded or redirected after it.
   const m = command.trim().match(
-    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-hash\s+"([^"<>|&;`$]+\.json)"$/i
+    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-hash\s+"([^"<>|&;`$]+\.json)"\s+--tool\s+"?(?:create|update|duplicate|move)"?$/i
   );
   if (!m) return false;
   return m[1].replace(/\//g, '\\').toLowerCase() === String(__filename).replace(/\//g, '\\').toLowerCase();
