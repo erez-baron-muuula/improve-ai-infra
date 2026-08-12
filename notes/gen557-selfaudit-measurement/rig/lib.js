@@ -164,5 +164,45 @@ function reachable(t) { return !WIDE_OPENER_RE.test(stripFences(t)); }
 const MAX_SCAN_CHARS = 200000;
 function scanText(t) { return t.length > MAX_SCAN_CHARS ? t.slice(0, MAX_SCAN_CHARS) : t; }
 
-module.exports = { hookSource, compile, build, corpus, reachable, scanText,
-  selfAuditArray, patternPartition, buildFrom };
+// --- injected-string invariant helpers (GEN-597 guardrail, 2026-08-12) --------
+// The hook documents an invariant (its "Injected-string CONSTRAINT" note, ~line
+// 801, and the header MAINTENANCE note): every string it INJECTS must never match
+// any CLAIM_PATTERNS or SELF_AUDIT_PATTERNS entry, and must not contain a
+// line-start block opener. These three helpers derive what invariant.js needs to
+// CHECK that, all sliced LIVE from the hook -- same fail-loud-on-move discipline
+// as the rest of this file; a moved declaration throws rather than silently
+// measuring the wrong thing.
+
+// The claim-linter's naked-claim patterns (Class A/B), eval'd from the live array.
+// hookSource() slices only the SELF_AUDIT block, so CLAIM_PATTERNS (which sits
+// earlier in the file) needs its own slice.
+function claimPatternsArray() {
+  const s = fs.readFileSync(HOOK, 'utf8');
+  const start = s.indexOf('const CLAIM_PATTERNS = [');
+  if (start === -1) throw new Error('CLAIM_PATTERNS declaration not found in ' + HOOK + ' -- re-derive');
+  const rel = s.slice(start).indexOf('\n];');
+  if (rel === -1) throw new Error('CLAIM_PATTERNS close not found -- re-derive');
+  return new Function(s.slice(start, start + rel + 3) + '\n; return CLAIM_PATTERNS;')();
+}
+
+// The hook's OWN quote/inline-code suppression mask fn, reused so the guardrail
+// judges an injected note the SAME way the live detector does: the note echoes the
+// turn's flagged phrases inside quotes, which match a pattern by construction, so
+// the mask suppresses them and only the hook's authored constant text is tested.
+function suppressionMaskFn() {
+  return new Function(hookSource() + '\n; return buildSuppressionMask;')();
+}
+
+// The NARROW opener (feeds the Phase-2 guard + record-on-release); WIDE_OPENER_RE
+// above is the wide skip-only form. Both are needed for the "no injected note may
+// contain a line-start block opener" arm of the invariant.
+function blockOpenerRe() {
+  const s = fs.readFileSync(HOOK, 'utf8');
+  const m = s.match(/const BLOCK_OPENER_RE = (\/.*\/[a-z]*);/);
+  if (!m) throw new Error('BLOCK_OPENER_RE declaration not found in ' + HOOK + ' -- re-derive');
+  return new Function('return ' + m[1] + ';')();
+}
+
+module.exports = { HOOK, hookSource, compile, build, corpus, reachable, scanText,
+  selfAuditArray, patternPartition, buildFrom,
+  claimPatternsArray, suppressionMaskFn, blockOpenerRe, WIDE_OPENER_RE };
