@@ -178,7 +178,7 @@ console.log('\n== G. the REST record path ==');
   // The two surfaces must not cross-match: same three slots, different surface tag in the hash input.
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', old_str: 'a', new_str: 'b' }), 'utf8');
-  check('MCP and REST hashes differ for the same target', cli(['--ticket-hash', p]).out.trim() !== hash, 'collision');
+  check('MCP and REST hashes differ for the same target', cli(['--ticket-hash', p, '--tool', 'update']).out.trim() !== hash, 'collision');
 }
 
 H.removeScriptCopy();
