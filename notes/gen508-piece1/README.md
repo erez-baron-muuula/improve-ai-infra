@@ -5,12 +5,55 @@ Working copies for the ticket-quality gate. **Nothing here is installed** — th
 
 ---
 
+## Step 4 (fix the four engineering defects) — DONE, 2026-08-12
+
+Fixes 1–4 of `plan-2026-08-12-fix-the-core.md` landed in the working copies (hook + skill + suites).
+**Nothing installed** — that is Step 6. Every red-by-design PEND is now a live assertion.
+
+**Suite state now** (this is current; the Step-3 block below is historical):
+- `test-gen508-v8-arm.js` = **75 passed / 0 failed / 0 pending**
+- `test-gen508-contract.js` = **22 passed / 0 failed / 0 pending**
+- `test-gen508-rest-parked.js` = unchanged, exits 0 at its 19-expected-fail baseline.
+- Corpus fail-open sweep (rebuilt this session): **1227 real payloads → 0 silent bypasses, 0 threw**.
+
+**What each fix did** (all in `auto-approve.working.js` + the suites; Fixes 1 & 4 also touch `vet-ticket-SKILL.md`):
+- **Fix 1 — BLOCKING 2 (hash binds the tool):** `ticketContentHash` folds a canonical tool tag
+  (`create|update|duplicate|move`, via `ticketToolTag`) into `{surface, tool, root}` on BOTH the ok and
+  the `!norm.ok` fallback paths, so a record minted for one tool cannot clear the same payload under
+  another (an update record on a `duplicate` = an unreviewed live-ticket create). `--ticket-hash` gained a
+  REQUIRED `--tool <tag>` arg, validated against a fixed enum and pinned in `isSafeTicketHash`'s regex and
+  the skill's invocation. Tests: contract §4 (cross-tool NEGATIVE + positive control), §5 tripwires updated.
+- **Fix 2 — expiry ceiling:** an UPPER-bound check (`TICKET_MAX_TTL_MS`, 20 min) in the ticket-scoped path
+  (reason `expiry-too-far`), deliberately NOT in the shared `findPassInDir`. Test: v8-arm §J (2099 rejected).
+- **Fix 3 — closed-shape record validation:** a matched pass carrying any key outside `TICKET_PASS_KEYS`
+  is refused (reason `unknown-record-key`). Tests: v8-arm behavioural + contract §8 skill↔hook round-trip pin.
+- **Fix 4 — BLOCKING 3 (premise sweep):** the four disproven premises ("the mint write prompts him / that
+  prompt IS the gate", "the write prompts him", the waive's "second, deliberate confirmation", raw REST
+  "runs silently") are rewritten to the true basis in `vet-ticket-SKILL.md` — the hook clears on the
+  reviewer's verified token, or on Erez's explicit chat answer for a waive, never on a (non-firing) mint
+  prompt. Test: contract §1 (four greps). The hook's own comment and design §2 already stated this correctly.
+
+**Two new hook reasons** — `expiry-too-far`, `unknown-record-key` — are registered in `blockTicketVetting`
+and the harness `TICKET_BLOCK_SIGNATURES`; contract §2 keeps the hook↔mapper reason set in sync.
+
+**Known, out of scope (unchanged):** the `/vet-code` and `/vet-rule` sibling-gate refusal texts still say
+their mint "prompts Erez" — the same premise, on pre-existing code for other gates. Left untouched to keep
+the GEN-508 diff additive; it is the "pre-existing hole in four gates" the second review already recorded.
+
+**Still to do — Step 5, then Step 6:**
+- **Step 5** (each an Erez design call, bring one at a time): BLOCKING-1 GEN-58 exemption writer; #6
+  rotated-data-source probe; #4 break-glass scope.
+- **Step 6:** full `/vet-code` Pass A + Pass B over the combined diff, INCLUDING a `/check` on the rewritten
+  `vet-ticket-SKILL.md` sections (Fixes 1 & 4 are rule-like content); live-verify (incl. the still-open
+  sub-agent-firing experiment); install hook + skill TOGETHER; post-install check.
+
 ## Step 3 (make the cross-artifact contract executable) — DONE, 2026-08-12
 
-The test/contract layer is rebuilt; the gate fixes (Steps 4–6) are NOT done. Read this section first for
-the current state; the round histories further down are pre-Step-3 and remain accurate as history.
+The test/contract layer is rebuilt (this was Step 3). **The Step 4 section above is now current** — gate
+fixes 1–4 have landed and the PEND specs described below are all promoted to live assertions. The round
+histories further down are pre-Step-3 and remain accurate as history.
 
-**Suite state now** (all in the repo working-copies; the live hook + skill are untouched):
+**Suite state at Step 3 completion** (superseded by the Step 4 counts above):
 - `test-gen508-v8-arm.js` = **73 passed / 0 failed / 1 pending**
 - `test-gen508-contract.js` (NEW) = **13 passed / 0 failed / 5 pending**
 - `test-gen508-rest-parked.js` = unchanged, exits 0 at its 19-expected-fail baseline.
