@@ -9,8 +9,9 @@ Creating, duplicating, moving-into, or substantively editing a Notion **Team-Tas
 **hard-blocked** by the `auto-approve.js` PreToolUse hook (GEN-508) unless a valid, single-use
 **ticket pass** exists. This skill is the ONLY sanctioned way to mint one: it drafts the write, has
 an **independent reviewer** judge it against the ticket bar, resolves every finding, shows Erez a
-summary card, mints the pass on his approval (the mint write itself prompts him — that prompt IS the
-gate), applies, and verifies.
+summary card, mints the pass, applies, and verifies. What actually clears the hook is the independent
+reviewer's verified PASS token (Step 2) — NOT the mint write, which under Erez's bypassPermissions mode
+falls through silently and does not prompt, so it is no kind of gate on its own.
 
 **The hook enforces the gate; this skill enforces the process.** Never hand-mint a pass to skip the
 review.
@@ -82,9 +83,11 @@ unreachable, rate-limited, archived, or a target id that is malformed or missing
 Notion access, so the escape is one review plus one mint — not break-glass.
 
 Known gaps, stated so they are not mistaken for coverage: **raw REST/curl writes to
-`api.notion.com`** and **all Jira writes** are outside this gate (piece 2). REST Notion writes are
-still forced to an interactive `ask` by `notion-schema-guard.js`, and Jira content edits still need a
-staging pass, so neither runs silently — but neither is held to the ticket bar.
+`api.notion.com`** and **all Jira writes** are outside this gate (piece 2). A raw REST Notion write is
+NOT gated here and is not reliably stopped elsewhere either — `notion-schema-guard.js` covers the MCP
+schema tool, not curl, and under Erez's bypassPermissions mode its `ask` would be discarded anyway — so
+such a write CAN run silently until piece 2 wires this arm. Jira/Confluence content edits are separately
+hard-blocked by the staging gate. Neither is held to the ticket bar.
 
 ---
 
@@ -121,13 +124,18 @@ matches and only break-glass gets a write through.
 2. Run the hook's own hash mode:
 
 ```bash
-node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>"
+node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>" --tool <create|update|duplicate|move>
 ```
 
 3. It prints one line: the `contentHash`. Use it verbatim.
 
 That exact invocation is auto-approved (it only reads a file and prints a hash), so it costs no
-permission prompt. Both paths must be quoted, and nothing may be appended to the command.
+permission prompt. Both paths must be quoted, the `--tool` tag must be exactly one of
+`create` / `update` / `duplicate` / `move` (matching the tool you are about to call —
+`update` for notion-update-page, `duplicate` for notion-duplicate-page, and so on), and nothing else
+may be appended to the command. The tag is folded into the hash, so a record minted for one tool will
+NOT clear the same payload under another (a duplicate spawns a live ticket, so an update record must
+never be spendable on it).
 
 **If it exits non-zero it prints no hash — then STOP and do not mint.** A non-zero exit means the
 hook could not read that payload end to end, so it is going to hard-block the call whatever pass
@@ -250,9 +258,10 @@ filings are shown together as one card list and approved in one action.
 His approval means "file this", not "I endorse this wording" — the body's quality rests on the
 reviewer. Say so once when the card list is unusually large or the reviewer's notes were substantive.
 
-Then mint the **ticket pass** into `~/.claude-staging/ticket-passes/` with the Write tool. That dir
-is outside `~/.claude`, so the write prompts him — **show the card content inline in that same
-moment**, never a bare file-write dialog.
+Then mint the **ticket pass** into `~/.claude-staging/ticket-passes/` with the Write tool. Do NOT rely
+on that write to prompt him — under his bypassPermissions mode it falls through silently — so his
+approval must come from the **card you show inline BEFORE the mint**, never from a file-write dialog
+that may never appear.
 
 ```json
 { "kind": "ticket",
@@ -291,9 +300,9 @@ machinery are gone: the hook consumes a matched pass by renaming the whole file 
 several tickets therefore needs one pass file per ticket, each with its own hash and its own reviewer
 token, written in the same approved moment.
 
-Known cost, not a design claim: each of those files is a separate Write, so a multi-ticket card list
-raises one prompt per ticket rather than the single prompt the batch pass used to give. Do not try to
-recover the old behaviour by putting several hashes in one file — the hook cannot read them.
+Known consequence, not a design claim: each of those files is a separate reviewed pass — its own hash
+and its own reviewer token — so a multi-ticket card list is several mints, not one. Do not try to
+collapse them by putting several hashes in one file — the hook cannot read them.
 
 ## Step 6 — The waive lane (Erez's per-case override)
 
@@ -301,7 +310,8 @@ When the reviewer holds findings that cannot be fixed and Erez wants it filed an
 outstanding findings in plain terms and ask. On his affirmative, set `waived: true` + `waiveReason` +
 the outstanding findings in the record, **and set `waived: true` on the pass as well** — the pass is
 the only file the hook opens, so a waive recorded solely in the record blocks with `bad-verdict`. Then
-mint normally; the mint prompt is his second, deliberate confirmation.
+mint normally. Erez's explicit affirmative in chat (above) is the waive's authority; there is no
+separate mint-write confirmation, because under his permission mode that write does not prompt.
 
 A waive is the ONLY path that skips the reviewer checks: on `waived: true` the hook verifies no
 sidecar and looks for no token, so a waived pass needs no `reviewerAgentId` and Erez's explicit chat
