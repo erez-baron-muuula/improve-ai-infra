@@ -78,40 +78,61 @@ console.log('\n== 3. the content hash has ONE definition, called by both the gat
   check('ticketContentHash is called by both the gate path and the CLI (def + 2 call sites)', occ >= 3, 'occurrences: ' + occ);
 }
 
-console.log('\n== 4. the content hash does not yet bind the tool (BLOCKING 2) ==');
+console.log('\n== 4. the content hash BINDS the tool (BLOCKING 2) ==');
 {
-  // A pass minted for a payload clears the SAME payload under a DIFFERENT tool, because the hash is taken
-  // over the payload alone. A waived pass isolates this from the reviewer path: no sidecar, no token, so
-  // the ONLY thing that could refuse the cross-tool write is a tool-bound hash -- which does not exist
-  // yet. Sent as notion-duplicate-page (which SPAWNS A LIVE TICKET) it must NOT clear. Red-by-design:
-  // Step 4 folds the tool into the hash (and updates the --ticket-hash CLI call below with it).
+  // BLOCKING 2 (was): a pass minted for a payload cleared the SAME payload under a DIFFERENT tool,
+  // because the hash was taken over the payload alone -- and notion-duplicate-page SPAWNS A LIVE TICKET,
+  // so an update record spent on a duplicate is an unreviewed create. The fix folds the tool tag into
+  // ticketContentHash. A WAIVED pass isolates the property under test from the reviewer path (no sidecar,
+  // no token), so the ONLY thing that can refuse the cross-tool write is the tool-bound hash.
+  //
+  // This is a FORMULA-level test, not a plumbing test: the POSITIVE control proves the record clears
+  // under its own tool, so the NEGATIVE proves the tool BINDS -- a `--tool` arg threaded through the
+  // plumbing while ticketContentHash still ignored it would clear BOTH and fail the negative here.
   const payload = { page_id: H.PAGE, command: 'update_properties', properties: { Urgency: 'High' } };
   const p = path.join(H.DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify(payload), 'utf8');
-  const h = H.cli(['--ticket-hash', p]).out.trim();
+  // Mint the record for this payload as an UPDATE (the tool it was reviewed under).
+  const h = H.cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
   fs.mkdirSync(H.PASS_DIR, { recursive: true });
   const passFile = path.join(H.PASS_DIR, 'rec.json');
-  fs.writeFileSync(passFile, JSON.stringify({
+  const mint = () => fs.writeFileSync(passFile, JSON.stringify({
     kind: 'ticket', surface: 'notion-mcp', contentHash: h, verdict: 'PASS', waived: true,
     target: 'page ' + H.PAGE, expires: new Date(Date.now() + 15 * 60 * 1000).toISOString()
   }), 'utf8');
+
+  // POSITIVE control: the update record DOES clear the same payload under update-page (and consumes it).
+  mint();
+  const rUpd = H.run({ tool_name: H.MCP + 'notion-update-page', tool_input: payload, cwd: H.DIR,
+                       transcript_path: path.join(H.DIR, 'nope.jsonl') });
+  check('control: the update record clears the same payload under update-page',
+        H.approved(rUpd), 'code=' + rUpd.code + ' err=' + rUpd.err.slice(0, 160));
+
+  // NEGATIVE (BLOCKING 2): re-mint (the control consumed it) and send the identical object under
+  // notion-duplicate-page. The tool is folded into the hash, so the update record cannot clear it.
+  mint();
   const rDup = H.run({ tool_name: H.MCP + 'notion-duplicate-page', tool_input: payload, cwd: H.DIR,
                        transcript_path: path.join(H.DIR, 'nope.jsonl') });
-  expectPending('a pass minted for one payload does NOT clear the same payload under another tool',
-                !H.approved(rDup), 'Step 4: fold the tool into the content hash');
+  check('a pass minted for one tool does NOT clear the same payload under another tool',
+        !H.approved(rDup) && H.ticketBlockReason(rDup) !== null,
+        'approved=' + H.approved(rDup) + ' reason=' + H.ticketBlockReason(rDup) + ' code=' + rDup.code);
   fs.rmSync(passFile, { force: true });
 }
 
 console.log('\n== 5. the --ticket-hash allow-list regex is still tightly pinned ==');
 {
-  // The self-approve regex (isSafeTicketHash) lets /vet-ticket run the hash CLI with no prompt. It must
-  // keep excluding shell metacharacters and must end on the .json argument -- the trailing `$` after the
-  // json group is what proves it takes NO extra argument, so BLOCKING 2's fix (a --tool arg) cannot ride
-  // this entry silently: it would have to change this regex, which this pin catches.
+  // The self-approve regex (isSafeTicketHash) lets /vet-ticket run the hash CLI with no prompt. GEN-508
+  // BLOCKING 2 added a REQUIRED `--tool <tag>` argument folded into the hash, so the regex now ends on
+  // that tag, pinned to a fixed four-word enum. These pins assert the security-relevant shape: the script
+  // and .json paths still exclude every shell metacharacter, and the tool arg is a CLOSED ENUM anchored to
+  // the end (`$`, no `m` flag) -- so nothing can be chained/expanded/redirected after it and the tool arg
+  // itself carries no metacharacter. A future change to the argv contract must deliberately update these.
   check('the regex still excludes shell metacharacters in the script path',
         hookSrc.indexOf('([^"<>|&;`$]+auto-approve\\.js)') !== -1, 'metachar exclusion on the path changed');
-  check('the regex still ends on the .json argument (no tool arg admitted)',
-        hookSrc.indexOf('--ticket-hash\\s+"([^"<>|&;`$]+\\.json)"$') !== -1, 'the --ticket-hash arg shape changed');
+  check('the regex still excludes shell metacharacters in the .json argument',
+        hookSrc.indexOf('--ticket-hash\\s+"([^"<>|&;`$]+\\.json)"') !== -1, 'the --ticket-hash .json arg shape changed');
+  check('the regex ends on the fixed --tool enum (closed set, anchored as the last token)',
+        hookSrc.indexOf('--tool\\s+"?(?:create|update|duplicate|move)"?$') !== -1, 'the --tool arg pin changed');
   check('isSafeTicketHash still gates the shell allow-list approve (call site intact)',
         hookSrc.indexOf('if (isSafeTicketHash(cmd)) return approve(') !== -1, 'the self-approve call site moved or changed');
 }

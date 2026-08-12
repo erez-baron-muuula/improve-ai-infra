@@ -121,13 +121,18 @@ matches and only break-glass gets a write through.
 2. Run the hook's own hash mode:
 
 ```bash
-node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>"
+node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>" --tool <create|update|duplicate|move>
 ```
 
 3. It prints one line: the `contentHash`. Use it verbatim.
 
 That exact invocation is auto-approved (it only reads a file and prints a hash), so it costs no
-permission prompt. Both paths must be quoted, and nothing may be appended to the command.
+permission prompt. Both paths must be quoted, the `--tool` tag must be exactly one of
+`create` / `update` / `duplicate` / `move` (matching the tool you are about to call —
+`update` for notion-update-page, `duplicate` for notion-duplicate-page, and so on), and nothing else
+may be appended to the command. The tag is folded into the hash, so a record minted for one tool will
+NOT clear the same payload under another (a duplicate spawns a live ticket, so an update record must
+never be spendable on it).
 
 **If it exits non-zero it prints no hash — then STOP and do not mint.** A non-zero exit means the
 hook could not read that payload end to end, so it is going to hard-block the call whatever pass
