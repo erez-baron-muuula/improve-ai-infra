@@ -12,6 +12,14 @@ verification-walkthrough narration" — https://app.notion.com/p/3a66e495d07c810
 > (the ten pre-GEN-557 ones at lines 337-352, the six new ones at 370-414). The
 > pre-install baseline — 801 lines, 47,164 bytes, 10 patterns — is the 2026-07-30/08-02
 > figure and is retained only for reading the older sections in context.
+>
+> **Superseded 2026-08-12 (GEN-597 guardrail session).** The live hook changed AGAIN after
+> the 08-03 measurement: the **GEN-467 re-cut, installed 2026-08-10**, added `WIDE_OPENER_RE`
+> + a Phase-1 skip and retired Arm-1's `decision:block`. Measured against the live hook
+> 2026-08-12: **1078 lines, 67,519 bytes, LF, sha256
+> `7ce85f53da69533e686272ca83a9afc40f29bae6ecffbc59d7059cb38119c1d9`.** `SELF_AUDIT_PATTERNS`
+> is still 16 (ten old at 378-393, six GEN-557 at 411-455); `CLAIM_PATTERNS` at 249-289. The
+> 990-line / 60,977-byte / `f5b2d250…` figures above are the pre-re-cut (2026-08-03) state.
 
 **The rig lives beside this file in `rig/` and is git-tracked** (verified 2026-08-03 via
 `git ls-files`: 25 files including `lib.js`, `working.js` and `proposed.diff`). The 2026-07-30
@@ -22,7 +30,8 @@ and the derived dumps are excluded; regenerate with `rig/extract.js`.
 **Re-baseline, never diff against a printed number.** `extract.js` rebuilds the corpus from
 on-disk transcripts and it SHRINKS as Claude Code prunes them, so figures from different
 dates are not comparable. The 2026-08-03 corpus was `files=164 turns=4464 unparsable=0`;
-earlier sections quote a 4,356- and a 4,580-turn corpus. Always re-run before quoting.
+earlier sections quote a 4,356- and a 4,580-turn corpus; the 2026-08-12 corpus was
+`files=148 turns=2970 unparsable=0`. Always re-run before quoting.
 
 ---
 
@@ -39,6 +48,20 @@ misses the `## 📌 For you` heading form), **GEN-602** (the 5-hit cap's log rep
 and **GEN-584** (the guard exits before the self-audit stage). Per **GEN-618**, decided
 2026-08-03, GEN-584/597/601/602 ship together in ONE `/vet-code` pass — do not open a pass for
 one of them alone.
+
+> **Superseded 2026-08-12 (GEN-597 guardrail session): the 08-10 re-cut already resolved most of
+> the GEN-618 batch — do NOT run it as written.** Re-baselined against the live hook 2026-08-12:
+> - **GEN-584 → Won't Do (2026-08-10):** its comment fix is live; the coverage gap was left open by choice.
+> - **GEN-597 → resolved by the re-cut:** the claim-linter note now reads "no block is due", not "owed", so
+>   it no longer matches pattern 383. Confirmed GREEN by `rig/invariant.js` (see the guardrail section below).
+> - **GEN-601 → overtaken by the re-cut:** heading-form blocks now hit the `WIDE_OPENER_RE` Phase-1 skip and
+>   Arm-1's block is gone. Its literal "widen `BLOCK_OPENER_RE`" action is now CONTRAINDICATED — that regex
+>   feeds record-on-release, which the re-cut deliberately keeps wide-openers OUT of. Close as overtaken.
+> - **GEN-602 → still open, still ~0-frequency:** the 5-hit cap fills 1 message in 1,641 Phase-1-reachable
+>   (2026-08-12), and that message's five hits are all NEW patterns — reached, not starved. The reorder fixes
+>   a case that has occurred 0 times.
+> - Two now-false in-hook comments remain (`buildSuppressionMask`'s "no block is owed" note ~line 548; the
+>   heading-form comment above `findSelfAudit` ~line 419); they ride the next gated hook edit, not their own pass.
 
 ### The pre-install record (as written 2026-08-02 — kept for provenance)
 
@@ -81,6 +104,53 @@ review can see them.
 > live hook has drifted since install and that is worth investigating before trusting any
 > figure here. A future pass on this file builds its own working copy; see the note atop
 > `rig/build.js` for why that script cannot be reused.
+>
+> **Superseded 2026-08-12 (GEN-597 guardrail session): that byte-identity BROKE and has been
+> re-established.** The 08-10 re-cut changed the live hook, so the 08-03 identity no longer held —
+> `rig/working.js` had drifted to a stale 76,086-byte copy while the live hook was 67,519 bytes (exactly
+> the "if it ever stops holding, the live hook has drifted" condition this note warned about). This session
+> re-banked `rig/working.js` byte-for-byte from the current live hook: both now sha256
+> `7ce85f53da69533e686272ca83a9afc40f29bae6ecffbc59d7059cb38119c1d9`, 67,519 bytes, verified 2026-08-12.
+> `rig/invariant.js` and `rig/livefire.js` both drive this local copy and re-assert the identity on every run.
+
+---
+
+## Injected-string invariant guardrail (`rig/invariant.js`, GEN-597, 2026-08-12)
+
+`rig/invariant.js` is the canonical enforcement of the invariant the hook documents in its header
+MAINTENANCE note and its "Injected-string CONSTRAINT" note (~line 801): **every string the hook
+injects — the claim-linter note AND the self-audit note — must never match any `CLAIM_PATTERNS` or
+`SELF_AUDIT_PATTERNS` entry, and must not contain a line-start block opener.** A violation is a
+latent bug: a later message that quotes the note can re-trip the detector on the hook's own words.
+GEN-597 was exactly such a violation ("no block is owed" in the claim-linter note matched self-audit
+pattern 383).
+
+**Why it exists.** The only prior check (`rig/livefire.js`'s MAINTENANCE fixture) tested ONE note
+(self-audit) against ONE family (self-audit patterns), so it structurally could not catch a
+claim-linter-note violation like GEN-597. `invariant.js` covers BOTH notes × BOTH families + the
+opener arm.
+
+**How it works (and why it can't drift):**
+- It DRIVES `rig/working.js` (re-banked byte-identical to the live hook; sha checked at start) as a
+  real Stop hook and reads the ACTUAL emitted note text — an author who rewords a note in source
+  cannot reword it out of this check. It drives the local copy, not the live hook, so the hook's log
+  writes land in the rig dir and are self-cleaned, never polluting `~/.claude/hooks/*.jsonl`.
+- A note echoes the turn's flagged phrases back in quotes (those match by construction), so the checker
+  applies the hook's OWN `buildSuppressionMask` and judges a match only OUTSIDE a quoted / inline-code
+  span — testing the hook's authored constant text, not its echoes.
+- A built-in self-test plants an unquoted "no block is owed" and asserts it is CAUGHT (non-vacuous), and
+  asserts the quoted form is suppressed (honest masking). A green run cannot be vacuous.
+
+**How the signal reaches a decision.** This is the check `/vet-code` Step 4 (mandatory detector
+live-fire) must run for `stop-claim-linter.js` on EVERY gated edit; a non-zero exit is a FAIL that
+blocks the vetting pass. The strongest wiring — a pointer to this file inside the hook's own
+MAINTENANCE note — is itself a locked-file edit, filed as a rider for the next gated hook edit.
+
+**Result 2026-08-12:** GREEN — both live notes clear both families and the opener arm, confirming
+GEN-597 is genuinely resolved; the built-in self-test and an end-to-end "revert the note to 'owed' →
+RED" demonstration both fired as expected.
+
+Run: `node rig/invariant.js` (exit 0 = invariant holds, 1 = violated).
 
 ---
 
