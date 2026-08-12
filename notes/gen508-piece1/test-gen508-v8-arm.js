@@ -115,13 +115,13 @@ console.log('\n== C. the MCP hash CLI ==');
 {
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] }), 'utf8');
-  const r = cli(['--ticket-hash', p]);
+  const r = cli(['--ticket-hash', p, '--tool', 'update']);
   check('--ticket-hash prints a 64-hex digest', r.code === 0 && /^[0-9a-f]{64}$/.test(r.out.trim()), 'code=' + r.code + ' out=' + r.out.slice(0, 80));
 
   // The envelope and the plain form MUST hash identically -- this is what the hoist buys.
   const p2 = path.join(DIR, 'test-payload-env.json');
   fs.writeFileSync(p2, JSON.stringify({ data: JSON.stringify({ page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] }) }), 'utf8');
-  const r2 = cli(['--ticket-hash', p2]);
+  const r2 = cli(['--ticket-hash', p2, '--tool', 'update']);
   check('enveloped and plain forms hash identically', r.out.trim() === r2.out.trim(), r.out.trim() + ' vs ' + r2.out.trim());
 }
 
@@ -142,7 +142,7 @@ console.log('\n== D. the record path end to end ==');
 
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] }), 'utf8');
-  const hash = cli(['--ticket-hash', p]).out.trim();
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
   const agentId = 'a1234567890abcdef';
 
   function writeTranscript(verdict) {
@@ -358,7 +358,7 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
   const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
-  const hash = cli(['--ticket-hash', p]).out.trim();
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
   const tok = v => 'TICKET-REVIEW-VERDICT: ' + v + ' ' + hash;
   const callWith = () => run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
                                transcript_path: sessionDir + '.jsonl' });
@@ -475,7 +475,7 @@ console.log('\n== G. the caller\'s transcript path resolves when the caller is a
   const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'x', new_str: 'y' }] };
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
-  const hash = cli(['--ticket-hash', p]).out.trim();
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
   fx.write([[{ type: 'text', text: 'TICKET-REVIEW-VERDICT: PASS ' + hash }]]);
 
   // The caller is a DIFFERENT sub-agent in the same session, so its own transcript sits beside the
@@ -587,7 +587,7 @@ console.log('\n== I. the two refusal texts that named no usable fix ==');
   const ti = { data: '{"page_id": "unterminated' };
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
-  const c = cli(['--ticket-hash', p]);
+  const c = cli(['--ticket-hash', p, '--tool', 'update']);
   check('the CLI still prints a fallback digest for an unreadable payload',
         c.code === 0 && /^[0-9a-f]{64}$/.test(c.out.trim()) && c.err.indexOf('raw-input fallback') !== -1,
         'code=' + c.code + ' out=' + c.out.slice(0, 80));
@@ -621,7 +621,7 @@ console.log('\n== J. branches with no assertion before Step 3 ==');
   const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
-  const hash = cli(['--ticket-hash', p]).out.trim();
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
   fx.write([[{ type: 'text', text: 'x'.repeat(5 * 1024 * 1024) + '\nTICKET-REVIEW-VERDICT: PASS ' + hash }]]);
   fx.record(hash);
   const rBig = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
@@ -651,25 +651,47 @@ console.log('\n== J. branches with no assertion before Step 3 ==');
         fellThrough(rWs), 'reason=' + ticketBlockReason(rWs) + ' code=' + rWs.code + ' err=' + rWs.err.slice(0, 180));
 }
 {
-  // EXPIRY CEILING -- RED-BY-DESIGN until Step 4. findPassInDir checks only `exp < now` (a lower bound),
-  // so a record with a far-future expiry is honoured indefinitely. The Step-4 fix caps the TTL in the
-  // TICKET-SCOPED path -- NOT in the shared findPassInDir, which would lock out longer-TTL sibling passes
-  // (staging / vetting / check-due, incl. /vet-code's, the gate that installs this very hook). This spec
-  // asserts the far-future record is REJECTED; it PENDs now and greens when the ceiling lands.
+  // EXPIRY CEILING (Fix 2, landed). findPassInDir checks only `exp < now` (a lower bound), so a record
+  // with a far-future expiry was honoured indefinitely. The ceiling caps the TTL in the TICKET-SCOPED
+  // path -- NOT in the shared findPassInDir, which would lock out longer-TTL sibling passes (staging /
+  // vetting / check-due, incl. /vet-code's, the gate that installs this very hook). This asserts the
+  // far-future record is REJECTED as expiry-too-far.
   const sessionDir = path.join(DIR, 'sess');
   const agentId = 'a7777777777777777';
   const fx = tokenFixture(agentId, sessionDir);
   const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
   const p = path.join(DIR, 'test-payload.json');
   fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
-  const hash = cli(['--ticket-hash', p]).out.trim();
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
   fx.write([[{ type: 'text', text: 'TICKET-REVIEW-VERDICT: PASS ' + hash }]]);
   fx.record(hash, { expires: '2099-01-01T00:00:00.000Z' });
   const rFuture = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
                         transcript_path: sessionDir + '.jsonl' });
-  expectPending('a far-future (2099) expiry is REJECTED', !approved(rFuture),
-                'Step 4: expiry ceiling in the ticket-scoped path');
+  check('a far-future (2099) expiry is REJECTED', ticketBlockReason(rFuture) === 'expiry-too-far',
+        'reason=' + ticketBlockReason(rFuture) + ' code=' + rFuture.code + ' err=' + rFuture.err.slice(0, 180));
   fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+}
+{
+  // GEN-508 closed-shape (Fix 3): a matched pass carrying an unrecognised key is REFUSED, not silently
+  // accepted -- the "field written and read by nothing" class. Waived, to isolate it from the reviewer
+  // path (a canonical record still APPROVES -- that is section D's first assertion).
+  fs.mkdirSync(PASS_DIR, { recursive: true });
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
+  const passFile = path.join(PASS_DIR, 'rec.json');
+  fs.writeFileSync(passFile, JSON.stringify({
+    kind: 'ticket', surface: 'notion-mcp', contentHash: hash, verdict: 'PASS', waived: true,
+    target: 'page ' + PAGE, expires: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    injectedExtra: 'not a field the mint template writes'
+  }), 'utf8');
+  const rExtra = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                      transcript_path: path.join(DIR, 'nope.jsonl') });
+  check('a record with an unrecognised key is refused (closed shape)',
+        ticketBlockReason(rExtra) === 'unknown-record-key',
+        'reason=' + ticketBlockReason(rExtra) + ' code=' + rExtra.code + ' err=' + rExtra.err.slice(0, 180));
+  fs.rmSync(passFile, { force: true });
 }
 // DELIBERATELY NOT ASSERTED behaviourally here, each with its reason -- the same call this suite already
 // makes for the hash re-assert (section A2) and the normalise-threw CLI branch (section I):
