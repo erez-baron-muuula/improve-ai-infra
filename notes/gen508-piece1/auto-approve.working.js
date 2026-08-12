@@ -3225,6 +3225,49 @@ function ticketHashCli(argv) {
   return process.exit(0);
 }
 
+// GEN-508 Step 3: batch scope-classifier over a payload corpus, for the fail-open sweep in the test
+// suite. Read-only by construction -- read a JSONL corpus, run each payload through the SAME ticketScope
+// the wired hook runs (no fs write, no network on any path), print one verdict line, exit. So the sweep
+// tests what runs, not a re-implementation of it. It carries NO auto-approve allow-list entry: the suite
+// spawns it directly with argv, never as a Bash tool call, so it is not a shell surface the gate must
+// recognise and needs no isSafeTicketHash change.
+//
+// Input:  a JSONL file, one {tool, short, input} object per line (build-corpus.js's row shape).
+// Output: one JSON line per non-blank input line, IN ORDER: {short, scope, reason, why}. A ticketScope
+//         throw is reported as scope:'threw' (message in `why`) rather than crashing the batch, so the
+//         sweep can assert it never happens -- ticketScope is written not to throw on anything JSON.parse
+//         can produce, so a 'threw' is itself a finding. One output line per non-blank corpus line keeps
+//         the sweep's index-join with the corpus exact.
+function ticketScopeBatchCli(argv) {
+  const file = argv[argv.indexOf('--ticket-scope-batch') + 1];
+  if (!file) {
+    process.stderr.write('ticket-scope-batch: usage: node auto-approve.js --ticket-scope-batch <corpus.jsonl>\n');
+    return process.exit(3);
+  }
+  let text;
+  try {
+    text = fs.readFileSync(file, 'utf8').replace(/^\\uFEFF/, '');
+  } catch (e) {
+    process.stderr.write('ticket-scope-batch: cannot read ' + file + '.\n');
+    return process.exit(3);
+  }
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    let row;
+    try { row = JSON.parse(line); }
+    catch (e) { process.stdout.write(JSON.stringify({ short: null, scope: 'unparsable-corpus-line', reason: null, why: null }) + '\n'); continue; }
+    let out;
+    try {
+      const sc = ticketScope(row.tool, row.input);
+      out = { short: row.short || null, scope: sc.scope, reason: sc.reason || null, why: sc.why || null };
+    } catch (e) {
+      out = { short: row.short || null, scope: 'threw', reason: null, why: String((e && e.message) || e) };
+    }
+    process.stdout.write(JSON.stringify(out) + '\n');
+  }
+  return process.exit(0);
+}
+
 // The shell surface's entry point. Its input is a file holding the CANONICAL INVOCATION LINE.
 // It exits NON-ZERO -- printing nothing to stdout -- when the command is not an exact template match
 // or its body file cannot be read: the two states in which the arm refuses to produce a hash at all.
@@ -3471,6 +3514,10 @@ function redirectNudgeContext(input, tool, cmd) {
 // process.exit(), so nothing below runs in those modes. Unreachable in normal PreToolUse operation,
 // where argv carries no flags at all.
 if (process.argv.indexOf('--ticket-hash') !== -1) ticketHashCli(process.argv);
+// GEN-508 Step 3: read-only batch scope-classifier for the test suite's fail-open corpus sweep. Like
+// --ticket-hash it takes a file argument, always process.exit()s, and is unreachable in normal PreToolUse
+// operation (argv carries no flags). NOT allow-listed -- the suite spawns it directly, never via Bash.
+if (process.argv.indexOf('--ticket-scope-batch') !== -1) ticketScopeBatchCli(process.argv);
 // PIECE 1a: `--ticket-hash-shell` is NOT dispatched -- the REST arm it serves is unwired (see the NOT
 // WIRED banner above §4.5). ticketHashShellCli stays defined so piece 2 is a reconnection rather than
 // a rebuild; with no dispatch here it is unreachable, and the flag is no longer allow-listed either.

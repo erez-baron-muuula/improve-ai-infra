@@ -15,8 +15,8 @@ const H = require('./test-gen508-harness.js');
 const fs = require('fs');
 const path = require('path');
 
-const { mcp, cli, run, blocked, fellThrough, MCP, TT_DS, GEN58, PAGE, PASS_DIR, DIR } = H;
-const { check, state } = H.newChecker();
+const { mcp, cli, run, blocked, approved, fellThrough, ticketBlockReason, MCP, TT_DS, GEN58, PAGE, PASS_DIR, DIR } = H;
+const { check, expectPending, state } = H.newChecker();
 
 console.log('\n== A. the MCP surface ==');
 {
@@ -27,22 +27,22 @@ console.log('\n== A. the MCP surface ==');
 {
   // Parent item is SUBSTANCE under v8 (it was housekeeping in the old ten-field list).
   const r = mcp('notion-update-page', { page_id: PAGE, command: 'update_properties', properties: { 'Parent item': 'https://x/' + PAGE } });
-  check('Parent item is now gated (was exempt in v7)', blocked(r, 'no usable ticket review record'), 'code=' + r.code);
+  check('Parent item is now gated (was exempt in v7)', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // Due Date / ID were also dropped from the exemption.
   const r = mcp('notion-update-page', { page_id: PAGE, command: 'update_properties', properties: { 'date:Due Date:start': '2026-09-01' } });
-  check('Due Date is now gated', r.code === 2, 'code=' + r.code);
+  check('Due Date is now gated', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // A create carrying the Team-Tasks marker, nested two levels down and inside an envelope.
   const r = mcp('notion-create-pages', { data: JSON.stringify({ pages: [{ parent: { data_source_id: TT_DS }, properties: { Name: 'x' } }] }) });
-  check('enveloped + nested create is caught by the marker scan', blocked(r, 'no usable ticket review record'), 'code=' + r.code);
+  check('enveloped + nested create is caught by the marker scan', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // Body edit on an arbitrary page: every page is a ticket, no network call.
-  const r = mcp('notion-update-page', { page_id: PAGE, command: 'update_content', old_str: 'a', new_str: 'b' });
-  check('body edit on any page is gated with no network call', r.code === 2, 'code=' + r.code);
+  const r = mcp('notion-update-page', { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] });
+  check('body edit on any page is gated with no network call', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // A truncated uuid is a malformed target, not an absent one.
@@ -67,19 +67,19 @@ console.log('\n== A. the MCP surface ==');
   const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content',
                                         content_updates: [{ old_str: 'a', new_str: 'b' }],
                                         allow_deleting_content: true });
-  check('GEN-58 + allow_deleting_content is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('GEN-58 + allow_deleting_content is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // ...nor with an empty new_str (the one clause that costs a real write). NESTED, which is the only
   // place a real one can appear -- and the whole reason clause 4 had to become a recursive walk.
   const r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content',
                                         content_updates: [{ old_str: 'a', new_str: '   ' }] });
-  check('GEN-58 + whitespace-only nested new_str is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('GEN-58 + whitespace-only nested new_str is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // replace_content is not one of the four content commands.
   const r = mcp('notion-update-page', { page_id: GEN58, command: 'replace_content', new_str: 'x' });
-  check('GEN-58 + replace_content is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('GEN-58 + replace_content is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 {
   // A payload we cannot read end to end must block, with a hash a record could still match.
@@ -114,13 +114,13 @@ console.log('\n== B. piece-1a scope: the REST arm is UNWIRED ==');
 console.log('\n== C. the MCP hash CLI ==');
 {
   const p = path.join(DIR, 'test-payload.json');
-  fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', old_str: 'a', new_str: 'b' }), 'utf8');
+  fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] }), 'utf8');
   const r = cli(['--ticket-hash', p]);
   check('--ticket-hash prints a 64-hex digest', r.code === 0 && /^[0-9a-f]{64}$/.test(r.out.trim()), 'code=' + r.code + ' out=' + r.out.slice(0, 80));
 
   // The envelope and the plain form MUST hash identically -- this is what the hoist buys.
   const p2 = path.join(DIR, 'test-payload-env.json');
-  fs.writeFileSync(p2, JSON.stringify({ data: JSON.stringify({ page_id: PAGE, command: 'update_content', old_str: 'a', new_str: 'b' }) }), 'utf8');
+  fs.writeFileSync(p2, JSON.stringify({ data: JSON.stringify({ page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] }) }), 'utf8');
   const r2 = cli(['--ticket-hash', p2]);
   check('enveloped and plain forms hash identically', r.out.trim() === r2.out.trim(), r.out.trim() + ' vs ' + r2.out.trim());
 }
@@ -141,7 +141,7 @@ console.log('\n== D. the record path end to end ==');
   fs.mkdirSync(passDir, { recursive: true });
 
   const p = path.join(DIR, 'test-payload.json');
-  fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', old_str: 'a', new_str: 'b' }), 'utf8');
+  fs.writeFileSync(p, JSON.stringify({ page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] }), 'utf8');
   const hash = cli(['--ticket-hash', p]).out.trim();
   const agentId = 'a1234567890abcdef';
 
@@ -164,7 +164,7 @@ console.log('\n== D. the record path end to end ==');
     }, over || {})), 'utf8');
     return f;
   }
-  const ti = { page_id: PAGE, command: 'update_content', old_str: 'a', new_str: 'b' };
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
   function callWith() {
     return run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
                  transcript_path: sessionDir + '.jsonl' });
@@ -172,14 +172,14 @@ console.log('\n== D. the record path end to end ==');
 
   writeTranscript('PASS'); const f1 = writeRecord();
   const rOk = callWith();
-  check('a valid record + PASS token APPROVES', rOk.code === 0 && rOk.out.indexOf('review record consumed') !== -1,
+  check('a valid record + PASS token APPROVES', approved(rOk),
         'code=' + rOk.code + ' out=' + rOk.out.slice(0, 200) + ' err=' + rOk.err.slice(0, 200));
   check('the record was consumed (single use)', !fs.existsSync(f1), 'still present');
 
   // Single use means the NEXT identical write, with no fresh record, must be refused.
   const rReplay = callWith();
   check('replaying the same write with no fresh record is refused',
-        blocked(rReplay, 'no usable ticket review record'), 'code=' + rReplay.code);
+        ticketBlockReason(rReplay) === 'no-pass', 'reason=' + ticketBlockReason(rReplay) + ' code=' + rReplay.code);
 
   writeTranscript('REVISE'); writeRecord();
   const rRevise = callWith();
@@ -201,11 +201,21 @@ console.log('\n== D. the record path end to end ==');
 
   writeTranscript('PASS'); writeRecord({ contentHash: 'f'.repeat(64) });
   const rStale = callWith();
-  check('a record for a different hash does not match', rStale.code === 2, 'code=' + rStale.code);
+  check('a record for a different hash is stale-content (a record exists for the ids, wrong hash)',
+        ticketBlockReason(rStale) === 'stale-content', 'reason=' + ticketBlockReason(rStale) + ' code=' + rStale.code);
 
-  writeTranscript('PASS'); writeRecord({ waived: true, verdict: 'REVISE' });
+  // The waive is the ONLY path that skips reviewer verification, so this assertion must DRIVE that skip
+  // rather than ride leftover fixtures. It used to call writeTranscript('PASS') first, leaving a valid
+  // sidecar + PASS token on disk -- so the waive cleared over evidence that would have passed
+  // verification anyway, and never exercised the bypass it is named for. Remove the reviewer evidence
+  // entirely: with no sidecar and no token, an UN-waived record blocks as reviewer-unverified (the
+  // unrelated-id and wrong-agentType cases above prove that), so a waived record clearing here can only
+  // be the verification-skip actually firing.
+  fs.rmSync(path.join(subs, 'agent-' + agentId + '.jsonl'), { force: true });
+  fs.rmSync(path.join(subs, 'agent-' + agentId + '.meta.json'), { force: true });
+  writeRecord({ waived: true, verdict: 'REVISE' });
   const rWaived = callWith();
-  check('a waived record clears without a token', rWaived.code === 0 && rWaived.out.indexOf('review record consumed') !== -1,
+  check('a waived record clears with NO sidecar and NO token present (the real bypass)', approved(rWaived),
         'code=' + rWaived.code + ' err=' + rWaived.err.slice(0, 200));
 
   // A nested contentHash is the shape the skill used to document. It must NOT match -- this is the
@@ -216,7 +226,7 @@ console.log('\n== D. the record path end to end ==');
   }), 'utf8');
   const rNested = callWith();
   check('a nested targets[] record does NOT match (the v7 skill shape)',
-        blocked(rNested, 'no usable ticket review record'), 'code=' + rNested.code + ' err=' + rNested.err.slice(0, 160));
+        ticketBlockReason(rNested) === 'no-pass', 'reason=' + ticketBlockReason(rNested) + ' code=' + rNested.code + ' err=' + rNested.err.slice(0, 160));
 
   // Regression guard for the fail-open the SECOND code review found (2026-08-05). A pass file whose
   // entire content is the literal `null` parses without throwing -- `null` IS valid JSON -- so the
@@ -236,8 +246,8 @@ console.log('\n== D. the record path end to end ==');
     fs.writeFileSync(path.join(passDir, 'rec.json'), junk, 'utf8');
     const rJunk = callWith();
     check('a pass file containing ' + junk + ' refuses instead of crashing',
-          blocked(rJunk, 'no usable ticket review record'),
-          'code=' + rJunk.code + ' err=' + rJunk.err.slice(0, 120));
+          ticketBlockReason(rJunk) === 'no-pass',
+          'reason=' + ticketBlockReason(rJunk) + ' code=' + rJunk.code + ' err=' + rJunk.err.slice(0, 120));
   }
   fs.rmSync(path.join(passDir, 'rec.json'), { force: true });
 
@@ -252,13 +262,13 @@ console.log('\n== D. the record path end to end ==');
   writeTranscript('PASS'); writeRecord({ contentHash: hash + '\n' });
   const rTrailingNl = callWith();
   check('a record whose contentHash has the CLI trailing newline still APPROVES (no lockout)',
-        rTrailingNl.code === 0 && rTrailingNl.out.indexOf('review record consumed') !== -1,
+        approved(rTrailingNl),
         'code=' + rTrailingNl.code + ' err=' + rTrailingNl.err.slice(0, 160));
 
   writeTranscript('PASS'); writeRecord({ contentHash: hash.toUpperCase() });
   const rUpper = callWith();
   check('an upper-case contentHash still APPROVES (matcher and re-assert agree)',
-        rUpper.code === 0 && rUpper.out.indexOf('review record consumed') !== -1,
+        approved(rUpper),
         'code=' + rUpper.code + ' err=' + rUpper.err.slice(0, 160));
 }
 
@@ -271,15 +281,15 @@ console.log('\n== A2. the housekeeping exemption is TOOL-SCOPED ==');
 
   const rDup = mcp('notion-duplicate-page', hkShape);
   check('duplicate-page with a housekeeping-shaped payload is GATED, not exempt',
-        rDup.code === 2, 'code=' + rDup.code + ' err=' + rDup.err.slice(0, 160));
+        ticketBlockReason(rDup) === 'no-pass', 'reason=' + ticketBlockReason(rDup) + ' code=' + rDup.code + ' err=' + rDup.err.slice(0, 160));
 
   const rMove = mcp('notion-move-pages', hkShape);
   check('move-pages with a housekeeping-shaped payload is GATED, not exempt',
-        rMove.code === 2, 'code=' + rMove.code + ' err=' + rMove.err.slice(0, 160));
+        ticketBlockReason(rMove) === 'no-pass', 'reason=' + ticketBlockReason(rMove) + ' code=' + rMove.code + ' err=' + rMove.err.slice(0, 160));
 
   const rCreate = mcp('notion-create-pages', hkShape);
   check('create-pages with a housekeeping-shaped payload is GATED, not exempt',
-        rCreate.code === 2, 'code=' + rCreate.code + ' err=' + rCreate.err.slice(0, 160));
+        ticketBlockReason(rCreate) === 'no-pass', 'reason=' + ticketBlockReason(rCreate) + ' code=' + rCreate.code + ' err=' + rCreate.err.slice(0, 160));
 
   // The genuine housekeeping case must still fall through -- the scoping narrowed the exemption and
   // must not have removed it. `update_properties` on Status is the case the exemption exists for.
@@ -391,7 +401,7 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
   fx.record(hash);
   r = callWith();
   check('a final delivered PASS after an earlier REVISE APPROVES',
-        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        approved(r),
         'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
   // Grounded in this project's own transcripts: all 14 isApiErrorMessage records carry a text block
@@ -406,7 +416,7 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
   fx.record(hash);
   r = callWith();
   check('a trailing API-error record does not shadow a valid verdict',
-        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        approved(r),
         'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
   // A final message may deliver several text blocks; the token in any of them is delivered output.
@@ -415,7 +425,7 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
              { type: 'text', text: tok('PASS') }]]);
   fx.record(hash);
   r = callWith();
-  check('a multi-text-block final message is read whole', r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+  check('a multi-text-block final message is read whole', approved(r),
         'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
   // LAST occurrence WITHIN the final message. Without this, taking the FIRST occurrence would pass
@@ -432,7 +442,7 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
   fx.record(hash);
   r = callWith();
   check('...and REVISE then PASS approves (not first-occurrence)',
-        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        approved(r),
         'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
   // An empty or whitespace-only trailing record must NOT become "the final message" and shadow a real
@@ -444,7 +454,7 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
   fx.record(hash);
   r = callWith();
   check('a whitespace-only trailing record does not shadow the verdict',
-        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        approved(r),
         'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
   fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
@@ -475,7 +485,7 @@ console.log('\n== G. the caller\'s transcript path resolves when the caller is a
   const rSub = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
                      transcript_path: callerPath });
   check('a sub-agent caller resolves the reviewer sidecar and APPROVES',
-        rSub.code === 0 && rSub.out.indexOf('review record consumed') !== -1,
+        approved(rSub),
         'code=' + rSub.code + ' err=' + rSub.err.slice(0, 200));
 
   // The main-session path must not have regressed: the climb fires only inside a `subagents` dir.
@@ -484,7 +494,7 @@ console.log('\n== G. the caller\'s transcript path resolves when the caller is a
   const rMain = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
                       transcript_path: sessionDir + '.jsonl' });
   check('the main-session transcript path still resolves',
-        rMain.code === 0 && rMain.out.indexOf('review record consumed') !== -1,
+        approved(rMain),
         'code=' + rMain.code + ' err=' + rMain.err.slice(0, 200));
 
   fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
@@ -506,25 +516,25 @@ console.log('\n== H. the GEN-58 carve-out reads the shape update_content really 
   check('replace_all_matches is a permitted element key', fellThrough(r), 'code=' + r.code + ' err=' + r.err.slice(0, 160));
 
   r = ok([{ old_str: 'a 6000-char block', new_str: '' }]);
-  check('an EMPTYING nested edit is NOT exempt (the wipe path the fix must not open)', r.code === 2, 'code=' + r.code);
+  check('an EMPTYING nested edit is NOT exempt (the wipe path the fix must not open)', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   r = ok([{ old_str: 'a', new_str: 'b' }, { old_str: 'c', new_str: '  \n ' }]);
-  check('one whitespace-only edit among several is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('one whitespace-only edit among several is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   r = ok([{ old_str: 'a', new_str: 'b', unexpected_key: 1 }]);
-  check('an unrecognised element key is NOT exempt (closed shape)', r.code === 2, 'code=' + r.code);
+  check('an unrecognised element key is NOT exempt (closed shape)', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   r = ok([{ new_str: 'b' }]);
-  check('an element with no old_str is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('an element with no old_str is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   r = ok([]);
-  check('an empty content_updates array is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('an empty content_updates array is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', content_updates: 'nope' });
-  check('a non-array content_updates is NOT exempt', r.code === 2, 'code=' + r.code);
+  check('a non-array content_updates is NOT exempt', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   r = mcp('notion-update-page', { page_id: GEN58, command: 'update_content', old_str: 'a', new_str: 'b' });
-  check('update_content with no content_updates is NOT exempt (malformed, not exempt)', r.code === 2, 'code=' + r.code);
+  check('update_content with no content_updates is NOT exempt (malformed, not exempt)', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   // insert_content is the OTHER real command, and it carries no content_updates at all -- so clause 6
   // must not demand one. This is the assertion that would have caught an over-strict fix.
@@ -535,13 +545,13 @@ console.log('\n== H. the GEN-58 carve-out reads the shape update_content really 
   // because naming a field path is the mistake that produced this defect in the first place.
   r = mcp('notion-update-page', { data: JSON.stringify({ page_id: GEN58, command: 'update_content',
                                                          content_updates: [{ old_str: 'a', new_str: '' }] }) });
-  check('an emptying edit inside an ENVELOPE is still caught', r.code === 2, 'code=' + r.code);
+  check('an emptying edit inside an ENVELOPE is still caught', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 
   // And a live ticket is still gated in the real shape: the carve-out is keyed on the page, not on the
   // payload shape, so widening the shape must not have widened the exemption.
   r = mcp('notion-update-page', { page_id: PAGE, command: 'update_content',
                                   content_updates: [{ old_str: 'a', new_str: 'b' }] });
-  check('the same real shape on a LIVE ticket is still gated', r.code === 2, 'code=' + r.code);
+  check('the same real shape on a LIVE ticket is still gated', ticketBlockReason(r) === 'no-pass', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
 }
 
 console.log('\n== I. the two refusal texts that named no usable fix ==');
@@ -587,7 +597,7 @@ console.log('\n== I. the two refusal texts that named no usable fix ==');
   const r = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
                   transcript_path: sessionDir + '.jsonl' });
   check('a record minted from that digest clears the unreadable-payload block (both sites agree)',
-        r.code === 0 && r.out.indexOf('review record consumed') !== -1,
+        approved(r),
         'code=' + r.code + ' err=' + r.err.slice(0, 200));
   fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
 
@@ -597,6 +607,168 @@ console.log('\n== I. the two refusal texts that named no usable fix ==');
   // checked rather than trusted -- so there is no input a file-driven suite can hand it to reach that
   // branch. It is a guard against a future bug in the normaliser, and saying so is better than
   // implying coverage, which is the same call this suite already makes for the hash re-assert.
+}
+
+console.log('\n== J. branches with no assertion before Step 3 ==');
+{
+  // transcript-too-large: a matched record + a verified reviewer, but the transcript is over the 4 MB
+  // read cap. This is a DISTINCT diagnosis from no-token (the review may well have happened), so it must
+  // not read as a false no-token. Reachable: pad the delivered text past the cap, still ending on a valid
+  // token. The cap is checked by statSync BEFORE the file is read, so the 5 MB is only written, not read.
+  const sessionDir = path.join(DIR, 'sess');
+  const agentId = 'a6666666666666666';
+  const fx = tokenFixture(agentId, sessionDir);
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const hash = cli(['--ticket-hash', p]).out.trim();
+  fx.write([[{ type: 'text', text: 'x'.repeat(5 * 1024 * 1024) + '\nTICKET-REVIEW-VERDICT: PASS ' + hash }]]);
+  fx.record(hash);
+  const rBig = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                     transcript_path: sessionDir + '.jsonl' });
+  check('an over-4MB reviewer transcript blocks as transcript-too-large (not a false no-token)',
+        ticketBlockReason(rBig) === 'transcript-too-large',
+        'reason=' + ticketBlockReason(rBig) + ' code=' + rBig.code + ' err=' + rBig.err.slice(0, 180));
+  fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+}
+{
+  // scope:'out' producer -- a create into a NON-Team-Tasks container. Every page is a ticket, but a
+  // create into ANOTHER database is free (the stated guarantee), so this must fall through. This is one
+  // side of BLOCKING #6: the 'out' return logs no event today, so a ROTATED Team-Tasks data source would
+  // read exactly like this and silently approve. Step 5's marker-liveness probe addresses the rotation
+  // case OUT of the hot path; this locks in the intended behaviour for a genuine other-DB create, which
+  // must keep falling through after that probe is added.
+  const rOther = mcp('notion-create-pages', { data: JSON.stringify({ pages: [
+    { parent: { data_source_id: '11111111-2222-3333-4444-555555555555' }, properties: { Name: 'x' } }] }) });
+  check('a create into a NON-Team-Tasks container falls through (create into another DB is free)',
+        fellThrough(rOther), 'reason=' + ticketBlockReason(rOther) + ' code=' + rOther.code + ' err=' + rOther.err.slice(0, 180));
+}
+{
+  // scope:'out' producer -- a workspace-level create with no `parent` key at all (1 real corpus
+  // instance). Also must fall through.
+  const rWs = mcp('notion-create-pages', { data: JSON.stringify({ pages: [{ properties: { Name: 'x' } }] }) });
+  check('a workspace-level create with no parent falls through',
+        fellThrough(rWs), 'reason=' + ticketBlockReason(rWs) + ' code=' + rWs.code + ' err=' + rWs.err.slice(0, 180));
+}
+{
+  // EXPIRY CEILING -- RED-BY-DESIGN until Step 4. findPassInDir checks only `exp < now` (a lower bound),
+  // so a record with a far-future expiry is honoured indefinitely. The Step-4 fix caps the TTL in the
+  // TICKET-SCOPED path -- NOT in the shared findPassInDir, which would lock out longer-TTL sibling passes
+  // (staging / vetting / check-due, incl. /vet-code's, the gate that installs this very hook). This spec
+  // asserts the far-future record is REJECTED; it PENDs now and greens when the ceiling lands.
+  const sessionDir = path.join(DIR, 'sess');
+  const agentId = 'a7777777777777777';
+  const fx = tokenFixture(agentId, sessionDir);
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const hash = cli(['--ticket-hash', p]).out.trim();
+  fx.write([[{ type: 'text', text: 'TICKET-REVIEW-VERDICT: PASS ' + hash }]]);
+  fx.record(hash, { expires: '2099-01-01T00:00:00.000Z' });
+  const rFuture = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                        transcript_path: sessionDir + '.jsonl' });
+  expectPending('a far-future (2099) expiry is REJECTED', !approved(rFuture),
+                'Step 4: expiry ceiling in the ticket-scoped path');
+  fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+}
+// DELIBERATELY NOT ASSERTED behaviourally here, each with its reason -- the same call this suite already
+// makes for the hash re-assert (section A2) and the normalise-threw CLI branch (section I):
+//   * consume-failed and internal-error: each needs a condition a file-driven, single-process black-box
+//     cannot force -- a rename that throws mid-consume, and a throw inside ticketScope (ticketNormalise is
+//     written not to throw on anything JSON.parse can produce). Their reason strings ARE pinned at the
+//     source level by the contract test (every ticketBlockReason signature must map to a real hook
+//     reason), so a rename or refactor that dropped them is caught there rather than here.
+//   * isSafeTicketHash APPROVING its own --ticket-hash CLI: the self-approve regex matches a path ending
+//     in `auto-approve.js`, but this suite runs `auto-approve.working.js`, whose name the regex cannot
+//     match -- so the POSITIVE path is unreachable against the working copy by construction. The contract
+//     test pins the regex SHAPE and the call site instead.
+
+console.log('\n== K. corpus fail-open sweep (real payloads) ==');
+{
+  // Re-expressed from the stale test-gen508.js Part B, which CANNOT run against v8: its in-process
+  // loadHook() names four symbols the v8 collapse removed (ReferenceError before any assertion), and its
+  // resolver stub is inert now that "every page is a ticket" is the default. Here the sweep runs each REAL
+  // payload through the wired hook's own ticketScope via the read-only --ticket-scope-batch CLI (ONE spawn,
+  // not ~1,300), then INDEPENDENTLY judges every 'out' verdict from the raw payload: an out-of-scope verdict
+  // is legitimate ONLY for a housekeeping property edit, a GEN-58-subtree content write, or a create with no
+  // Team-Tasks marker. Anything else 'out' is a silent bypass. FIELD-level exemption correctness (which
+  // properties are substance) is covered directly by sections A and A2; this sweep catches the SHAPE/TARGET
+  // escapes across real traffic that the synthetic cases cannot enumerate.
+  //
+  // The corpus holds real ticket bodies, so it is NOT committed. Absent -> this section SKIPS with a notice
+  // (not a failure), exactly as the stale Part B did. Build it first with:  node build-corpus.js
+  const CORPUS = H.CORPUS;
+  if (!fs.existsSync(CORPUS)) {
+    console.log('  SKIP corpus sweep -- ' + CORPUS + ' not found. Build it first:  node build-corpus.js');
+  } else {
+    const CONTENT_CMDS = new Set(['update_content', 'insert_content', 'replace_content']);
+    // The hook's exempt property set and name-normaliser, reproduced so the sweep judges housekeeping
+    // INDEPENDENTLY rather than rubber-stamping every update_properties -- a substance key on an 'out'
+    // verdict is a real fail-open. The contract test pins this set + normaliser against the hook's
+    // TICKET_HOUSEKEEPING_PROPS / ticketPropName, so a drift between the two copies is caught there.
+    const HK_PROPS = new Set(['status', 'assignee', 'type', 'project', 'reason']);
+    const propName = k => String(k == null ? '' : k)
+      .replace(/^(?:date|place|userDefined):/i, '')
+      .replace(/:(?:start|end|is_datetime|name|address|latitude|longitude|google_place_id)$/i, '')
+      .trim().toLowerCase();
+    const unwrap = ti => {
+      if (ti && typeof ti === 'object' && typeof ti.data === 'string') {
+        try { const d = JSON.parse(ti.data); if (d && typeof d === 'object') return d; } catch (e) { /* not an envelope */ }
+      }
+      return ti;
+    };
+    const carriesId = (ti, id) => JSON.stringify(ti == null ? '' : ti).replace(/-/g, '').toLowerCase()
+                                    .indexOf(String(id).replace(/-/g, '').toLowerCase()) !== -1;
+    function legitimateOut(row) {
+      const t = row.tool || '', u = unwrap(row.input), cmd = u && u.command;
+      if (t.endsWith('notion-update-page') && cmd === 'update_properties') {
+        // NOT a rubber stamp: every property key must normalise to one of the five exempt names.
+        const props = (u && u.properties && typeof u.properties === 'object' && !Array.isArray(u.properties))
+          ? Object.keys(u.properties) : [];
+        return props.every(k => HK_PROPS.has(propName(k)));
+      }
+      if (t.endsWith('notion-update-page') && CONTENT_CMDS.has(cmd) && carriesId(row.input, GEN58)) return true; // GEN-58 content
+      if (t.endsWith('notion-create-pages') && !carriesId(row.input, TT_DS)) return true; // create w/o the Team-Tasks marker
+      return false;
+    }
+
+    // Negative control: the classifier MUST reject an illegitimate 'out' shape. Without this, a future
+    // edit could turn legitimateOut into a rubber stamp that passes the sweep no matter what escapes --
+    // and the sweep would look green while asserting nothing. A duplicate-page is not a valid out-shape;
+    // a substance-property (Urgency) update_properties must fail the housekeeping-field check.
+    check('the sweep classifier discriminates (rejects an illegitimate out shape)',
+          !legitimateOut({ tool: MCP + 'notion-duplicate-page', input: { page_id: PAGE, properties: { Status: 'Done' } } }) &&
+          !legitimateOut({ tool: MCP + 'notion-update-page', input: { page_id: PAGE, command: 'update_properties', properties: { Urgency: 'High' } } }),
+          'legitimateOut is not discriminating -- it may have become a rubber stamp');
+
+    const rows = fs.readFileSync(CORPUS, 'utf8').split(/\r?\n/).filter(l => l.trim());
+    const res = cli(['--ticket-scope-batch', CORPUS]);
+    const verdicts = res.out.split(/\r?\n/).filter(l => l.trim())
+                        .map(l => { try { return JSON.parse(l); } catch (e) { return null; } });
+
+    check('the batch CLI returned one verdict per non-blank corpus line (index-join is exact)',
+          verdicts.length === rows.length && verdicts.every(Boolean),
+          'rows=' + rows.length + ' verdicts=' + verdicts.length + ' code=' + res.code);
+
+    const counts = { in: 0, out: 0, block: 0, threw: 0, other: 0 };
+    const findings = [];
+    for (let i = 0; i < Math.min(rows.length, verdicts.length); i++) {
+      const v = verdicts[i]; if (!v) continue;
+      if (v.scope === 'in') counts.in++;
+      else if (v.scope === 'block') counts.block++;
+      else if (v.scope === 'threw') { counts.threw++; findings.push('THREW ' + v.short + ': ' + v.why); }
+      else if (v.scope === 'out') {
+        counts.out++;
+        let row; try { row = JSON.parse(rows[i]); } catch (e) { row = null; }
+        if (!row || !legitimateOut(row)) { counts.other++; findings.push('BYPASS ' + (v.short || '?') + ' @line ' + (i + 1)); }
+      } else { counts.other++; findings.push('UNEXPECTED scope ' + v.scope + ' @line ' + (i + 1)); }
+    }
+    console.log('  swept ' + rows.length + ' real payloads: in=' + counts.in + ' block=' + counts.block +
+                ' out=' + counts.out + ' threw=' + counts.threw);
+    check('no ticketScope threw on the real corpus', counts.threw === 0, findings.slice(0, 5).join(' | '));
+    check('every out-of-scope verdict is a legitimate exemption (0 silent bypasses)',
+          counts.other === 0, counts.other + ' unexplained: ' + findings.slice(0, 10).join(' | '));
+  }
 }
 
 console.log('\n== E. latency ==');
@@ -611,5 +783,8 @@ console.log('\n== E. latency ==');
 }
 
 H.cleanup();
-console.log('\n' + (state.fail === 0 ? 'ALL PASS' : 'FAILURES') + ': ' + state.pass + ' passed, ' + state.fail + ' failed\n');
+console.log('\n' + (state.fail === 0 ? 'ALL PASS' : 'FAILURES') + ': ' + state.pass + ' passed, ' + state.fail +
+            ' failed, ' + state.pending.length + ' pending (red-by-design, awaits Step 4/5)');
+if (state.pending.length) { for (const pnd of state.pending) console.log('    PEND ' + pnd); }
+console.log('');
 process.exit(state.fail === 0 ? 0 : 1);

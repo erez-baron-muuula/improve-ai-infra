@@ -3,6 +3,63 @@
 Working copies for the ticket-quality gate. **Nothing here is installed** — the live
 `~/.claude/hooks/auto-approve.js` is untouched, and installing it goes through `/vet-code`.
 
+---
+
+## Step 3 (make the cross-artifact contract executable) — DONE, 2026-08-12
+
+The test/contract layer is rebuilt; the gate fixes (Steps 4–6) are NOT done. Read this section first for
+the current state; the round histories further down are pre-Step-3 and remain accurate as history.
+
+**Suite state now** (all in the repo working-copies; the live hook + skill are untouched):
+- `test-gen508-v8-arm.js` = **73 passed / 0 failed / 1 pending**
+- `test-gen508-contract.js` (NEW) = **13 passed / 0 failed / 5 pending**
+- `test-gen508-rest-parked.js` = unchanged, exits 0 at its 19-expected-fail baseline.
+
+"Pending" = **red-by-design** specs, shown but NOT counted as failures (`expectPending()` in the harness,
+which follows this suite's own rule that a permanently-red gate hides real regressions). They are the
+executable spec the Step-4/5 fixes must turn green. If a PEND flips to `ok (NOW PASSES — promote…)`, the
+fix landed and the spec should become a normal assertion.
+
+**What Step 3 changed:**
+- `test-gen508-harness.js`: `approved()` (and `fellThrough()` now also excludes an approve — it couldn't
+  tell the two apart before); `ticketBlockReason()` + `TICKET_BLOCK_SIGNATURES` (map a refusal to its
+  reason KEY so assertions bind the specific reason, not just exit 2); `expectPending()`; `CORPUS` (the
+  shared out-of-repo corpus path).
+- `test-gen508-v8-arm.js`: the 18 exit-2-only assertions (+5 adjacent shared-prefix ones) now bind a
+  reason via `ticketBlockReason`; the waive assertion drives the real no-sidecar/no-token bypass; the
+  fictional root-`old_str` payload is gone (real `content_updates[]` everywhere except the deliberate
+  malformed-shape tests at H:L527 and the truncated-id test); new section **J** (transcript-too-large,
+  both create `scope:'out'` families, the expiry-ceiling PEND) and section **K** (the corpus fail-open
+  sweep, re-expressed against the spawn interface).
+- `auto-approve.working.js`: **+47 lines, 0 removed** — a read-only, test-only `--ticket-scope-batch`
+  CLI (dispatched like `--ticket-hash`; NOT allow-listed; spawned directly by the suite). This is the
+  ONLY working-hook change in Step 3.
+- `build-corpus.js`: writes to `H.CORPUS` (a stable out-of-repo temp path), overridable via `argv[2]`,
+  instead of the old stale hardcoded session-UUID path no reader used.
+- `test-gen508-contract.js` (NEW): the hook↔skill seam test — killed-premise greps, reason-set sync,
+  single-`ticketContentHash`-definition, the `--ticket-hash` regex pin, the housekeeping field-set +
+  `ticketPropName` normaliser pin (which the sweep reproduces), the dead-`containerTeamTasks` tripwire
+  (BLOCKING #6), and the cross-tool BLOCKING-2 negative.
+
+**Corpus fail-open result (real traffic):** swept **1231 real payloads → 0 silent bypasses, 0 threw**
+(in=938, block=3, out=290, every `out` a legitimate exemption). The corpus is NOT committed (real ticket
+bodies); rebuild with `node build-corpus.js` → writes `H.CORPUS`
+(`os.tmpdir()/gen508-notion-payload-corpus.jsonl`). Absent → section K skips with a notice, not a failure.
+
+**The 6 red-by-design PEND specs, and the Step-4/5 fix each awaits:**
+- (arm) far-future 2099 expiry is REJECTED → **Step 4**: add an expiry CEILING in the ticket-scoped path,
+  NOT in the shared `findPassInDir` (that would lock out longer-TTL sibling passes, incl. `/vet-code`'s).
+- (contract ×4) skill no longer asserts the four disproven premises → **Step 4**: the BLOCKING-3 premise
+  sweep of `vet-ticket-SKILL.md`. The skill is UNCHANGED by Step 3 — the greps read the live text.
+- (contract) a pass minted for one payload does NOT clear it under another tool → **Step 4**: BLOCKING-2,
+  fold the tool into `ticketContentHash` (and update the `--ticket-hash` CLI arg contract + this test).
+
+**What remains — see `plan-2026-08-12-fix-the-core.md` Steps 4–6:** Step 4 (BLOCKING-2 hash↔tool bind,
+expiry ceiling, closed-shape record validation, BLOCKING-3 premise sweep); Step 5 (BLOCKING-1 GEN-58
+exemption writer, #6 rotated-data-source probe, #4 break-glass scope — **each an Erez design call, bring
+one at a time**); Step 6 (full `/vet-code` Pass A + Pass B over the combined diff, live-verify, install
+hook + skill together). All three suites must be green (every PEND promoted) before install.
+
 **SCOPE, changed 2026-08-05: piece 1a is the Notion MCP surface ONLY.** Erez chose to install that
 half first and defer the raw REST/curl arm (§4.5) to piece 2. The REST code is still in the working
 hook but is **NOT WIRED** — nothing reaches it. Shipping it as built would have refused every raw REST
