@@ -9,8 +9,9 @@ Creating, duplicating, moving-into, or substantively editing a Notion **Team-Tas
 **hard-blocked** by the `auto-approve.js` PreToolUse hook (GEN-508) unless a valid, single-use
 **ticket pass** exists. This skill is the ONLY sanctioned way to mint one: it drafts the write, has
 an **independent reviewer** judge it against the ticket bar, resolves every finding, shows Erez a
-summary card, mints the pass on his approval (the mint write itself prompts him — that prompt IS the
-gate), applies, and verifies.
+summary card, mints the pass, applies, and verifies. What actually clears the hook is the independent
+reviewer's verified PASS token (Step 2) — NOT the mint write, which under Erez's bypassPermissions mode
+falls through silently and does not prompt, so it is no kind of gate on its own.
 
 **The hook enforces the gate; this skill enforces the process.** Never hand-mint a pass to skip the
 review.
@@ -68,13 +69,17 @@ NOT gated, and you do not need this skill for them:
   and `allow_async` may ride along). Anything else about the payload, recognised or not, is gated —
   and it is **tool-scoped**: the same shape sent to `notion-duplicate-page`, `notion-move-pages` or
   `notion-create-pages` IS gated, because a duplicate spawns a live ticket.
-- **Content writes inside the GEN-58 subtree** — the GEN-58 ticket page and its log-volume child
-  pages. A standing rule requires reasoning-failure log writes to happen immediately and exempts them
-  from the approval pause. A **property** edit on the GEN-58 row is still a ticket-property edit and
-  stays gated. (This replaces an earlier command-name rule that covered only 5% of real GEN-58
-  writes.) The exemption reads the real payload shape: `update_content` carries its edits in
-  `content_updates: [{old_str, new_str}]`, and **an edit whose `new_str` is empty or whitespace-only is
-  gated wherever it sits in the payload** — emptying existing log text is not a log append.
+- **Content writes inside the GEN-58 subtree** — the GEN-58 ticket **row** (always, via the hook's
+  hardcoded id) and each log-volume **child page once it has been registered** in the exempt list
+  `~/.claude-staging/ticket-gate-exempt-pages.txt`. A standing rule requires reasoning-failure log writes
+  to happen immediately and exempts them from the approval pause. **A volume child is NOT exempt until its
+  id is in that list** — the hook reads the list but never writes it; **the GEN-58 rollover lane (below) is
+  its single writer**, registering each new volume as it is created (the current volume is seeded at
+  install). A **property** edit on the GEN-58 row is still a ticket-property edit and stays gated. (This
+  replaces an earlier command-name rule that covered only 5% of real GEN-58 writes.) The exemption reads the
+  real payload shape: `update_content` carries its edits in `content_updates: [{old_str, new_str}]`, and
+  **an edit whose `new_str` is empty or whitespace-only is gated wherever it sits in the payload** —
+  emptying existing log text is not a log append.
 - Comments, views, attachments, and any page outside Team-Tasks.
 
 **If a page cannot be resolved, the write is blocked, not waved through** (no token, Notion
@@ -82,9 +87,57 @@ unreachable, rate-limited, archived, or a target id that is malformed or missing
 Notion access, so the escape is one review plus one mint — not break-glass.
 
 Known gaps, stated so they are not mistaken for coverage: **raw REST/curl writes to
-`api.notion.com`** and **all Jira writes** are outside this gate (piece 2). REST Notion writes are
-still forced to an interactive `ask` by `notion-schema-guard.js`, and Jira content edits still need a
-staging pass, so neither runs silently — but neither is held to the ticket bar.
+`api.notion.com`** and **all Jira writes** are outside this gate (piece 2). A raw REST Notion write is
+NOT gated here and is not reliably stopped elsewhere either — `notion-schema-guard.js` covers the MCP
+schema tool, not curl, and under Erez's bypassPermissions mode its `ask` would be discarded anyway — so
+such a write CAN run silently until piece 2 wires this arm. Jira/Confluence content edits are separately
+hard-blocked by the staging gate. Neither is held to the ticket bar.
+
+---
+
+## The GEN-58 log-volume rollover lane (single writer of the exempt list)
+
+Reasoning-failure logs land on the **current** GEN-58 log volume (a child page), which rolls over every
+~25 write-ups / ~60k chars into a new child page. Writes to the current volume are exempt (its id is in
+`~/.claude-staging/ticket-gate-exempt-pages.txt`); **creating the next volume is a gated
+`notion-create-pages` and is what brings you here.** This lane is the ONLY sanctioned way a new volume id
+enters the exempt list — the hook reads that file but never writes it.
+
+**Do not pause the urgent write for this.** Write the reasoning-failure entry to the *current* volume
+first (it is exempt — no pause; slight overflow is not data loss), then run this lane as a separate,
+non-urgent step to roll over. The urgent log write never waits on rollover.
+
+When you roll over, run these steps **in this order** — the order is load-bearing:
+
+1. **Lane evidence bar** (this REPLACES the Step-2 ticket checklist — a log volume is a plain child page
+   with none of the Team-Tasks-row properties that checklist assumes). An independent `check-reviewer`
+   still signs off, but against THIS bar: the title is `GEN-58 — Reasoning-failure instance log — Vol. N`
+   for the next N; no volume with that number already exists; the payload carries no destructive key
+   (`archived`, `in_trash`, `allow_deleting_content`); and `parent.page_id` is the GEN-58 row.
+2. **Mint the create pass and create the volume.** Hash the create payload (Step 1, `--tool create`), have
+   the reviewer sign off against the lane bar above (in place of Step 2's checklist), show Erez the card and
+   mint (Step 5), and apply. Capture the **new page id** from the create result.
+3. **Re-verify parentage over the network.** Re-fetch the newly-created page and confirm its ACTUAL parent
+   is the GEN-58 row — do not trust the draft payload. A wrongly-registered id would un-gate content writes
+   on whatever page it names, so this is what keeps the exempt list honest.
+4. **Normalize, then append.** Reduce the new id to the hook's exact form — **32 lowercase hex, no dashes**.
+   Notion returns dashed ids, and the hook's parser silently IGNORES any line that is not exactly 32
+   lowercase hex, so a dashed append is a no-op that looks successful. Append that one line to
+   `~/.claude-staging/ticket-gate-exempt-pages.txt` (a plain local file write — not gated).
+5. **Confirm it registered.** Re-read the file and confirm the new id is present as a valid 32-hex line.
+   Only now is the new volume actually exempt.
+6. **Then repoint "current."** Update the GEN-58 index pointer to name the new volume as current **only
+   after step 5 confirms it is registered.** Repointing before the append is confirmed makes the next
+   reasoning-failure write target a volume the gate has not yet exempted — it hard-blocks, the exact pause
+   this lane exists to prevent.
+
+**Seed (install-time, done once):** the current volume's id must already be in the exempt list before the
+gate goes live, or the first log write blocks. At install, read the then-current-volume id from the GEN-58
+pointer and write it (normalized to 32 lowercase hex, no dashes) as the file's first line.
+
+**If the exempt file is ever lost:** a *missing* file makes the current volume revert to needing a normal
+`/vet-ticket` review (a pause, not a bypass) — re-seed the current volume id to restore. Only a *corrupt*
+or over-cap file hard-blocks.
 
 ---
 
@@ -121,13 +174,18 @@ matches and only break-glass gets a write through.
 2. Run the hook's own hash mode:
 
 ```bash
-node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>"
+node "C:\Users\Erez\.claude\hooks\auto-approve.js" --ticket-hash "<that temp .json file>" --tool <create|update|duplicate|move>
 ```
 
 3. It prints one line: the `contentHash`. Use it verbatim.
 
 That exact invocation is auto-approved (it only reads a file and prints a hash), so it costs no
-permission prompt. Both paths must be quoted, and nothing may be appended to the command.
+permission prompt. Both paths must be quoted, the `--tool` tag must be exactly one of
+`create` / `update` / `duplicate` / `move` (matching the tool you are about to call —
+`update` for notion-update-page, `duplicate` for notion-duplicate-page, and so on), and nothing else
+may be appended to the command. The tag is folded into the hash, so a record minted for one tool will
+NOT clear the same payload under another (a duplicate spawns a live ticket, so an update record must
+never be spendable on it).
 
 **If it exits non-zero it prints no hash — then STOP and do not mint.** A non-zero exit means the
 hook could not read that payload end to end, so it is going to hard-block the call whatever pass
@@ -250,9 +308,10 @@ filings are shown together as one card list and approved in one action.
 His approval means "file this", not "I endorse this wording" — the body's quality rests on the
 reviewer. Say so once when the card list is unusually large or the reviewer's notes were substantive.
 
-Then mint the **ticket pass** into `~/.claude-staging/ticket-passes/` with the Write tool. That dir
-is outside `~/.claude`, so the write prompts him — **show the card content inline in that same
-moment**, never a bare file-write dialog.
+Then mint the **ticket pass** into `~/.claude-staging/ticket-passes/` with the Write tool. Do NOT rely
+on that write to prompt him — under his bypassPermissions mode it falls through silently — so his
+approval must come from the **card you show inline BEFORE the mint**, never from a file-write dialog
+that may never appear.
 
 ```json
 { "kind": "ticket",
@@ -291,9 +350,9 @@ machinery are gone: the hook consumes a matched pass by renaming the whole file 
 several tickets therefore needs one pass file per ticket, each with its own hash and its own reviewer
 token, written in the same approved moment.
 
-Known cost, not a design claim: each of those files is a separate Write, so a multi-ticket card list
-raises one prompt per ticket rather than the single prompt the batch pass used to give. Do not try to
-recover the old behaviour by putting several hashes in one file — the hook cannot read them.
+Known consequence, not a design claim: each of those files is a separate reviewed pass — its own hash
+and its own reviewer token — so a multi-ticket card list is several mints, not one. Do not try to
+collapse them by putting several hashes in one file — the hook cannot read them.
 
 ## Step 6 — The waive lane (Erez's per-case override)
 
@@ -301,7 +360,8 @@ When the reviewer holds findings that cannot be fixed and Erez wants it filed an
 outstanding findings in plain terms and ask. On his affirmative, set `waived: true` + `waiveReason` +
 the outstanding findings in the record, **and set `waived: true` on the pass as well** — the pass is
 the only file the hook opens, so a waive recorded solely in the record blocks with `bad-verdict`. Then
-mint normally; the mint prompt is his second, deliberate confirmation.
+mint normally. Erez's explicit affirmative in chat (above) is the waive's authority; there is no
+separate mint-write confirmation, because under his permission mode that write does not prompt.
 
 A waive is the ONLY path that skips the reviewer checks: on `waived: true` the hook verifies no
 sidecar and looks for no token, so a waived pass needs no `reviewerAgentId` and Erez's explicit chat
