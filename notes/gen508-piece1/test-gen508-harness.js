@@ -83,6 +83,8 @@ const TICKET_BLOCK_SIGNATURES = {
   'no-token': 'does not end on',
   'bad-record': 'reviewer transcript could not be read at all',
   'transcript-too-large': 'exceeds the 4 MB read cap',
+  'expiry-too-far': 'further in the future than the gate',
+  'unknown-record-key': 'a field the gate does not recognise',
   'consume-failed': 'could not be consumed',
   'stale-content': 'minted for a DIFFERENT payload',
   'exempt-list-overflow': 'exemption list is over its',
