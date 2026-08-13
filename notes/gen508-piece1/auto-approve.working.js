@@ -2245,6 +2245,28 @@ function logTicketGateEvent(entry) {
   } catch (e) { /* logging must never break a tool call */ }
 }
 
+// GEN-508 #4: break-glass on the ticket gate clears ONLY a MECHANICAL block -- one where the gate could
+// not read the write at all (internal-error, unreadable-payload) -- NEVER a content/auth decision
+// (no-pass, stale-content, bad-target, bad-record, unknown-record-key, expiry-too-far, bad-verdict,
+// reviewer-unverified, no-token/transcript-too-large, consume-failed, exempt-list-*). This mirrors
+// enforceStaging, which deliberately has no global break-glass because a pass-MISS is Erez's content
+// approval and must stay unbreakable. The prior `if (configUnlocked()) return` at the top of
+// enforceTicketVetting voided the WHOLE gate, unlogged -- a silent, session-wide hole. Now every skip
+// is LOGGED and SURFACED: a gate-void is at least as decision-worthy as a waive.
+const TICKET_BREAKGLASS_REASONS = new Set(['internal-error', 'unreadable-payload']);
+function ticketBreakGlassSkip(tool, target, reason) {
+  logTicketGateEvent({ event: 'break-glass-skip', tool: tool, target: target, reason: reason });
+  // defer() injects the advisory into the model's context AND exit(0)s -- terminal, so no other guard runs
+  // and there is no double stdout write. For the four MCP write tools that reach here this is behaviourally
+  // identical to the natural fall-through, PLUS the advisory the immediate-surfacing reader needs.
+  return defer('NOTE (ticket-gate break-glass): config-unlock is active, so the ticket-review gate cleared ' +
+    'a MECHANICAL block it could not evaluate (' + reason + ') on ' + target + ' and let this Notion write ' +
+    'proceed UNREVIEWED. The gate is not evaluating writes it cannot read while break-glass is on. Surface ' +
+    'this in your next "\u{1F4CC} For you" block, and turn break-glass off (env ' + UNLOCK_ENV_VAR + ' / the ' +
+    '.config-unlock sentinel) once the wedged task is done. Content-review blocks (no-pass, bad-verdict, ' +
+    'reviewer-unverified) are NOT cleared by break-glass -- use one /vet-ticket review + mint instead.');
+}
+
 // A short human-readable label for the block message and the audit log. NOT part of record matching
 // -- that is the content hash alone -- so it is free to be readable rather than canonical.
 function ticketLabel(tool, ids) {
@@ -3119,7 +3141,10 @@ function enforceTicketVetting(tool, input) {
   // WIRED -- shell tools are not in scope here, which makes ticketShellScope unreachable from this
   // hook. Read the NOT WIRED banner above §4.5 before reconnecting it; two of its findings are open.
   if (!isMcp) return;
-  if (configUnlocked()) return;                 // break-glass: skip the gate entirely
+  // GEN-508 #4: NO global break-glass here. It is scoped BELOW to the two MECHANICAL blocks only
+  // (internal-error, unreadable-payload) via ticketBreakGlassSkip -- a content/auth decision (no-pass,
+  // bad-verdict, reviewer-unverified, ...) is Erez's approval and stays unbreakable, mirroring
+  // enforceStaging. The old unconditional `if (configUnlocked()) return` voided the whole gate, unlogged.
 
   const ti = input && input.tool_input;
   let sc;
@@ -3128,7 +3153,8 @@ function enforceTicketVetting(tool, input) {
   } catch (e) {
     // A throw in our own scoping is NOT a reason to let a Notion write through. Under
     // bypassPermissions returning here would be a SILENT APPROVE of an unreviewed write, not a
-    // prompt. Fail closed; break-glass is the escape.
+    // prompt. Fail closed; break-glass clears this MECHANICAL block (logged + surfaced), never a content one.
+    if (configUnlocked()) return ticketBreakGlassSkip(tool, '<internal-error>', 'internal-error');
     logTicketGateEvent({ event: 'block', tool: tool, target: '<internal-error>', reason: 'internal-error' });
     return blockTicketVetting({ target: '<internal-error>', reason: 'internal-error', ids: [] });
   }
@@ -3150,6 +3176,9 @@ function enforceTicketVetting(tool, input) {
     // stale-content when a record exists for this ticket under a different hash.
     let reason = sc.reason;
     if (!reason) reason = ticketRecordExistsForIds(sc.ids) ? 'stale-content' : 'no-pass';
+    // GEN-508 #4: break-glass clears ONLY a MECHANICAL block (unreadable-payload) here, logged + surfaced;
+    // no-pass / stale-content / bad-target / exempt-list-* are content/scope decisions and stay unbreakable.
+    if (configUnlocked() && TICKET_BREAKGLASS_REASONS.has(reason)) return ticketBreakGlassSkip(tool, sc.target, reason);
     logTicketGateEvent({ event: 'block', tool: tool, surface: sc.surface, target: sc.target,
                          reason: reason === 'stale-content' ? 'no-pass' : reason,
                          why: sc.why, hash: sc.hash });

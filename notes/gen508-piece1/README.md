@@ -5,6 +5,75 @@ Working copies for the ticket-quality gate. **Nothing here is installed** — th
 
 ---
 
+## Step 5 — #4 (break-glass scope) — DONE, 2026-08-13 — Step 5 now COMPLETE
+
+**This is the current state; it supersedes the #6 section below (kept as the audit trail).** Erez chose
+Option A — scope break-glass to MECHANICAL blocks only (mirroring `enforceStaging`), log every skip, surface
+it. Built to working copies; **nothing installed** (Step 6). With #4 done, **all of Step 5 is complete**;
+only Step 6 (the combined `/vet-code` + install) remains.
+
+- **Hook (`auto-approve.working.js`):** removed the global `if (configUnlocked()) return` at the top of
+  `enforceTicketVetting` (it voided the WHOLE gate, unlogged, session-wide). Break-glass is now scoped via a
+  new `ticketBreakGlassSkip` helper + `TICKET_BREAKGLASS_REASONS = {internal-error, unreadable-payload}` to
+  the two MECHANICAL blocks only. A content/auth block (no-pass, bad-verdict, reviewer-unverified, bad-record,
+  unknown-record-key, expiry-too-far, consume-failed, exempt-list-*) is now UNBREAKABLE. Every skip logs a
+  `break-glass-skip` event AND surfaces an advisory via `defer()` (the GEN-488 additionalContext channel —
+  immediate, in-session). Reader: immediate = the advisory; the durable log's `/wrap` aggregate is piece 3
+  (GEN-636).
+- **Doc sweep:** skill Step 9 + Scope-intro, and design §7 step 1 + the install-together note, corrected from
+  "break-glass suspends the whole ticket gate" to the scoped behavior (with a piece-2 implication note for the
+  parked-REST escapes that relied on break-glass). §14 confirmed (grep) to carry no break-glass claim.
+- **Tests:** v8-arm section M (5 behavioral: content stays unbreakable under break-glass; mechanical cleared +
+  advisory surfaces; both baselines block) and contract §11 (3 source pins: no global break-glass; scoped
+  helper + mechanical set; skip logged). Harness `run`/`mcp` gained an optional `env` (back-compat) to spawn
+  the hook with `CLAUDE_CONFIG_UNLOCK=1`.
+- Suites green: `test-gen508-contract.js` **34/0/0**, `test-gen508-v8-arm.js` **82/0/0**,
+  `test-gen508-rest-parked.js` at its 19-fail parked baseline.
+
+**Still to do — Step 6 only** (the combined install; #4 and #6 land together):
+- full `/vet-code` Pass A + Pass B over the combined diff (hook + skill); `/check` the rewritten/new skill
+  sections; apply the two `step6-skill-edits.md` edits via `/vet-rule`; live-verify (probe
+  MATCH/DIVERGENCE/LOOKUP-ERROR + the break-glass scoping); seed the exempt file; install hook + skill
+  together; post-install check.
+
+---
+
+## Step 5 — #6 (marker-liveness probe) — DONE, 2026-08-13
+
+**This is the current state; it supersedes the Step-5·BLOCKING-1 section below (kept as the audit trail).**
+Erez chose Option A (a probe, checking at install AND at wrap-up); the approach went through plan-mode
+approval (the converged plan `option-a-check-at-fuzzy-sutherland.md` in `~/.claude/plans/` + an in-session
+adversarial critique). Built to working copies; **nothing installed** (Step 6). Step 5's last item (#4)
+remains — an Erez decision, below.
+
+- **Added the "Marker-liveness probe" section to `vet-ticket-SKILL.md`** (the single definition): read both ids
+  in the installed hook's `TEAM_TASKS_IDS`, `notion-fetch` them, require `{ live DB id } ∪ { its data-source
+  id(s) } == TEAM_TASKS_IDS` exactly; **fail loud** (default non-MATCH on any incomplete/failed read); outcomes
+  MATCH / DIVERGENCE / LOOKUP-ERROR. Reads the ids from the installed hook (single source of truth), makes NO
+  hook change, and runs OFF the hot path (honoring the collapse). Verified live: DB `fe198002…` returns sole
+  data source `bd2cd17b…` → MATCH today.
+- **Two arms, both invoking that one procedure:** install-time (companion to the existing "Seed" step; runs at
+  `/vet-code` Step 8 post-apply, STOPs the install on non-MATCH) and wrap-up (new `/wrap` Step 3d, surfaces a
+  non-MATCH line in the "📌 For you" block + HISTORY, silent on MATCH).
+- **The two live-skill edits** (`/wrap` Step 3d + a one-line `/vet-code` Step 8 pointer) are drafted in
+  `step6-skill-edits.md`, to be applied at Step 6 via `/vet-rule` (they edit installed skills, so they are not
+  applied now).
+- **Contract pin:** `test-gen508-contract.js` §10 pins the probe section's existence + its set-equality /
+  fail-loud / no-re-hardcode invariants (5 new assertions).
+- **No hook change** — `containerTeamTasks` stays dead and contract §7 stays green.
+- Tests: `test-gen508-contract.js` **31/0/0** (was 26 + §10's 5), `test-gen508-v8-arm.js` **77/0/0** (unchanged),
+  `test-gen508-rest-parked.js` at its 19-fail parked baseline.
+
+**Still to do — Step 5 (#4, an Erez decision), then Step 6:**
+- **#4** — break-glass (`configUnlocked()`) voids the whole gate session-wide, unlogged, before `ticketScope`
+  runs. Decision: scope it to mechanical blocks only (mirroring `enforceStaging`) + log every skip vs. leave it.
+- **Step 6** — full `/vet-code` Pass A + Pass B over the combined diff; `/check` the rewritten/new skill
+  sections; apply the two `step6-skill-edits.md` edits via `/vet-rule`; live-verify (incl. the probe's
+  MATCH / DIVERGENCE / LOOKUP-ERROR cases); seed the exempt file; install hook + skill together; post-install
+  check.
+
+---
+
 ## Step 5 — BLOCKING 1 (GEN-58 exemption) — DONE, 2026-08-12
 
 **This is the current state.** Erez chose Option A ("finish the mechanism"); the concrete design went

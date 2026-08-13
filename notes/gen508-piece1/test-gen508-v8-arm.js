@@ -829,6 +829,36 @@ console.log('\n== E. latency ==');
   check('a 200 KB payload completes well inside the process budget (' + ms + ' ms)', ms < 2000, ms + ' ms');
 }
 
+console.log('\n== M. #4: break-glass is scoped to MECHANICAL blocks only (mirrors enforceStaging) ==');
+{
+  const UNLOCK = Object.assign({}, process.env, { CLAUDE_CONFIG_UNLOCK: '1' });
+
+  // A CONTENT decision stays UNBREAKABLE under break-glass. A body edit with no record is no-pass; before
+  // #4 the global `if (configUnlocked()) return` at the top of enforceTicketVetting cleared it -- a silent,
+  // session-wide hole. Now it still blocks even with break-glass on.
+  const content = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
+  const rContentBase = mcp('notion-update-page', content);
+  check('baseline (no break-glass): a no-pass content write blocks',
+        ticketBlockReason(rContentBase) === 'no-pass', 'reason=' + ticketBlockReason(rContentBase) + ' code=' + rContentBase.code);
+  const rContentBG = mcp('notion-update-page', content, UNLOCK);
+  check('break-glass does NOT clear a content (no-pass) block -- the #4 fix',
+        ticketBlockReason(rContentBG) === 'no-pass', 'reason=' + ticketBlockReason(rContentBG) + ' code=' + rContentBG.code);
+
+  // A MECHANICAL block (unreadable-payload) IS cleared by break-glass: no exit-2 refusal, and the advisory
+  // rides along on stdout so the skip surfaces immediately. Without break-glass the same payload blocks.
+  const mech = { data: '{"page_id": "unterminated' };
+  const rMechBase = mcp('notion-update-page', mech);
+  check('baseline (no break-glass): an unreadable-payload write blocks',
+        ticketBlockReason(rMechBase) === 'unreadable-payload', 'reason=' + ticketBlockReason(rMechBase) + ' code=' + rMechBase.code);
+  const rMechBG = mcp('notion-update-page', mech, UNLOCK);
+  check('break-glass CLEARS a mechanical (unreadable-payload) block -- no exit-2 refusal',
+        rMechBG.code !== 2 && ticketBlockReason(rMechBG) === null,
+        'code=' + rMechBG.code + ' reason=' + ticketBlockReason(rMechBG));
+  check('the cleared mechanical skip SURFACES an advisory on stdout (the immediate reader)',
+        rMechBG.out.indexOf('break-glass') !== -1 && rMechBG.out.indexOf('UNREVIEWED') !== -1,
+        'stdout=' + rMechBG.out.slice(0, 200));
+}
+
 H.cleanup();
 console.log('\n' + (state.fail === 0 ? 'ALL PASS' : 'FAILURES') + ': ' + state.pass + ' passed, ' + state.fail +
             ' failed, ' + state.pending.length + ' pending (red-by-design, awaits Step 4/5)');

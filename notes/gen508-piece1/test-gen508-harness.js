@@ -35,12 +35,14 @@ const TT_DS = 'bd2cd17b-f58f-4993-8b95-468e881272fa';
 const GEN58 = '36d6e495d07c816e9e0cce265d694ab3';
 const PAGE = '3a36e495d07c81fb9a55ddc315639c7f';
 
-function run(input) {
-  const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: 'utf8' });
+// `env` is optional and defaults to the current process env (so every existing caller is unchanged); the
+// GEN-508 #4 break-glass tests pass an env with CLAUDE_CONFIG_UNLOCK=1 to exercise configUnlocked().
+function run(input, env) {
+  const r = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: 'utf8', env: env || process.env });
   return { code: r.status, out: r.stdout || '', err: r.stderr || '' };
 }
-function mcp(tool, ti) {
-  return run({ tool_name: MCP + tool, tool_input: ti, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') });
+function mcp(tool, ti, env) {
+  return run({ tool_name: MCP + tool, tool_input: ti, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') }, env);
 }
 function sh(cmd) {
   return run({ tool_name: 'Bash', tool_input: { command: cmd }, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') });

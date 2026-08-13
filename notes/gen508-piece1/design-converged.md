@@ -1553,7 +1553,17 @@ one record could authorise a second write.
 
 ## 7. Enforcement flow
 
-1. `configUnlocked()` → return (break-glass; shared accepted residual with the siblings).
+1. **No global break-glass here `[GEN-508 #4]`.** The old `configUnlocked() → return` at the top voided the
+   whole gate, unlogged and session-wide. Break-glass is now scoped to the two MECHANICAL blocks only
+   (`internal-error`, `unreadable-payload`) at the block step (step 10): each such skip is logged as a
+   `break-glass-skip` event and surfaced via an injected advisory into the turn. A content/auth block
+   (`no-pass`, `bad-verdict`, `reviewer-unverified`, `bad-record`, `unknown-record-key`, `expiry-too-far`,
+   `consume-failed`, `exempt-list-*`) is UNBREAKABLE — mirroring `enforceStaging`, whose break-glass likewise
+   clears only a mechanical block. **Implication for the parked REST arm / piece 2:** any escape this doc
+   describes as "compute the digest under `configUnlocked()` break-glass" or "break-glass was the only door
+   for a hash mismatch" no longer holds — a shell-path block that carries no hash is not cleared by
+   break-glass either; piece 2 must re-provide those escapes (e.g. the install fixture) without relying on
+   break-glass.
 2. **Pick the surface, or return** `[v7]`. One of the four MCP tools → the MCP path (step 3). A `Bash` or
    `PowerShell` call → the shell path (step 3s). Anything else → return.
 3. **MCP path.** Compute scope: §4.1 → §4.2 → §4.3, no network. `out` → return, untouched.
@@ -2011,8 +2021,9 @@ network call, so it sits in the class already verified to block; deliverable 9 r
 measurement with two permanent test assertions, which is stronger than a one-off check.
 
 **Install the hook and the skill together.** Every refusal message names `/vet-ticket`; shipping the
-hook alone makes every in-scope write unrunnable except through break-glass, which also disables the
-three sibling gates (finding 15).
+hook alone makes every in-scope write unrunnable — and since GEN-508 #4 break-glass no longer clears a
+content block, it is not even an escape from that state (only a per-write waive or a working `/vet-ticket`
+is). This strengthens, rather than relaxes, the install-together requirement (finding 15).
 
 **Install steps the script adds** `[v8]`, each a blocking step rather than a note:
 
