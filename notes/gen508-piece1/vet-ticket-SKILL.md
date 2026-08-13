@@ -141,6 +141,61 @@ or over-cap file hard-blocks.
 
 ---
 
+## Marker-liveness probe — is the gate still watching the real board?
+
+The gate recognises a Team-Tasks write ONLY by matching the payload against the two hardcoded ids in
+`TEAM_TASKS_IDS` (`~/.claude/hooks/auto-approve.js`): the REST **database** id and the MCP **data-source**
+(`collection://`) id. If the live board ever diverges from that pair — the data source is replaced and its id
+rotates, or a second data source is added under the board — every write to it reads as out-of-scope and is
+**silently approved, unreviewed, with no event-log row.** The §10 drift counter cannot see this (it measures
+over-gating on *gated* writes; this is an under-gating escape that logs nothing), so this probe is the only
+thing that catches it. It is **detection, not prevention**: it tells you the pair has diverged, but the gate
+stays blind to that board until you update `TEAM_TASKS_IDS` by hand.
+
+The probe runs **off the hot hook path** — the hook itself still makes no network call (that is "the
+collapse"). It runs at two moments only: at install (below) and at each `/wrap` (Step 3d). It is a plain
+read; nothing about it is gated.
+
+**The procedure (the single definition; both callers run exactly this):**
+1. Read BOTH ids in `TEAM_TASKS_IDS` from the **installed** hook `~/.claude/hooks/auto-approve.js` (grep the
+   `const TEAM_TASKS_IDS = new Set([...])` line). That installed set is the single source of truth — keep no
+   second copy of the ids here.
+2. `notion-fetch` the two ids to find the live board. **Exactly one** must come back as a database
+   (`metadata.type == "database"`); that is the board. (Zero databases → LOOKUP-ERROR if any fetch merely
+   failed to reach Notion, DIVERGENCE if a clean fetch shows the id no longer names a database. Two databases
+   → DIVERGENCE — the pair no longer describes one board plus its source.)
+3. From that one live database, collect its `<data-source url="collection://…">` id(s), each normalised to 32
+   lowercase hex, no dashes (the hook's `normNotionId` form). Require
+   `{ the database's own id } ∪ { its data-source id(s) }` to **equal `TEAM_TASKS_IDS` exactly** — same
+   members, no more, no fewer. An added data source, a removed one, or a changed one all break equality.
+4. Decide the outcome:
+   - **MATCH** — set equality held and the fetch was clean and complete. The gate is watching the real board.
+   - **DIVERGENCE** — the fetch was clean but the sets differ (or step 2 saw zero/two databases as noted).
+     Name what changed.
+   - **LOOKUP-ERROR** — anything that means you could NOT prove a clean match: a fetch that throws, times out,
+     is rate-limited, or returns a truncated / `has_more` / empty / data-source-tag-missing body. **This is
+     the default — never read "couldn't check" as "all clear."**
+
+(Optional cheap belt-and-suspenders: also confirm the live database's title contains `Team-Tasks`.)
+
+**Install-time arm (companion to the "Seed (install-time, done once)" step above).** Right after the hook is
+installed and the exempt file seeded, run the probe against the just-installed hook. On **MATCH**, report it
+and finish the install. On **DIVERGENCE** or **LOOKUP-ERROR**, **STOP the install and tell Erez** — a gate
+that cannot confirm its own board must not be switched on. `/vet-code` Step 8 carries the one-line pointer
+that triggers this whenever the ticket-gate hook is (re)installed, and the result is attested to Erez at
+`/vet-code` Step 5.
+
+**Wrap-up arm.** `/wrap` Step 3d runs this probe every session-end (only when the gate is installed). MATCH is
+silent; a DIVERGENCE / LOOKUP-ERROR becomes one line under a "Ticket-gate marker-liveness" sub-heading in the
+"📌 For you" block and is recorded in the HISTORY entry so it survives the session.
+
+**What this does NOT catch (say so; do not oversell):** a wholly separate *new* Team-Tasks board created
+elsewhere, with a different database id — the gate keys on id, so adopting a new board is a deliberate
+`TEAM_TASKS_IDS` edit, outside this probe. What it *does* catch, false-positive-free, is the known board's id
+pair rotating or gaining/losing a data source.
+
+---
+
 ## Step 0 — Gate self-check (fail closed)
 
 Grep `~/.claude/hooks/auto-approve.js` for `enforceTicketVetting` and `findTicketPassFile`. Both
