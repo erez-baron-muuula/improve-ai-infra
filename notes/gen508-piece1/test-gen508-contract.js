@@ -209,6 +209,27 @@ console.log('\n== 9. the skill documents the GEN-58 rollover lane (BLOCKING-1) =
         skillSrc.indexOf('once it has been registered') !== -1, 'the corrected GEN-58 coverage wording is missing');
 }
 
+console.log('\n== 10. the skill documents the marker-liveness probe (BLOCKING #6) ==');
+{
+  // BLOCKING #6 (Step 5): a rotated/second Team-Tasks data source reads as out-of-scope and silently
+  // approves, unlogged, and the drift counter cannot see it. The remedy is an off-hot-path probe (run at
+  // install + /wrap Step 3d) defined ONCE in the skill. This pins the section's existence and its
+  // load-bearing invariants so the procedure cannot be silently dropped or weakened. The /wrap-Step-3d and
+  // /vet-code-pointer edits live in other skills and are asserted at live-verify (Step 6), not here.
+  check('the skill documents the marker-liveness probe',
+        skillSrc.indexOf('Marker-liveness probe') !== -1, 'the marker-liveness probe section is missing from the skill');
+  check('the probe requires exact set-equality against TEAM_TASKS_IDS (not a subset)',
+        skillSrc.indexOf('no more, no fewer') !== -1,
+        'the set-equality wording is missing -- a subset check would miss an added data source');
+  check('the probe fails loud (never reads "couldn\'t check" as "all clear")',
+        skillSrc.indexOf('as "all clear."') !== -1, 'the fail-loud default is missing');
+  check('the install-time arm STOPS the install on a non-MATCH',
+        skillSrc.indexOf('STOP the install and tell Erez') !== -1, 'the install-arm stop-on-divergence note is missing');
+  check('the probe does NOT re-hardcode the Team-Tasks ids (single source of truth = the installed hook)',
+        skillSrc.indexOf('bd2cd17b') === -1 && skillSrc.indexOf('fe198002') === -1,
+        'the skill hardcodes a Team-Tasks id -- it must read TEAM_TASKS_IDS from the installed hook instead');
+}
+
 H.cleanup();
 console.log('\n' + (state.fail === 0 ? 'ALL PASS' : 'FAILURES') + ': ' + state.pass + ' passed, ' + state.fail +
             ' failed, ' + state.pending.length + ' pending (red-by-design, awaits Step 4/5)');
