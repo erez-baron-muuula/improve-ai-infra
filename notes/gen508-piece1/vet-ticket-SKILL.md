@@ -50,12 +50,15 @@ Four tools are gated — `notion-create-pages`, `notion-update-page`, `notion-du
 header block in `~/.claude/hooks/auto-approve.js`.
 
 **Do not try to predict the verdict from a field path.** The hook does not read one. It normalises the
-whole payload (parsing any embedded JSON, unwrapping envelopes), then looks for a Team-Tasks id
-*anywhere* in it, and resolves any remaining page id against the database. That is deliberate: two
-earlier field-path versions each silently approved real traffic that put the parent somewhere else.
-So a call is gated whenever it touches a Team-Tasks row, however the payload happens to be shaped —
-including a move **out**, which de-lists a row and **drops every database property** (body kept), the
-most destructive ticket write these tools can make.
+whole payload (parsing any embedded JSON, unwrapping envelopes), then scans for a Team-Tasks marker
+*anywhere* in it. It makes **no network call and no database lookup**: when the payload carries a page
+id it cannot match to an exemption, it treats that page as a ticket (in scope) rather than resolving
+what the page actually is. That is deliberate — two earlier field-path versions each silently approved
+real traffic that put the parent somewhere else, and the resolver that once phoned Notion was "the
+collapse" this build removed. So a call is gated whenever it touches a Team-Tasks row — or any
+unrecognised page id — however the payload happens to be shaped, including a move **out**, which
+de-lists a row and **drops every database property** (body kept), the most destructive ticket write
+these tools can make.
 
 NOT gated, and you do not need this skill for them:
 - **Housekeeping-only property edits** — `Status`, `Assignee`, `Project`, `Type`, `Reason`. **FIVE
@@ -81,11 +84,17 @@ NOT gated, and you do not need this skill for them:
   real payload shape: `update_content` carries its edits in `content_updates: [{old_str, new_str}]`, and
   **an edit whose `new_str` is empty or whitespace-only is gated wherever it sits in the payload** —
   emptying existing log text is not a log append.
-- Comments, views, attachments, and any page outside Team-Tasks.
+- Comments, views, and attachments — these go through other Notion tools entirely, not the four gated
+  above. **There is no "any page outside Team-Tasks" exemption:** with no resolver, the hook cannot tell
+  a non-Team-Tasks page apart, so a create/update/duplicate/move on ANY unrecognised page id is gated as
+  a ticket (Stage 5, "every page is a ticket"). When the target genuinely is not a Team-Tasks row, clear
+  it through the **non-ticket lane** below — never by asserting to the hook that it is out of scope.
 
-**If a page cannot be resolved, the write is blocked, not waved through** (no token, Notion
-unreachable, rate-limited, archived, or a target id that is malformed or missing). Minting needs no
-Notion access, so the escape is one review plus one mint — not break-glass.
+**If the payload or its target cannot be read, the write is blocked, not waved through** — no token, a
+malformed or missing target id, or an unreadable / over-cap exempt file. The hook makes **no Notion
+call on any path**, so reachability, rate limits, and archived-state never enter into it; a block is
+always about what the hook could read locally, never about Notion being up. Minting needs no Notion
+access, so the escape is one review plus one mint — not break-glass.
 
 Known gaps, stated so they are not mistaken for coverage: **raw REST/curl writes to
 `api.notion.com`** and **all Jira writes** are outside this gate (piece 2). A raw REST Notion write is
@@ -142,6 +151,34 @@ or over-cap file hard-blocks.
 
 ---
 
+## The non-ticket lane (a gated write to a genuine non-Team-Tasks page)
+
+Because the hook has no resolver, a `create` / `update` / `duplicate` / `move` on a page that is
+genuinely **not** a Team-Tasks row still reaches this gate — Stage 5 treats every unmatched page id as a
+ticket. Measured, that is ~1 page reference in 1,081, so it is rare; but it must not force the full
+Team-Tasks ticket checklist onto a page that has none of the properties that checklist assumes. This
+lane is the sanctioned way to clear such a write, and it is what the hook's Stage-5 comment means when it
+says "/vet-ticket's non-ticket lane is what keeps that cost off Erez."
+
+The review is still independent — never self-certified — but it judges a different, minimal bar:
+
+1. **Lane evidence bar** (this REPLACES the Step-2 ticket checklist). An independent `check-reviewer`
+   confirms two things and nothing more: (a) the target page is **not** a Team-Tasks row — it does not
+   live in the Team-Tasks database and carries none of its ticket properties (the reviewer may
+   `notion-fetch` the id to confirm; it runs off the hot path); and (b) the payload carries no
+   destructive key — no `archived`, `in_trash`, `allow_deleting_content`, and no move that de-lists a
+   row. If either cannot be confirmed, it is not a non-ticket write — fall back to the full Step-2
+   checklist (or, for a move-out of a real row, treat it as the destructive ticket write it is).
+2. **Then Steps 1 and 4–8 as normal.** Hash the payload (Step 1, with the matching `--tool` tag), have
+   the reviewer sign off against the lane bar above in place of Step 2's checklist, ending on
+   `TICKET-REVIEW-VERDICT: PASS <hash>` exactly as Step 2 requires, then write the record, show Erez the
+   card, mint, and apply.
+
+This lane attests the write is harmless to a non-ticket page; it never applies to a real Team-Tasks row
+(that is the full checklist) and never to a destructive move-out.
+
+---
+
 ## Marker-liveness probe — is the gate still watching the real board?
 
 The gate recognises a Team-Tasks write ONLY by matching the payload against the two hardcoded ids in
@@ -190,10 +227,19 @@ that triggers this whenever the ticket-gate hook is (re)installed, and the resul
 silent; a DIVERGENCE / LOOKUP-ERROR becomes one line under a "Ticket-gate marker-liveness" sub-heading in the
 "📌 For you" block and is recorded in the HISTORY entry so it survives the session.
 
-**What this does NOT catch (say so; do not oversell):** a wholly separate *new* Team-Tasks board created
-elsewhere, with a different database id — the gate keys on id, so adopting a new board is a deliberate
-`TEAM_TASKS_IDS` edit, outside this probe. What it *does* catch, false-positive-free, is the known board's id
-pair rotating or gaining/losing a data source.
+**What this does NOT catch (say so; do not oversell):**
+- A wholly separate *new* Team-Tasks board created elsewhere, with a different database id — the gate
+  keys on id, so adopting a new board is a deliberate `TEAM_TASKS_IDS` edit, outside this probe.
+- **A connector-UUID rotation.** The hook's four gated-tool names are built from a hardcoded
+  `NOTION_MCP_PREFIX` (the Notion connector's UUID). If the connector is removed and re-added, it is
+  minted a NEW UUID, so the live tool names no longer equal the hook's constants and `enforceTicketVetting`
+  silently stops firing on every Notion write — yet this probe still reports **MATCH**, because the board
+  ids it checks are unchanged. So a green probe is not proof the gate is live; it only proves the board
+  pair is intact. Catching a rotation needs a separate check that the hook's `NOTION_MCP_PREFIX` still
+  matches the connector id the live tools carry (deferred to the hardening ticket).
+
+What it *does* catch, false-positive-free, is the known board's id pair rotating or gaining/losing a data
+source.
 
 ---
 
@@ -267,7 +313,10 @@ below verbatim — including its machine-readable last line, which is the part t
    concrete next action or acceptance criteria; who verifies it where that matters. Scale to
    complexity — a one-line fix needs only enough of each.
 2. **Priority fields** — `Urgency` and `Gain ratio` both set, and `Priority` correctly derived from
-   them (Not-urgent: Gain 1 → High, 2 → Medium, 3 → Low; Urgent: Gain 1 → Highest, else High).
+   them **per the derivation table in `hooks/refs/notion.md`** (that ref is authoritative). The inline
+   summary here — Not-urgent: Gain 1 → High, 2 → Medium, 3 → Low; Urgent: Gain 1 → Highest, else High —
+   is a convenience copy; if it ever disagrees with the ref, the ref wins and this line is what needs
+   updating.
 3. **Named by outcome**, not by a presumed solution or technology.
 4. **Right home** — routed by the domain the problem belongs to, not by who will fix it.
 5. **Not a near-duplicate** — search the tracker for the underlying issue (behaviour + root cause,
@@ -364,6 +413,11 @@ filings are shown together as one card list and approved in one action.
 His approval means "file this", not "I endorse this wording" — the body's quality rests on the
 reviewer. Say so once when the card list is unusually large or the reviewer's notes were substantive.
 
+**Before you write the pass, run the Step 7 evidence precondition.** Step 7 is numbered after this step
+but executes first: it re-verifies the reviewer's transcript, token, and hash immediately before the
+mint. Minting first risks an unexplained hard-block after the write, when a failed precondition here
+costs only a re-review.
+
 Then mint the **ticket pass** into `~/.claude-staging/ticket-passes/` with the Write tool. Do NOT rely
 on that write to prompt him — under his bypassPermissions mode it falls through silently — so his
 approval must come from the **card you show inline BEFORE the mint**, never from a file-write dialog
@@ -418,6 +472,21 @@ the outstanding findings in the record, **and set `waived: true` on the pass as 
 the only file the hook opens, so a waive recorded solely in the record blocks with `bad-verdict`. Then
 mint normally. Erez's explicit affirmative in chat (above) is the waive's authority; there is no
 separate mint-write confirmation, because under his permission mode that write does not prompt.
+
+The waived pass carries the SAME `TICKET_PASS_KEYS` shape as Step 5's, with `waived: true` and
+**`reviewerAgentId` omitted** (a waive cites no reviewer). Keep `waiveReason` and the outstanding
+findings in the **ticket-record only** — `waiveReason` is not a `TICKET_PASS_KEYS` member, so copying it
+onto the pass makes the hook refuse with `unknown-record-key`:
+
+```json
+{ "kind": "ticket",
+  "surface": "notion-mcp",
+  "contentHash": "<the 64-hex line --ticket-hash printed>",
+  "verdict": "PASS",
+  "waived": true,
+  "target": "<human-readable label>",
+  "expires": "<now + 15 min, ISO-8601 UTC>" }
+```
 
 A waive is the ONLY path that skips the reviewer checks: on `waived: true` the hook verifies no
 sidecar and looks for no token, so a waived pass needs no `reviewerAgentId` and Erez's explicit chat
@@ -487,12 +556,19 @@ routine. Aggregate counts and a re-evaluate bar at `/wrap` are piece 3.
   rather than forcing it. Re-minting alone cannot help: the new hash has no reviewer token behind it.
 - If NO pass ever matches and the payload is unchanged, suspect a projection drift between this skill
   and the hook header. Do not paper over it with break-glass: fix the mismatch via `/vet-code`.
+- A persistent `consume-failed` block means the hook matched a valid pass but could not rename it to
+  `*.consumed.<ts>` (a locked or read-only file, a permissions problem), so the write keeps blocking and
+  the `*.json` pass stays stuck on disk. Clear it by **deleting the stuck `*.json` pass** in
+  `~/.claude-staging/ticket-passes/` by hand, then re-mint and retry. (Do not break-glass it —
+  `consume-failed` is unbreakable.)
 - Break-glass (`CLAUDE_CONFIG_UNLOCK=1`, or the `.config-unlock` sentinel + reaper token) does NOT clear
   the ticket gate's content decisions. GEN-508 #4 scoped it to the two MECHANICAL blocks only
   (`internal-error`, `unreadable-payload` — a write the gate could not read at all); every such skip is
   LOGGED (a `break-glass-skip` row in the ticket-events log) and SURFACED (an advisory injected into the
-  turn, to be raised in the "📌 For you" block). A content/auth block (`no-pass`, `bad-verdict`,
-  `reviewer-unverified`, `bad-record`, `unknown-record-key`, `expiry-too-far`, `consume-failed`,
-  `exempt-list-*`) stays UNBREAKABLE — the per-case Step 6 waive is the only way past those. The OPEN/CLOSE
-  commands are in `/vet-code` and `/vet-rule`; the staging gate is scoped the same mechanical-only way,
-  while the vetting and check gates are still fully suspended by break-glass.
+  turn, to be raised in the "📌 For you" block). **Every other block reason stays UNBREAKABLE** — not
+  only the ones named here (`no-pass`, `no-token`, `bad-verdict`, `bad-record`, `reviewer-unverified`,
+  `unknown-record-key`, `expiry-too-far`, `stale-content`, `bad-target`, `consume-failed`,
+  `exempt-list-*`) but any content/auth reason the hook can return except those two mechanical ones; the
+  per-case Step 6 waive is the only way past them. The OPEN/CLOSE commands are in `/vet-code` and
+  `/vet-rule`; the staging gate is scoped the same mechanical-only way, while the vetting and check gates
+  are still fully suspended by break-glass.
