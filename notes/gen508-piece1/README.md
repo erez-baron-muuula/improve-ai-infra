@@ -5,6 +5,122 @@ Working copies for the ticket-quality gate. **Nothing here is installed** — th
 
 ---
 
+## Step 6 — IN PROGRESS (cold-resume handoff, 2026-08-16)
+
+**Reviews are DONE with ZERO material findings. The hook working copy is FINAL and hash-locked. Remaining
+work is skill/doc polish + live-verify + the install.** Read this section first to resume cold.
+
+### What is DONE this session (2026-08-16)
+
+- **Step 1 — design `/check` (mint evidence):** 4 `check-reviewer` sub-agents (Opus), **converged round 1,
+  ZERO material findings.** AgentIds (transcripts in **session `51ae6376-8f2b-49d1-9b4e-ac666396d922`**'s
+  `subagents/`, durable): `a17cf41a019c79786` (pre-mortem+premises), `ad705b51e07e74d9f` (holistic),
+  `ab8c1239a1e2a6e9e` (soundness/contract), `a692d7b62ee95704c` (rule-check).
+- **Step 1b — vetting record WRITTEN:** `C:\Users\Erez\.claude-staging\vetting-passes\vetting-record-gen508-auto-approve.json`.
+  `contentHash = 3922f9be8ce7c5afb1f5929cf04d978667b2831b5123dd63bdf45dbe797455bd` (sha256 of
+  auto-approve.working.js, normalized UTF-8 + LF, BOM stripped). `draftedUtc 2026-08-16T08:25:34.931Z`.
+- **Step 3 — code review, BOTH passes, ZERO material / ZERO blocking:**
+  - Pass A (in-session `/code-review` HIGH, Opus 4.8): clean; 1 advisory (`containerTeamTasks` dead code,
+    intentional/pinned by contract §7).
+  - Pass B (independent adversarial workflow, 4 lenses + per-finding verify): run **twice** — Opus 4.8
+    (5 confirmed advisories) and **Fable 5** (13 confirmed advisories). Every confirmed finding advisory.
+  - Sub-agent PreToolUse firing **live-verified** this session (Claude Code docs + a live probe: the hook
+    fired on a sub-agent's `Write` and logged it). The load-bearing unknown is resolved — the gate cannot
+    be dodged by delegating to a sub-agent.
+- **Code fixes applied to `auto-approve.working.js` (5 edits, all NON-decision-logic):** BOM-regex typo
+  fixed at line ~3359 (`/^\uFEFF/`); null-guard added in `ticketScopeBatchCli`; `defer()` comment updated;
+  `isSafeTicketHash` premise-residual comment reworded; `exempt-list-unreadable` refusal message now names
+  the file + recovery. **Suites after fixes: v8-arm 82/0/0, contract 34/0/0, rest-parked at 19-fail parked
+  baseline.** (The contract test caught a message-split regression mid-edit; fixed.)
+
+### ⚠️ CRITICAL cold-resume gotchas
+
+1. **DO NOT edit `auto-approve.working.js` again** — even a comment — or its hash stops matching the
+   vetting record and Step 6 mint fails (needs a full re-vet). All remaining fixes are **skill/doc only.**
+2. **Mint evidence lives in session `51ae6376…`'s `subagents/` folder, not a new session's.** `/vet-code`
+   Step 6's evidence check normally uses the *current* `$CLAUDE_SESSION_ID`. To mint from a NEW session,
+   either (a) verify the 4 recorded transcripts in the `51ae6376…` folder directly (they persist), or
+   (b) re-run the Step-1 `/check` panel in the new session for fresh in-session evidence (the code is
+   settled, so it converges fast) and rewrite the vetting record. Do NOT re-run the Step-3 code review —
+   it is captured and the code is unchanged.
+3. The deferred-hardening items below are **NOT applied** (that keeps the hook hash-locked/final).
+
+### REMAINING — skill fixes (`vet-ticket-SKILL.md`, all advisory, from the reviews)
+
+1. **§Scope (lines ~53-55 & ~86-88):** delete the stale "resolves any remaining page id against the
+   database" + network failure-mode text (v8 hook makes NO network call). State: whole-payload marker
+   scan; every unmatched page id treated as a ticket; blocks come from unreadable payload/target, never
+   Notion reachability.
+2. **Line ~84** falsely says "any page outside Team-Tasks" is NOT gated — the hook gates any page id at
+   stage 5. Correct it, and add the promised **non-ticket lane** (reviewer confirms target is not a
+   Team-Tasks row → minimal bar) — the hook comment (`working.js` ~2398) cites this lane but it doesn't
+   exist yet. (The hook-comment inaccuracy is cosmetic and hash-locked → route to the follow-up ticket,
+   don't edit the hook.)
+3. **Step 6 waive lane:** add an explicit **waived-pass JSON template** (the 8 `TICKET_PASS_KEYS`,
+   `waived:true`, `reviewerAgentId` omitted) — prose-only today, so copying `waiveReason` onto the pass
+   trips `unknown-record-key`.
+4. **Step 9 unbreakable-reason list:** it enumerates only some reasons — add "…and every other
+   content/auth reason (e.g. …)" so it's not read as exhaustive (omits no-token, transcript-too-large,
+   stale-content, bad-target).
+5. **Step 5:** add a forward-reference to run the **Step 7 evidence precondition before the mint** (Step 7
+   is numbered after Step 5 but must execute first).
+6. **Step 9 recovery:** document that a persistent `consume-failed` is cleared by deleting the stuck
+   `*.json` pass in `~/.claude-staging/ticket-passes/`.
+7. **Marker-liveness "What this does NOT catch":** add the `NOTION_MCP_PREFIX` (connector UUID) rotation
+   gap — a connector re-add minting a new UUID silently disables the gate, and the probe still reports
+   MATCH (board ids unchanged).
+8. **Step 2 Priority derivation:** the values duplicate `hooks/refs/notion.md`; add a staleness pointer
+   (cite the ref) per the "no time-varying facts in rule files" rule.
+
+### REMAINING — doc fixes (`design-converged.md`, drift vs the build)
+
+- **§4.4 cost table (~line 672)** and **§5.3 (~lines 1370-1371):** "GEN-58 volume-rollover create is
+  *free*" → it is **gated** (the GEN-58 exemption is `update-page`-scoped; the rollover *create* goes
+  through the lane). Skill + hook already agree; only the doc is stale.
+- **§7.1 (~line 1682):** "two hash-assembly call sites exist" → now **one** (`ticketContentHash`, called
+  by both hook and CLI).
+- **§14 (~line 2281):** "Whether PreToolUse fires for sub-agent tool calls is unverified" → **verified
+  this session** (docs + live probe). Update §14's coverage sentence too (it still reads MCP+REST; build
+  is piece 1a).
+
+### REMAINING — FILE a follow-up hardening ticket (4 deferred decision-logic items, all advisory)
+
+Deferred as their **own reviewed change** (folding logic changes into a just-vetted security path is what
+the code's own "its own reviewed change" philosophy warns against). Each needs `/vet-code`:
+- **A5 — token REVISE-then-PASS inversion** (`ticketTokenVerdict` ~line 2963): takes the LAST token in the
+  final message, so a REVISE reviewer that later quotes `PASS <hash>` inverts. Fix: if ANY occurrence in
+  the final message parses as `REVISE <this-hash>`, refuse (safe, fail-toward-block). Fable Pass B.
+- **#9 — GEN-58 quoted-JSON key-leak** (`ticketNormalise` ~1881): a log write whose `new_str` is entirely
+  a JSON literal is parsed in place, leaking its keys into `norm.keys` and defeating the GEN-58 clauses
+  (properties/archived/empty-new_str). Fix: a parallel "structural keys" set excluding keys reached
+  through `asJson`-parsed strings, used for the 3 GEN-58 clauses. Narrow trigger, escapable (reword).
+- **#7 — exempt-file over-block** (`ticketScope` stage 3, ~2344): an unreadable/over-cap exempt file
+  hard-blocks even the always-exempt GEN-58 row and out-of-scope creates, before the hardcoded-id check.
+  Fix: evaluate the file-independent hardcoded `GEN58_PAGE_ID` exemption before the `readExemptPages` gate.
+- **#11 — `stableStringify` unbounded recursion** on the `!norm.ok` raw-input fallback: a pathologically
+  deep payload → RangeError → misdiagnosed `internal-error` (hook, fail-closed) and an uncaught CLI crash
+  (`ticketHashCli`). Fix: depth-cap `stableStringify` (or wrap the CLI's `ticketContentHash` call).
+
+### REMAINING — the install (per `plan-2026-08-12-fix-the-core.md` Step 6 + `/vet-code` Steps 4-8)
+
+- **Step 4 live-verify:** rebuild corpus (`node build-corpus.js`) + run the fail-open sweep in the gating
+  suite; exercise the marker-liveness probe (MATCH today: DB `fe198002…` + data-source `bd2cd17b…`),
+  break-glass scoping, GEN-58 volume-child fall-through, BLOCKING-2 cross-tool negative, expiry ceiling;
+  pass-consumption fixture assertion (single-line consumes, multi-line defers) in a fake `.claude` tree.
+- **Step 5:** show Erez + get install approval. Put to him: **REST-arm keep-vs-excise** (recommend KEEP
+  for piece 1a — unreachable via `if(!isMcp)return`, pinned by the rest-parked suite, reconnected in place
+  for piece 2/GEN-635); and the deferred-hardening follow-up ticket above.
+- **Step 6-7:** re-confirm `contentHash` still matches auto-approve.working.js; verify the 4 reviewer
+  transcripts (see gotcha 2); mint the vetting **PASS** (`kind:"vetting"`, `expires` now+15min) via Write;
+  apply via the gated single-line `update-config.ps1 -Op write-file -ContentFile` (consumes the pass).
+- **Step 8 + Step 9:** verify byte-identical install + no live pass remains; install the NEW skill at
+  `~/.claude/skills/vet-ticket/SKILL.md`; apply the two `step6-skill-edits.md` edits (`/wrap` Step 3d +
+  `/vet-code` Step 8 pointer) via `/vet-rule`; **seed** `~/.claude-staging/ticket-gate-exempt-pages.txt`
+  with the CURRENT GEN-58 volume id (time-varying — re-confirm at install; 32-hex, no dashes). Hook +
+  skill install TOGETHER. Post-install: run the marker-liveness probe (expect MATCH).
+
+---
+
 ## Step 5 — #4 (break-glass scope) — DONE, 2026-08-13 — Step 5 now COMPLETE
 
 **This is the current state; it supersedes the #6 section below (kept as the audit trail).** Erez chose

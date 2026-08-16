@@ -83,8 +83,9 @@ function defer(additionalContext) {
   // GEN-488: an optional advisory string may ride along. additionalContext is a
   // documented PreToolUse field that injects text into the model's context WITHOUT
   // reporting a permission decision, so the flow is identical to a silent exit
-  // (same channel inject-shell-refs.js uses). Only the SHELL_TOOLS defer passes an
-  // argument; every other call site stays argument-less (behavior unchanged).
+  // (same channel inject-shell-refs.js uses). Two call sites pass an argument: the
+  // SHELL_TOOLS defer (the GEN-488 redirect nudge) and the GEN-508 ticket-gate
+  // break-glass advisory (ticketBreakGlassSkip); every other call site is argument-less.
   if (typeof additionalContext === 'string' && additionalContext !== '') {
     try {
       process.stdout.write(JSON.stringify({
@@ -3073,8 +3074,11 @@ function blockTicketVetting(sc) {
           ' Then TRIM the list back to the real log volumes: that is the in-band fix, and it is an' +
           ' ordinary edit of ' + TICKET_EXEMPT_FILE + '. Do not reach for break-glass for this.';
   } else if (reason === 'exempt-list-unreadable') {
-    why = ' The GEN-58 exemption list could not be read. A gate that cannot read its own exemption' +
-          ' list must stop rather than guess.';
+    why = ' The GEN-58 exemption list could not be read (' + TICKET_EXEMPT_FILE + '), so this gate is' +
+          ' refusing every in-scope write until it reads clean. A gate that cannot read its own exemption' +
+          ' list must stop rather than guess. If the file is CORRUPT, the safe recovery is to DELETE it' +
+          ' (a MISSING file reverts to ordinary review-gated operation, not a bypass) and re-seed the' +
+          ' current GEN-58 volume id via /vet-ticket. Do not reach for break-glass for this.';
   } else if (reason === 'rest-not-via-script') {
     why = ' This is a raw Notion REST WRITE issued directly. Reissue it as the canonical invocation:\n' +
           '   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + REST_SCRIPT_PATH + '"' +
@@ -3356,7 +3360,7 @@ function ticketScopeBatchCli(argv) {
   }
   let text;
   try {
-    text = fs.readFileSync(file, 'utf8').replace(/^\\uFEFF/, '');
+    text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
   } catch (e) {
     process.stderr.write('ticket-scope-batch: cannot read ' + file + '.\n');
     return process.exit(3);
@@ -3366,6 +3370,10 @@ function ticketScopeBatchCli(argv) {
     let row;
     try { row = JSON.parse(line); }
     catch (e) { process.stdout.write(JSON.stringify({ short: null, scope: 'unparsable-corpus-line', reason: null, why: null }) + '\n'); continue; }
+    // A literal `null` (or any non-object) corpus line parses successfully but has no .tool/.short;
+    // without this guard row.tool would throw inside the try below and the catch's row.short would
+    // throw again, uncaught, crashing the whole sweep. Treat it as an unparsable line instead.
+    if (!row || typeof row !== 'object') { process.stdout.write(JSON.stringify({ short: null, scope: 'unparsable-corpus-line', reason: null, why: null }) + '\n'); continue; }
     let out;
     try {
       const sc = ticketScope(row.tool, row.input);
@@ -3410,8 +3418,12 @@ function ticketHashShellCli(argv) {
   return process.exit(0);
 }
 
-// /vet-ticket has to call a hash CLI once per ticket. Deferring that call would raise a permission
-// dialog per mint, so these exact invocations are approved outright.
+// /vet-ticket has to call a hash CLI once per ticket. Deferring that call would either fall through
+// to a SILENT approve (under Erez's bypassPermissions mode, where a non-allow-listed call is not
+// prompted -- see the premise correction near TEAM_TASKS_IDS) or raise a dialog per mint in a
+// prompting mode; approving the one exact __filename-pinned invocation outright gives the same
+// no-friction result in every mode while binding the path. (An earlier version of this note said
+// the deferred call "would raise a permission dialog" unconditionally -- the disproven premise.)
 //
 // The script path is pinned to THIS FILE via __filename, which is load-bearing rather than tidy:
 // without it, `node <any>\auto-approve.js --ticket-hash x.json` would be approved, and since edits
