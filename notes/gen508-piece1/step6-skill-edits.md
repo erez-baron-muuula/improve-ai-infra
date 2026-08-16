@@ -15,13 +15,15 @@ HISTORY.md`. It joins the Step 3b/3c detector-readout family.
 
 ```markdown
 ## Step 3d — Ticket-gate marker-liveness probe (GEN-508 #6)
-**Guard:** run only if the ticket-gate hook is installed — grep `~/.claude/hooks/auto-approve.js` for
-`enforceTicketVetting`. Absent → the gate is not live; skip this step silently (clean checkmark).
-Run the `/vet-ticket` **Marker-liveness probe** (that skill holds the single definition — do NOT re-derive
-the logic here): read both ids in the installed hook's `TEAM_TASKS_IDS`, `notion-fetch` them, and require
-`{ the one live database's id } ∪ { its data-source id(s) }` to equal `TEAM_TASKS_IDS` exactly. Outcome ∈
-{ MATCH, DIVERGENCE, LOOKUP-ERROR }; default to non-MATCH on any incomplete or failed read (never read
-"couldn't check" as "all clear").
+**Guard:** run only if the ticket-gate arm is present in the hook — grep `~/.claude/hooks/auto-approve.js`
+for `enforceTicketVetting`. Absent → the gate is not installed; mark this step **"skipped — ticket-gate
+hook not installed"** with its one-line reason in the roll-up (per Step 7's convention for a step that did
+not apply this session), never a bare checkmark. (This guard only decides whether the board-liveness check
+applies; detecting an installed-but-broken hook is `/vet-ticket` Step 0's job, not this probe's.)
+Run the `/vet-ticket` **Marker-liveness probe** exactly as that skill's "Marker-liveness probe" section
+defines it — that section is the single definition; do NOT re-derive or restate its matching logic here. It
+returns one of { MATCH, DIVERGENCE, LOOKUP-ERROR }, defaulting to non-MATCH on any incomplete or failed read
+(never read "couldn't check" as "all clear").
 **Report** — one line, under a "Ticket-gate marker-liveness" sub-heading, only when the outcome is not MATCH:
 - DIVERGENCE: e.g. `Ticket-gate marker-liveness: DIVERGENCE — live board data source <id> is not in the
   hook's TEAM_TASKS_IDS; the gate is silently un-watching that board until the hardcoded set is updated by
@@ -49,12 +51,12 @@ valid vetting pass for this target remains … (that is the GEN-503 defer-instea
 
 ```markdown
 **Ticket-gate hook only (GEN-508 #6):** if the installed target is `auto-approve.js` and it contains
-`enforceTicketVetting`, also run the `/vet-ticket` **Marker-liveness probe** against the just-installed hook.
-A `DIVERGENCE` or `LOOKUP-ERROR` is an install FAILURE — do NOT report the gate live; surface it and stop
-(a gate that cannot confirm its own board must not be switched on). No-op for every other target. The same
-probe is exercised pre-apply as a Step 4 live-verify case (MATCH today; plus deliberately-broken DIVERGENCE
-and LOOKUP-ERROR inputs) and attested to Erez at Step 5, so the outcome reaches him both before and after
-apply.
+`enforceTicketVetting` (the ticket-gate arm), also run the `/vet-ticket` **Marker-liveness probe** against
+the just-installed hook. A `DIVERGENCE` or `LOOKUP-ERROR` here is an install FAILURE — and because Step 7
+has already written and consumed the pass, the hook is now live and blind to its board, so **revert to the
+prior hook (or fix `TEAM_TASKS_IDS` and re-verify) before relying on the gate, surface it to Erez, and do
+NOT report the gate live** (a gate that cannot confirm its own board must not stay switched on). No-op for
+every other target.
 ```
 
 ---
