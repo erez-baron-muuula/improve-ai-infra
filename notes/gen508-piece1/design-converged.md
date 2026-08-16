@@ -669,7 +669,7 @@ Three notes on the choices in that table:
 |---|---|---|
 | create into Team-Tasks | 0 | gated (97.0% of creates) |
 | create into another database | 0 | free |
-| create parented to an exempt page (GEN-58 volume rollover) | 0 | free |
+| create of a new GEN-58 volume (parented to the GEN-58 row) | 0 | gated — via the rollover lane |
 | create parented to any other page | 0 | gated — 1 payload in 263 |
 | any body or property edit on any Notion page | 0 | gated, unless housekeeping (§4.2) or exempt (§5) |
 | housekeeping-only property edit | 0 | free |
@@ -1367,9 +1367,12 @@ Two facts that stand independent of which writer maintains the list:
 - **Appends are `O_APPEND`, one id per line — never read-modify-write.** Two sessions run concurrently in
   this setup (there is a concurrent-session incident in this repo's own history), and a read-modify-write
   loses one session's entry silently.
-- The create that makes a new volume is itself **free**: its parent page id is exempt, so §4.3's create
-  row exempts it with no record. This closes finding 12, in which the rollover create was hard-blocked —
-  the one write a standing rule requires to be immediate.
+- The create that makes a new volume is itself **gated**, cleared through the GEN-58 rollover lane in
+  `/vet-ticket`: its parent is the GEN-58 *row* (a page), so §4.3's Stage-5 "every page is a ticket" puts
+  it in scope — the GEN-58 carve-out is `update-page`-scoped and does not reach a create. Finding 12 (the
+  rollover create hard-blocked, the one write a standing rule requires to be immediate) is closed not by
+  exempting the create but by the lane's ordered create-review AND by writing the urgent entry to the
+  *current* volume first — that write is exempt, so it never waits on rollover.
 
 **What the cut costs, stated plainly:** the first write to a newly rolled-over volume is blocked once, and
 the block resolves itself in the same turn through the lane above. That is the entire difference.
@@ -1679,8 +1682,10 @@ Bash-tool-issued literal-Windows-path invocation matches the template** (the liv
 its paths in `$(cygpath -w …)`, which the template's no-`$` slots reject, so this is the assertion that
 stops the arm being unusable from the shell it will actually be called from). That equality is
 currently a design assertion, not a measured fact (nothing is installed), and a `/check` lens was right to
-flag it: two hash-assembly call sites exist even though the normaliser has one implementation, so the
-round-trip is what proves they agree. Treat all three assertions as blocking for install. Residual: a normalisation bug on a payload shape
+flag it: hash assembly is now a single implementation (`ticketContentHash`) that both the hook's
+in-process gating and the `--ticket-hash` CLI the skill calls route through (Step 3 collapsed the earlier
+two byte-identical copies into one), so the round-trip is what proves those two entry paths agree, not
+that two separate formulas match. Treat all three assertions as blocking for install. Residual: a normalisation bug on a payload shape
 the fixture does not cover — which is the strongest argument for keeping the normaliser as small as
 this design allows.
 
@@ -2278,10 +2283,10 @@ acceptance test, not the pass count.
 - **`notion-duplicate-page` has zero captured payloads.** No field-name guess is load-bearing (the id
   scan is generic), and "no extractable id ⇒ block" covers a misread.
 - **A hollow but shape-conforming ticket can still pass a lenient reviewer.**
-- **Whether PreToolUse hooks fire for sub-agent-originated tool calls is unverified.**
-  `notion-schema-guard`'s header records the same open question. If they do not, a sub-agent could
-  file an unreviewed ticket. To be checked at build; if unfired it becomes a named gap, not a silent
-  one.
+- **PreToolUse hooks DO fire for sub-agent-originated tool calls — verified 2026-08-16** (Claude Code
+  docs plus a live probe: the hook fired on a sub-agent's `Write` and logged it). So the gate cannot be
+  dodged by delegating the Notion write to a sub-agent. This was the load-bearing open question of the
+  prior draft; it is now resolved, not a named gap.
 - **Hardcoded ids rot, and the property names already have.** The two Team-Tasks markers, the GEN-58
   page id, the housekeeping property names and the Notion MCP server UUID carry the same latent-rotation
   risk the sibling Notion hooks already document, and a maintenance note goes in the header. The
@@ -2294,14 +2299,15 @@ acceptance test, not the pass count.
 - **Whether a *user-scope* `permissions.ask` rule would prompt under `bypassPermissions` is
   untested** — the global settings files are locked. Nothing here depends on the answer, but it is the
   open question for anyone trying to restore a genuine prompt to any of the four gates.
-- **Coverage after v8, in one sentence, because the ticket's title says "every"** `[v8]`: every Notion
-  create/edit reachable through the four MCP write tools **or issued through the canonical REST invocation
-  §4.5 defines**. **Everything else on the shell surface is refused** — every other form of raw REST write,
-  detected and hard-blocked rather than reviewed. Refused is a safe outcome but it is not coverage, and
-  round 4 was right that the sentence has to say so. The main qualifier is what changed from v7: coverage is
-  no longer "named in a shell command whose body is resolvable from the command text" but the far narrower
-  "issued through the one canonical invocation". The residuals below say what sits outside even that. The
-  rule-coverage half of "every" is §12.2's, and it is a separate claim with its own acceptance criteria.
+- **Coverage, narrowed to piece 1a, in one sentence** `[piece 1a]`: this build covers every Notion
+  create/edit reachable through the four MCP write tools. The raw-REST arm §4.5 defines is **parked to
+  piece 2 (GEN-635) and unwired**, so a raw REST/curl write to `api.notion.com` is NOT covered here —
+  and, unlike the earlier v8 plan that would have *refused* every such write, the unwired arm refuses
+  nothing, so a raw REST write CAN run silently until piece 2 reconnects it. Leaving the surface
+  unchecked is deliberate: a refuse-everything arm with no working escape was judged worse than the
+  pre-install state, in which the surface is simply unchecked. The residuals below say what else sits
+  outside coverage. The rule-coverage half of "every" is §12.2's, a separate claim with its own
+  acceptance criteria.
 - **The residuals of the REST arm specifically, enumerated rather than summarised** `[v8]`:
   **(a)** a write whose URL never appears in the command text — because it lives inside a `.js`/`.ps1`/`.py`
   file the command runs, **or because it is assembled from a variable set by an earlier command** — is

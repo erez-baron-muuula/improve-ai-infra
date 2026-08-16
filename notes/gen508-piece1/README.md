@@ -83,7 +83,7 @@ work is skill/doc polish + live-verify + the install.** Read this section first 
   this session** (docs + live probe). Update §14's coverage sentence too (it still reads MCP+REST; build
   is piece 1a).
 
-### REMAINING — FILE a follow-up hardening ticket (4 deferred decision-logic items, all advisory)
+### REMAINING — FILE a follow-up hardening ticket (5 deferred hardening items, all advisory)
 
 Deferred as their **own reviewed change** (folding logic changes into a just-vetted security path is what
 the code's own "its own reviewed change" philosophy warns against). Each needs `/vet-code`:
@@ -100,6 +100,14 @@ the code's own "its own reviewed change" philosophy warns against). Each needs `
 - **#11 — `stableStringify` unbounded recursion** on the `!norm.ok` raw-input fallback: a pathologically
   deep payload → RangeError → misdiagnosed `internal-error` (hook, fail-closed) and an uncaught CLI crash
   (`ticketHashCli`). Fix: depth-cap `stableStringify` (or wrap the CLI's `ticketContentHash` call).
+- **#12 — `NOTION_MCP_PREFIX` connector-UUID rotation blind spot** (surfaced by the Step-6 `/check`,
+  2026-08-16; not one of the original 4 decision-logic items): the four gated-tool name constants are
+  built from the hardcoded connector UUID `NOTION_MCP_PREFIX`. A connector remove-and-re-add mints a new
+  UUID, so the live tool names no longer equal the hook's constants and `enforceTicketVetting` silently
+  stops firing on every Notion write — and the marker-liveness probe still reports MATCH (board ids
+  unchanged), so it does not catch this. Fix: a detection-only check, off the hot path (probe-side or a
+  hook maintenance assertion), that the hook's `NOTION_MCP_PREFIX` still equals the connector id the live
+  tools carry. **GEN-699 was filed with only the original 4 items — this 5th needs adding to it.**
 
 ### REMAINING — the install (per `plan-2026-08-12-fix-the-core.md` Step 6 + `/vet-code` Steps 4-8)
 
