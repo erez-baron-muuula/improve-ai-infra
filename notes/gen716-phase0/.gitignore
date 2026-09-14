@@ -1,0 +1,8 @@
+# Phase 0 data artifacts extracted from session transcripts contain REAL SECRETS
+# (tokens/keys that appeared in past tool output). NEVER commit them.
+# They are fully regeneratable: run extract.py then sample.py (seed 716).
+blocks.jsonl
+sample.jsonl
+batch_*.jsonl
+annotations_*.json
+inventory.json
