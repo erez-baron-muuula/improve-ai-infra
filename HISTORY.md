@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-09-15 - GEN-716 grounding flag converged to a minimal loop (build deferred to a fresh session; plan = build spec); filed GEN-724 (summary self-consistency check); overstatement pattern + reasoning-failure write-up pending reconcile & file to GEN-58 <!-- toc-session:8c109710-027e-4315-812d-b9cde16225e7 -->
+- 2026-09-15 - GEN-716 grounding flag converged to a minimal loop (build deferred to a fresh session; plan = build spec); filed GEN-724 (summary self-consistency check) and GEN-725 (reconcile + file the reasoning-failure write-up to GEN-58); overstatement/unverified-relay pattern noted <!-- toc-session:8c109710-027e-4315-812d-b9cde16225e7 -->
 - 2026-09-14 (2) — GEN-716 Phase 0 measured the block-claim gap (4% wrong / 0 acted-on, lower bounds); plan /check'd to convergence; after Erez pushback pivoted to BUILD the grounding flag; /vet-code Step 0 passed + cold-pickup handoff written; GEN-58 overstatement recurrence logged <!-- toc-session:82fce884-9409-4005-92bc-b8ba490738fc -->
 - 2026-09-14 - GEN-450 claim-linter: retire (Part A parked) + measure-then-build a block-verification replacement; design /check-converged (5 panels) and approved; GEN-716 In Progress, Phase 0 next session; GEN-58 Class D logged <!-- toc-session:21cd6104-4c97-4aa4-ba2a-eb4f65ffb501 -->
 - 2026-09-10 (2) — GEN-86 In-Progress triage: root-caused why finished tickets stay open; GEN-179/GEN-53 → Done, GEN-469 → Review; decided to RETIRE the GEN-450 claim-linter (salvage test failed — a regex can't judge a semantic property), filed GEN-716, folded GEN-451 → Wont Do; removal surgery deferred to next session; GEN-58 class-D logged. <!-- toc-session:2a084a5f-1210-4a09-a576-c97ca2981b48 -->
@@ -232,9 +232,9 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 
 **Reasoning-failure write-up: captured, NOT yet filed.** `notes/gen716-phase1/GEN-58-writeup-2026-09-14-grounding-flag-design.md` holds a draft, but it needs RECONCILING before filing: it currently logs the prior design's "architectural miss" as a failure, which Erez showed was itself my overstatement. Rewrite it around the overstatement/unverified-relay pattern above, then file to GEN-58 (which needs a Vol.9 log-volume rollover — Vol.8 is past the ~60k threshold).
 
-Unresolved items filed: none (GEN-724 was filed mid-session; the build is tracked by GEN-716 + the plan).
-Surfaced-not-filed (needs a focused follow-up, not a gate block): the GEN-58 reasoning-failure write-up — reconcile it around the overstatement pattern, then file to GEN-58 via a Vol.9 rollover.
+Unresolved items filed: GEN-725 — "Reconcile the grounding-flag reasoning-failure write-up and file it to GEN-58 (Vol.9 rollover)" (To Do, Medium, under GEN-58). (GEN-724 was filed mid-session; the build is tracked by GEN-716 + the plan.)
 Dropped learnings: none.
+Note: initially mis-marked the GEN-725 item as "surfaced-not-filed" during /wrap; Erez caught it (surfaced-not-filed is for gate failures only) and it was then auto-filed correctly.
 
 ---
 
