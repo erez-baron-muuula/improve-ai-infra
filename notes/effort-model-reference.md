@@ -2,7 +2,7 @@
 
 **Purpose:** Lookup data for choosing a reasoning effort level (`low` / `medium` / `high` / `xhigh` / `max`) given the current model and the kind of work a request calls for. Consumed by the effort-nudge mechanism (and by Claude directly) to decide when to suggest changing effort.
 
-**Last updated:** 2026-08-16
+**Last updated:** 2026-09-24
 
 **Refresh when:**
 - A new model ships to prod → add it to the tier ranking (Part 2), and add its per-effort row to Part 3 if CursorBench publishes one.
@@ -32,11 +32,13 @@ Source: Anthropic effort docs (platform.claude.com/docs/en/build-with-claude/eff
 
 Strongest → weakest, current models:
 
-**Fable 5  >  Opus 5  >  Opus 4.8  >  Sonnet 5  >  Haiku 4.5**
+**Fable 5.1  >  Fable 5  ?  Opus 5.5  >  Opus 5  >  Opus 4.8  >  Sonnet 5  >  Haiku 4.5**
+
+(Fable 5.1 and Opus 5.5 added 2026-09-24. Within-family order is by version; the cross-family position of Opus 5.5 relative to Fable 5 / Fable 5.1 is **unverified** — no sourced comparison yet. This has no effect on the floor test below, which is membership at-or-above Opus 4.8.)
 
 (On coding specifically, Opus 5 is effectively at Fable 5's level — within ~0.5 pt at every effort level per Part 3 — at half the cost per task. Opus 4.8 is the prior-generation Opus, superseded as the default by Opus 5 on 2026-07-30 but retained here as the floor anchor below.)
 
-**Model floor (Erez's bar): Opus 4.8.** At or above it (Opus 4.8, Opus 5, Fable 5) = acceptable — use as-is. Below it (Sonnet 5, Haiku 4.5) = flag and recommend going higher. This line is the single source of truth for the floor; its consumers (the weak-model nudge in `stop-foryou-nudge.js`, `/vet-code`'s model check, the global `CLAUDE.md` tag rule) must be kept in sync per "Refresh when" above. The floor is a set/rank membership test, not a cross-family capability claim — a model not listed here is treated as unconfirmed (surface it, don't silently pass or auto-nudge).
+**Model floor (Erez's bar): Opus 4.8.** At or above it (Opus 4.8, Opus 5, Opus 5.5, Fable 5, Fable 5.1) = acceptable — use as-is. Below it (Sonnet 5, Haiku 4.5) = flag and recommend going higher. This line is the single source of truth for the floor; its consumers (the weak-model nudge in `stop-foryou-nudge.js`, `/vet-code`'s model check, the global `CLAUDE.md` tag rule) must be kept in sync per "Refresh when" above. The floor is a set/rank membership test, not a cross-family capability claim — a model not listed here is treated as unconfirmed (surface it, don't silently pass or auto-nudge).
 
 Rule of thumb: **a stronger model can often drop one effort level for the same work** and hold quality. (E.g. work that wants `high` on Sonnet 5 may be fine at `medium` on Opus 5.) Combine this with Part 1: pick the effort the *work* needs, then adjust down if the current model is strong.
 
