@@ -5,9 +5,9 @@
 **Last updated:** 2026-09-24
 
 **Refresh when:**
-- A new model ships to prod → add it to the tier ranking (Part 2), and add its per-effort row to Part 3 if CursorBench publishes one.
+- A new model ships to prod → add it to Part 2 in BOTH places — the tier line and the matching list ("At or above it" or "Below it") on the Model floor line (a model on the tier line only still classifies as unlisted) — and add its per-effort row to Part 3 if CursorBench publishes one. `/wrap` Step 3f flags a session model that isn't listed yet.
 - CursorBench publishes a new version → the numbers in Part 3 are stale; re-pull from cursor.com/evals and update the version tag.
-- The model floor or tier ranking changes → also update the inlined tier list in `~/.claude/hooks/stop-foryou-nudge.js`, the floor pointer in `~/.claude/skills/vet-code/SKILL.md`, and the tag rule in the global `CLAUDE.md`. (These consume the floor below; a `/wrap` or SessionStart drift check compares the hook's inlined list against this file's "Last updated" line.)
+- The model floor or tier ranking changes → edit Part 2 only; nothing else keeps a copy. The end-of-turn hook `~/.claude/hooks/stop-foryou-nudge.js` reads Part 2 live, and `/vet-code` (Steps 0, 3, 6) and `/wrap` (Step 3f) classify models through that hook's CLI (`--classify`, `--agent-transcript`, `--selftest`). **The tier line (the wholly bold line with `>` / `?` separators) and the Model floor line's "At or above it (...)" / "Below it (...)" lists are machine-read** — keep their format (`<Name> <major>[.<minor>]` names, comma-separated) or change it only together with the hook; `/wrap` Step 3f reports the list as unreadable or its lines as off if they break. If the floor itself moves, also check the tag rule in the global `CLAUDE.md` still reads right.
 
 ---
 
@@ -38,7 +38,7 @@ Strongest → weakest, current models:
 
 (On coding specifically, Opus 5 is effectively at Fable 5's level — within ~0.5 pt at every effort level per Part 3 — at half the cost per task. Opus 4.8 is the prior-generation Opus, superseded as the default by Opus 5 on 2026-07-30 but retained here as the floor anchor below.)
 
-**Model floor (Erez's bar): Opus 4.8.** At or above it (Opus 4.8, Opus 5, Opus 5.5, Fable 5, Fable 5.1) = acceptable — use as-is. Below it (Sonnet 5, Haiku 4.5) = flag and recommend going higher. This line is the single source of truth for the floor; its consumers (the weak-model nudge in `stop-foryou-nudge.js`, `/vet-code`'s model check, the global `CLAUDE.md` tag rule) must be kept in sync per "Refresh when" above. The floor is a set/rank membership test, not a cross-family capability claim — a model not listed here is treated as unconfirmed (surface it, don't silently pass or auto-nudge).
+**Model floor (Erez's bar): Opus 4.8.** At or above it (Opus 4.8, Opus 5, Opus 5.5, Fable 5, Fable 5.1) = acceptable — use as-is. Below it (Sonnet 5, Haiku 4.5) = flag and recommend going higher. This line is the single source of truth for the floor; its consumers (the weak-model nudge in `stop-foryou-nudge.js`, `/vet-code`'s model check, the global `CLAUDE.md` tag rule) must be kept in sync per "Refresh when" above. The floor is a set/rank membership test, not a cross-family capability claim — a model not listed here is treated as unconfirmed (surface it, don't silently pass or auto-nudge), with one exception Erez approved on 2026-09-24: an unlisted point release in the same line and major version as a listed at-or-above model, at or above that model's version (e.g. Opus 5.7 while Opus 5 and 5.5 are listed), counts as at or above — unless that line also has an entry below the floor — and `/wrap` Step 3f flags it for adding here.
 
 Rule of thumb: **a stronger model can often drop one effort level for the same work** and hold quality. (E.g. work that wants `high` on Sonnet 5 may be fine at `medium` on Opus 5.) Combine this with Part 1: pick the effort the *work* needs, then adjust down if the current model is strong.
 
