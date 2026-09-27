@@ -2917,7 +2917,8 @@ function ticketDeliveredText(rec) {
 
 // -> 'ok' | 'no-token' | 'bad-record' | 'transcript-too-large'
 // The verdict is read from the reviewer's FINAL DELIVERED MESSAGE -- the last assistant record that
-// delivered any text -- and the LAST token occurrence within it must read exactly `PASS <contentHash>`.
+// delivered any text, or its confirmed SubagentHandback report (GEN-740, below) -- and the LAST token
+// occurrence within it must read exactly `PASS <contentHash>`.
 //
 // "Final message", not "last occurrence in the file", which is what this did before. It let a reviewer
 // emit PASS early and then wander -- or, with the block filter above, put its real verdict in an earlier
@@ -2938,6 +2939,70 @@ function ticketDeliveredText(rec) {
 // 529s from this very session -- and one landing after a valid verdict would otherwise shadow it.
 //
 // A cap-exceeded transcript is a DISTINCT diagnosis from a missing token and must not be logged as one.
+//
+// GEN-740 -- THE HAND-BACK CHANNEL. Some harness runs give a sub-agent a `SubagentHandback` tool and
+// tell it, in an isMeta notice: "Only a SubagentHandback call reaches your caller as your result; plain
+// text you write at the end is not delivered." Such a reviewer delivers its report as the tool's
+// `message` argument and then writes a token-less "Report delivered." -- which the text-only read above
+// took as the final message, so every hand-back PASS blocked as no-token (observed 2026-09-27: five
+// reviewers, harness 2.1.281). Other runs of the same harness have no such tool and reply in plain text,
+// so BOTH shapes must clear. What changes, and only this:
+//   * A SubagentHandback tool_use is a delivery ONLY when the harness confirmed it: a paired tool_result
+//     (by tool_use_id) that is not is_error and whose content parses to {success: true}. The reviewer
+//     writes the tool_use but cannot write the tool_result, so a fabricated call is not a delivery.
+//     A call the harness rejected as "No such tool available" is ignored outright: the run has no
+//     hand-back tool, so plain text is its delivery channel, exactly as before. Every OTHER tool_use
+//     stays ignored (the grep-for-own-token hole).
+//   * The read is per TURN. A turn starts at a genuine prompt: a user record that carries no tool_result
+//     and is not a harness notice (isMeta with no `origin`). So the brief and a SendMessage resume
+//     (isMeta + origin) start turns; tool echoes and the mode / "[handback-send-enforce]" notices do not.
+//     promptId is NOT usable for this -- it changes mid-turn in real transcripts.
+//   * Within a turn, once the reviewer ATTEMPTS a hand-back, only its LAST attempt can be the delivered
+//     message: confirmed -> that message; unconfirmed -> nothing was delivered this turn. Earlier text
+//     and hand-backs are discarded, so an unconfirmed attempt can never leave an older PASS standing.
+//     Text written after the last attempt never reached the caller, so it can only make things
+//     stricter: if it restates the token at all, that too must read PASS for this hash (a later REVISE
+//     fails closed; a later PASS cannot rescue a hand-back REVISE or a rejected attempt), and the
+//     token-less ack changes nothing.
+//   * The final message is the candidate of the LAST turn that delivered anything. A resumed turn that
+//     only thought or read files falls back to the turn before -- today's "last text anywhere" -- while a
+//     resumed turn that replied without restating PASS is a no-token, keeping the "final message" rule.
+// A transcript with one prompt and no hand-back reads exactly as before.
+const TICKET_HANDBACK_TOOL = 'SubagentHandback';
+
+function ticketHandbackConfirmed(block) {
+  if (!block || block.type !== 'tool_result' || block.is_error === true) return false;
+  let t = block.content;
+  if (Array.isArray(t)) {
+    t = t.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('');
+  }
+  if (typeof t !== 'string') return false;
+  try { const o = JSON.parse(t); return !!o && typeof o === 'object' && o.success === true; } catch (e) { return false; }
+}
+
+// The harness's rejection of a call to a tool this run does not have. EXACT match on the whole result,
+// not a substring: every real instance (4, 2026-09-27 scan) is is_error true with content exactly
+// '<tool_use_error>Error: No such tool available: <name></tool_use_error>', while the same phrase also
+// appears inside ordinary tool output (file reads that quote it), and an error that echoed the
+// reviewer's own input could carry it too -- neither must count as "the tool does not exist".
+const TICKET_NO_SUCH_HANDBACK = '<tool_use_error>Error: No such tool available: ' + TICKET_HANDBACK_TOOL + '</tool_use_error>';
+function ticketNoSuchTool(block) {
+  if (!block || block.type !== 'tool_result' || block.is_error !== true) return false;
+  let t = block.content;
+  if (Array.isArray(t)) {
+    t = t.filter(b => b && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join('');
+  }
+  return typeof t === 'string' && t.trim() === TICKET_NO_SUCH_HANDBACK;
+}
+
+function ticketIsPrompt(rec) {
+  if (!rec || rec.type !== 'user' || !rec.message) return false;
+  const c = rec.message.content;
+  if (Array.isArray(c) && c.some(b => b && b.type === 'tool_result')) return false;
+  if (rec.isMeta === true && !(rec.origin && typeof rec.origin === 'object')) return false;
+  return true;
+}
+
 function ticketTokenVerdict(sessionDir, agentId, hash) {
   if (!sessionDir || typeof agentId !== 'string' || !/^[A-Za-z0-9_-]{4,64}$/.test(agentId)) return 'bad-record';
   const file = path.join(sessionDir, 'subagents', 'agent-' + agentId + '.jsonl');
@@ -2948,33 +3013,105 @@ function ticketTokenVerdict(sessionDir, agentId, hash) {
     text = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
   } catch (e) { return 'bad-record'; }
 
-  let final = null;
+  const recs = [];
   for (const line of text.split('\n')) {
     if (line.trim() === '') continue;
     let rec;
     try { rec = JSON.parse(line); } catch (e) { continue; }   // a partial trailing line is not fatal
-    if (!rec || rec.type !== 'assistant' || rec.isApiErrorMessage === true) continue;
-    const delivered = ticketDeliveredText(rec);
-    if (delivered !== null) final = delivered;
+    if (rec && typeof rec === 'object') recs.push(rec);
   }
-  if (final === null) return 'no-token';
 
-  // Last occurrence WITHIN the final message: a reviewer may quote the form while explaining itself,
-  // but what it signs off with is the verdict.
+  // Pre-pass: the tool_use ids the harness confirmed as delivered, and the ids it rejected because the
+  // tool does not exist in this run. The latter means the run is NOT in hand-back mode, so plain text
+  // is the delivery channel and the stray call is ignored outright -- otherwise a text-mode reviewer
+  // that tries the tool once would be locked out, a behaviour change from the text-only read.
+  const confirmed = new Set();
+  const noSuchTool = new Set();
+  for (const rec of recs) {
+    const c = rec.type === 'user' && rec.message && rec.message.content;
+    if (!Array.isArray(c)) continue;
+    for (const b of c) {
+      if (!b || typeof b.tool_use_id !== 'string') continue;
+      if (ticketHandbackConfirmed(b)) confirmed.add(b.tool_use_id);
+      else if (ticketNoSuchTool(b)) noSuchTool.add(b.tool_use_id);
+    }
+  }
+
+  // `final` = { primary, after }: the delivered message (null if a hand-back was attempted but not
+  // confirmed), and in a hand-back turn the text written after the last attempt. `after` can only make
+  // the verdict stricter -- see the token check below.
+  let final = null;
+  let turn = null;
+  const newTurn = () => ({ touched: false, attempted: false, handback: null, post: [], last: null });
+  const closeTurn = () => {
+    if (!turn || !turn.touched) return;
+    final = turn.attempted ? { primary: turn.handback, after: turn.post.join('\n') }
+                           : { primary: turn.last, after: '' };
+  };
+  const deliver = d => {
+    if (d === null) return;
+    turn.touched = true;
+    if (turn.attempted) turn.post.push(d); else turn.last = d;
+  };
+  for (const rec of recs) {
+    if (ticketIsPrompt(rec)) { closeTurn(); turn = newTurn(); continue; }
+    if (rec.type !== 'assistant' || rec.isApiErrorMessage === true) continue;
+    if (!turn) turn = newTurn();
+    const c = rec.message && rec.message.content;
+    const isAttempt = b => !!b && b.type === 'tool_use' && b.name === TICKET_HANDBACK_TOOL && !noSuchTool.has(b.id);
+    if (!(Array.isArray(c) && c.some(isAttempt))) {
+      deliver(ticketDeliveredText(rec));   // the common record: unchanged allow-list read
+      continue;
+    }
+    // A record carrying a hand-back: walk its blocks in order, so text BEFORE the call is discarded with
+    // the rest of the turn's pre-hand-back text and text AFTER it is after-text. Same allow-list: only
+    // `text` blocks are delivered text; whitespace-only runs deliver nothing.
+    let run = [];
+    for (const b of c) {
+      if (b && b.type === 'text' && typeof b.text === 'string') { run.push(b.text); continue; }
+      if (isAttempt(b)) {
+        run = [];
+        turn.touched = true;
+        turn.attempted = true;
+        turn.last = null;
+        turn.post = [];
+        const ok = typeof b.id === 'string' && confirmed.has(b.id) && !!b.input && typeof b.input.message === 'string';
+        turn.handback = ok ? b.input.message : null;
+      }
+    }
+    const tail = run.join('\n');
+    deliver(tail.trim() === '' ? null : tail);
+  }
+  closeTurn();
+  if (final === null || final.primary === null) return 'no-token';
+
+  // The delivered message must sign off PASS for this hash. Text written AFTER a hand-back never
+  // reached the caller, so it cannot supply a PASS the hand-back lacked -- but if it restates the token
+  // at all, that restatement must ALSO read PASS for this hash: any disagreement fails closed.
+  if (ticketLastToken(final.primary, hash) !== 'pass') return 'no-token';
+  const afterTok = ticketLastToken(final.after, hash);
+  if (afterTok !== 'none' && afterTok !== 'pass') return 'no-token';
+  return 'ok';
+}
+
+// -> 'none' | 'pass' | 'other'. LAST occurrence within the message: a reviewer may quote the form while
+// explaining itself, but what it signs off with is the verdict. 'pass' only for exactly PASS <this hash>.
+function ticketLastToken(msg, hash) {
+  if (typeof msg !== 'string') return 'none';
   let last = null;
   let from = 0;
   for (;;) {
-    const at = final.indexOf(TICKET_TOKEN_PREFIX, from);
+    const at = msg.indexOf(TICKET_TOKEN_PREFIX, from);
     if (at === -1) break;
-    last = final.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128);
+    last = msg.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128);
     from = at + TICKET_TOKEN_PREFIX.length;
   }
-  if (last === null) return 'no-token';
+  if (last === null) return 'none';
   const m = last.match(/^\s*(PASS|REVISE)\s+([0-9a-f]{64})/i);
-  if (!m) return 'no-token';
-  if (m[1].toUpperCase() !== 'PASS') return 'no-token';
-  if (m[2].toLowerCase() !== String(hash).toLowerCase()) return 'no-token';
-  return 'ok';
+  if (!m) return 'other';
+  if (m[1].toUpperCase() !== 'PASS') return 'other';
+  if (m[2].toLowerCase() !== String(hash).toLowerCase()) return 'other';
+  return 'pass';
 }
 
 // ---- record matching and single-use consumption ----------------------------
@@ -3035,9 +3172,10 @@ function blockTicketVetting(sc) {
   } else if (reason === 'no-token') {
     why = ' The named reviewer\'s FINAL DELIVERED REPLY does not end on' +
           ' "TICKET-REVIEW-VERDICT: PASS <hash>" for THIS content. A record is not evidence; the' +
-          ' reviewer\'s own sign-off is. Only delivered text counts -- a token that appears solely in' +
-          ' the reviewer\'s internal reasoning, in a tool call, or in an earlier message is NOT a' +
-          ' verdict, so have the reviewer end its reply with the token. If the content changed after' +
+          ' reviewer\'s own sign-off is. Only delivered output counts -- its last text reply, or its' +
+          ' SubagentHandback report once the harness confirmed delivery. A token that appears solely in' +
+          ' the reviewer\'s internal reasoning, in any other tool call, or in an earlier message is NOT a' +
+          ' verdict, so have the reviewer end its report with the token. If the content changed after' +
           ' the review, re-review it -- reviewed-then-edited content has not been reviewed.';
   } else if (reason === 'bad-record') {
     why = ' The reviewer transcript could not be read at all. Re-run /vet-ticket, which rewrites the' +
@@ -3339,6 +3477,44 @@ function ticketHashCli(argv) {
   return process.exit(0);
 }
 
+// GEN-740: the reviewer-verdict CLI -- the SAME two reviewer checks the gate runs, callable by /vet-ticket's
+// Step 7 so the skill asks the hook instead of re-tracing ticketTokenVerdict's turn / hand-back logic in
+// prose (the drift the hash CLI above exists to prevent, now applied to the verdict).
+//   node auto-approve.js --ticket-verify "<sessionDir>\subagents\agent-<id>.jsonl" --hash <64-hex>
+// Prints ONE word on stdout -- ok | reviewer-unverified | no-token | bad-record | transcript-too-large |
+// internal-error -- and exits 0 only on ok (3 otherwise, and on bad usage, with usage on stderr).
+// sessionDir and agentId are derived exactly as the gate derives them: the gate takes the reviewer's
+// transcript as <sessionDir>\subagents\agent-<agentId>.jsonl, so the path must have that shape.
+// Read-only by construction: reads the sidecar and the transcript, prints a word, exits. It prints no
+// transcript content. ADVISORY ONLY: the gate never consults this CLI -- enforceTicketVetting re-derives
+// sessionDir from the harness's transcript_path and re-runs both checks itself at write time -- so a
+// wrong word here can cost a wasted mint or re-review, never an approve the gate would not make.
+function ticketVerifyCli(argv) {
+  const file = argv[argv.indexOf('--ticket-verify') + 1];
+  const hIdx = argv.indexOf('--hash');
+  const hash = hIdx !== -1 ? argv[hIdx + 1] : undefined;
+  const usage = 'ticket-verify: usage: node auto-approve.js --ticket-verify' +
+    ' "<sessionDir>\\subagents\\agent-<id>.jsonl" --hash <64-hex contentHash>\n';
+  if (typeof file !== 'string' || !file || typeof hash !== 'string' || !/^[0-9a-f]{64}$/i.test(hash)) {
+    process.stderr.write(usage);
+    return process.exit(3);
+  }
+  const full = path.resolve(file);
+  const m = path.basename(full).match(/^agent-([A-Za-z0-9_-]{4,64})\.jsonl$/i);
+  const subDir = path.dirname(full);
+  if (!m || path.basename(subDir).toLowerCase() !== 'subagents') {
+    process.stderr.write(usage);
+    return process.exit(3);
+  }
+  const sessionDir = path.dirname(subDir);
+  let v;
+  try {
+    v = ticketReviewerVerified(sessionDir, m[1]) ? ticketTokenVerdict(sessionDir, m[1], hash) : 'reviewer-unverified';
+  } catch (e) { v = 'internal-error'; }
+  process.stdout.write(v + '\n');
+  return process.exit(v === 'ok' ? 0 : 3);
+}
+
 // GEN-508 Step 3: batch scope-classifier over a payload corpus, for the fail-open sweep in the test
 // suite. Read-only by construction -- read a JSONL corpus, run each payload through the SAME ticketScope
 // the wired hook runs (no fs write, no network on any path), print one verdict line, exit. So the sweep
@@ -3433,6 +3609,11 @@ function ticketHashShellCli(argv) {
 // printing a hash of it is the entire blast radius that remains.
 function isSafeTicketHash(command) {
   if (typeof command !== 'string' || /[\r\n]/.test(command)) return false;
+  // GEN-740 Pass B: PRINTABLE ASCII ONLY. PowerShell treats the curly quotes U+201C/U+201D/U+201E as
+  // double quotes, so `"x” (calc.exe) “.json"` passes the quoted-path class below (none of those code
+  // points is excluded) while PowerShell closes the string at `”` and runs `(calc.exe)`. Rejecting every
+  // non-printable-ASCII character closes that and any other Unicode quote / dash look-alike at once.
+  if (/[^\x20-\x7E]/.test(command)) return false;
   // PIECE 1a: `--ticket-hash` on a `.json` payload ONLY. `--ticket-hash-shell` is deliberately NOT
   // allow-listed while the REST arm is unwired -- it would hand back a hash binding a record to a
   // surface this hook does not gate, which is the "a record exists for a write nothing checked" shape
@@ -3443,6 +3624,21 @@ function isSafeTicketHash(command) {
   // self-approved invocation can carry nothing chained, expanded or redirected after it.
   const m = command.trim().match(
     /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-hash\s+"([^"<>|&;`$]+\.json)"\s+--tool\s+"?(?:create|update|duplicate|move)"?$/i
+  );
+  if (!m) return false;
+  return m[1].replace(/\//g, '\\').toLowerCase() === String(__filename).replace(/\//g, '\\').toLowerCase();
+}
+
+// GEN-740: the same exact-invocation approve for the reviewer-verdict CLI, on the same reasoning and the
+// same __filename pin as isSafeTicketHash above. The transcript path must be quoted, metacharacter-free
+// and end in .jsonl; the hash is a bare 64-hex token and the LAST token ($ anchor, no m flag), so nothing
+// can be chained, expanded or redirected after it. Blast radius: read two files, print one word.
+function isSafeTicketVerify(command) {
+  if (typeof command !== 'string' || /[\r\n]/.test(command)) return false;
+  if (/[^\x20-\x7E]/.test(command)) return false;   // printable ASCII only -- see isSafeTicketHash
+
+  const m = command.trim().match(
+    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-verify\s+"([^"<>|&;`$]+\.jsonl)"\s+--hash\s+[0-9a-f]{64}$/i
   );
   if (!m) return false;
   return m[1].replace(/\//g, '\\').toLowerCase() === String(__filename).replace(/\//g, '\\').toLowerCase();
@@ -3639,6 +3835,9 @@ function redirectNudgeContext(input, tool, cmd) {
 // process.exit(), so nothing below runs in those modes. Unreachable in normal PreToolUse operation,
 // where argv carries no flags at all.
 if (process.argv.indexOf('--ticket-hash') !== -1) ticketHashCli(process.argv);
+// GEN-740: the reviewer-verdict CLI, same contract (file argument, always exits, unreachable in normal
+// PreToolUse operation). Allow-listed by isSafeTicketVerify, as --ticket-hash is by isSafeTicketHash.
+if (process.argv.indexOf('--ticket-verify') !== -1) ticketVerifyCli(process.argv);
 // GEN-508 Step 3: read-only batch scope-classifier for the test suite's fail-open corpus sweep. Like
 // --ticket-hash it takes a file argument, always process.exit()s, and is unreachable in normal PreToolUse
 // operation (argv carries no flags). NOT allow-listed -- the suite spawns it directly, never via Bash.
@@ -3713,6 +3912,7 @@ process.stdin.on('end', () => {
     if (isSafeNotionTicketLookup(cmd)) return approve('Auto-approved: notion-ticket-lookup.ps1 (GEN-316)');
     if (isSafeLoggateTouch(cmd)) return approve('Auto-approved: compact-gate marker (GEN-348)');
     if (isSafeTicketHash(cmd)) return approve('Auto-approved: shared ticket contentHash CLI (GEN-508)');
+    if (isSafeTicketVerify(cmd)) return approve('Auto-approved: ticket reviewer-verdict CLI (GEN-740)');
     if (shellCommandIsSafe(cmd)) return approve('Auto-approved: read-only shell command(s)');
     // GEN-337(e): hard-block a mixed-risk chain (exits 2) or fall through to the prompt.
     blockMixedChain(input, tool, cmd);
