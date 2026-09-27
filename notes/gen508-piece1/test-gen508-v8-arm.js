@@ -859,6 +859,358 @@ console.log('\n== M. #4: break-glass is scoped to MECHANICAL blocks only (mirror
         'stdout=' + rMechBG.out.slice(0, 200));
 }
 
+console.log('\n== N. GEN-740: a verdict delivered through SubagentHandback ==');
+{
+  // Fixture shapes copied from the five real 2026-09-27 hand-back reviewer transcripts (harness 2.1.281):
+  // the isMeta mode notice (no origin), the SubagentHandback tool_use with input {message}, its harness
+  // tool_result {"success":true,...}, the token-less "Report delivered." ack, the isMeta
+  // "[handback-send-enforce]" notice, and a SendMessage resume (isMeta + origin {kind:"coordinator"}).
+  const sessionDir = path.join(DIR, 'sess');
+  const agentId = 'a7400000000000000';
+  const fx = tokenFixture(agentId, sessionDir);
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'hb', new_str: 'hb2' }] };
+  const p = path.join(DIR, 'test-payload.json');
+  fs.writeFileSync(p, JSON.stringify(ti), 'utf8');
+  const hash = cli(['--ticket-hash', p, '--tool', 'update']).out.trim();
+  const other = hash.replace(/^./, c => (c === 'a' ? 'b' : 'a'));
+  const tok = (v, h) => 'TICKET-REVIEW-VERDICT: ' + v + ' ' + (h || hash);
+  const callWith = () => run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                               transcript_path: sessionDir + '.jsonl' });
+
+  let n = 0;
+  const J = o => JSON.stringify(o);
+  const brief = () => J({ type: 'user', message: { content: 'Review this. End with ' + tok('PASS') } });
+  const modeNote = () => J({ type: 'user', isMeta: true, message: { content: '<system-reminder>\nYour final report is delivered through SubagentHandback: when your work is complete, call SubagentHandback({message: <your full report>}) and then stop. Only a SubagentHandback call reaches your caller as your result; plain text you write at the end is not delivered.\n</system-reminder>' } });
+  const enforce = () => J({ type: 'user', isMeta: true, message: { content: '[handback-send-enforce] Your report has not been delivered. Call SubagentHandback({message: <your full report>}) now, then stop.' } });
+  const resume = msg => J({ type: 'user', isMeta: true, origin: { kind: 'coordinator' }, message: { content: 'The coordinator sent a message while you were working: ' + msg } });
+  const text = s => J({ type: 'assistant', message: { content: [{ type: 'text', text: s }] } });
+  const thinking = s => J({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: s }] } });
+  const toolUse = (name, input) => { const id = 'toolu_' + (++n); return { id: id, line: J({ type: 'assistant', message: { content: [{ type: 'tool_use', id: id, name: name, input: input }] } }) }; };
+  const result = (id, content, extra) => J({ type: 'user', message: { content: [Object.assign({ type: 'tool_result', tool_use_id: id, content: content }, extra || {})] } });
+  const OK = [{ type: 'text', text: '{"success":true,"message":"Report delivered to your caller."}' }];
+  // A confirmed hand-back: the call + the harness's success result.
+  const hb = msg => { const u = toolUse('SubagentHandback', { message: msg }); return [u.line, result(u.id, OK)]; };
+  const ack = () => text('Report delivered.');
+  const readCall = () => { const u = toolUse('Read', { file_path: 'C:/x.md' }); return [u.line, result(u.id, 'file body ' + tok('PASS'))]; };
+
+  // PARITY: every case below is also run through the --ticket-verify CLI (GEN-740 part 2), which must
+  // print the same verdict the gate reached -- `ok` exactly when the gate approved, `no-token` exactly
+  // when it blocked as no-token -- with the matching exit code. The CLI exists so /vet-ticket's Step 7
+  // can ask the hook instead of re-tracing it; a disagreement here is the drift it was built to remove.
+  const transcriptPath = path.join(sessionDir, 'subagents', 'agent-' + agentId + '.jsonl');
+  const verify = () => cli(['--ticket-verify', transcriptPath, '--hash', hash]);
+  const expectOk = (name, lines) => {
+    fx.writeRaw(lines);
+    const v = verify();
+    fx.record(hash);
+    const r = callWith();
+    check(name, approved(r), 'code=' + r.code + ' err=' + r.err.slice(0, 200));
+    check('  ...and --ticket-verify agrees (ok, exit 0)', v.out.trim() === 'ok' && v.code === 0, 'out=' + v.out.trim() + ' code=' + v.code);
+  };
+  const expectNoToken = (name, lines) => {
+    fx.writeRaw(lines);
+    const v = verify();
+    fx.record(hash);
+    const r = callWith();
+    check(name, ticketBlockReason(r) === 'no-token', 'reason=' + ticketBlockReason(r) + ' code=' + r.code + ' out=' + r.out.slice(0, 80));
+    check('  ...and --ticket-verify agrees (no-token, exit 3)', v.out.trim() === 'no-token' && v.code === 3, 'out=' + v.out.trim() + ' code=' + v.code);
+  };
+
+  // ---- must APPROVE ----
+  expectOk('hand-back PASS then a token-less "Report delivered." ack APPROVES (the GEN-740 bug)',
+    [brief(), modeNote(), thinking('reviewing')].concat(hb('Findings: none.\n' + tok('PASS')), [ack()]));
+  expectOk('Read calls and their tool_result echoes before the hand-back do not split the turn',
+    [brief(), modeNote()].concat(readCall(), readCall(), hb(tok('PASS')), [ack()]));
+  expectOk('plain-text PASS -> enforce notice -> hand-back PASS -> ack APPROVES',
+    [brief(), modeNote(), text('Report. ' + tok('PASS')), enforce()].concat(hb('Report. ' + tok('PASS')), [ack()]));
+  expectOk('hand-back REVISE -> resume -> plain-text PASS (a reviewer that changed its mind) APPROVES',
+    [brief(), modeNote()].concat(hb(tok('REVISE')), [ack(), resume('please restate'), text('Fixed. ' + tok('PASS'))]));
+  expectOk('the real a125312261cd9aa97 shape: hand-back, resume, text, enforce, hand-back, restating text',
+    [brief(), modeNote()].concat(readCall(), hb(tok('PASS')), [ack(), resume('restate as plain text'),
+      text(tok('PASS')), enforce()], hb(tok('PASS')), [text(tok('PASS'))]));
+  expectOk('a string-form tool_result {"success":true} also confirms the hand-back',
+    (() => { const u = toolUse('SubagentHandback', { message: tok('PASS') });
+             return [brief(), u.line, result(u.id, '{"success":true}'), ack()]; })());
+  expectOk('a turn that only reads files after a resume falls back to the prior turn\'s hand-back PASS',
+    [brief()].concat(hb(tok('PASS')), [ack(), resume('one more look')], readCall()));
+
+  // ---- must BLOCK as no-token ----
+  expectNoToken('hand-back REVISE blocks', [brief()].concat(hb(tok('REVISE')), [ack()]));
+  expectNoToken('hand-back PASS for a DIFFERENT hash blocks', [brief()].concat(hb(tok('PASS', other)), [ack()]));
+  expectNoToken('plain-text PASS -> enforce -> hand-back REVISE blocks (the hand-back is what was delivered)',
+    [brief(), modeNote(), text(tok('PASS')), enforce()].concat(hb(tok('REVISE')), [ack()]));
+  expectNoToken('hand-back PASS -> resume -> plain-text REVISE blocks',
+    [brief()].concat(hb(tok('PASS')), [ack(), resume('are you sure?'), text('On reflection. ' + tok('REVISE'))]));
+  expectNoToken('hand-back PASS -> resume -> a reply with no token blocks (the final message rule)',
+    [brief()].concat(hb(tok('PASS')), [ack(), resume('what about X?'), text('X is a real problem; see above.')]));
+  expectNoToken('two hand-backs in one turn, REVISE last, blocks', [brief()].concat(hb(tok('PASS')), hb(tok('REVISE')), [ack()]));
+  expectNoToken('a verdict restated AFTER the hand-back overrides it (later REVISE fails closed)',
+    [brief()].concat(hb(tok('PASS')), [text('Correction: ' + tok('REVISE'))]));
+  {
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    // The exact shape the harness writes for a call to a tool the agent does not have (4 real instances
+    // in this project's transcripts, 2026-09-27 scan): is_error true, string content.
+    expectNoToken('a hand-back rejected as "No such tool available" (is_error) is NOT a delivery',
+      [brief(), u.line, result(u.id, '<tool_use_error>Error: No such tool available: SubagentHandback</tool_use_error>', { is_error: true }), ack()]);
+  }
+  {
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('a hand-back whose tool_result is a plain-text error (no is_error flag) is NOT a delivery',
+      [brief(), u.line, result(u.id, 'Error: No such tool available: SubagentHandback'), ack()]);
+  }
+  {
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('a hand-back with {"success":false} is NOT a delivery',
+      [brief(), u.line, result(u.id, [{ type: 'text', text: '{"success":false}' }]), ack()]);
+  }
+  {
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('a hand-back with NO paired tool_result is NOT a delivery', [brief(), u.line]);
+  }
+  {
+    const u = toolUse('SubagentHandback', { message: tok('REVISE') });
+    expectNoToken('an UNCONFIRMED hand-back discards an earlier plain-text PASS in its turn',
+      [brief(), text(tok('PASS')), u.line]);
+  }
+  {
+    const u = toolUse('SubagentHandbackX', { message: tok('PASS') });
+    expectNoToken('a same-shaped tool_use under a DIFFERENT name is not a hand-back',
+      [brief(), u.line, result(u.id, OK), ack()]);
+  }
+  {
+    const u = toolUse('Grep', { pattern: tok('PASS') });
+    expectNoToken('a PASS in another tool_use (confirmed-looking result) is still not a verdict',
+      [brief(), u.line, result(u.id, OK), ack()]);
+  }
+  {
+    // A confirmed result pairs by id: a success result for SOME OTHER call does not confirm the hand-back.
+    const g = toolUse('Read', { file_path: 'C:/x' });
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('a success result paired to a different tool_use id does not confirm the hand-back',
+      [brief(), g.line, result(g.id, OK), u.line, result('toolu_nomatch', OK), ack()]);
+  }
+  expectNoToken('a later plain-text PASS cannot rescue a hand-back REVISE in the same turn (never delivered)',
+    [brief()].concat(hb(tok('REVISE')), [ack(), text('Actually fine. ' + tok('PASS'))]));
+  expectNoToken('a harness notice (isMeta, no origin) does not start a new turn: hand-back REVISE -> notice -> text PASS blocks',
+    [brief()].concat(hb(tok('REVISE')), [enforce(), text(tok('PASS'))]));
+  expectOk('after-text that restates the SAME PASS is fine',
+    [brief()].concat(hb(tok('PASS')), [text('Delivered: ' + tok('PASS'))]));
+  expectNoToken('an unconfirmed hand-back in a RESUMED turn does not fall back to the earlier turn\'s PASS',
+    (() => { const u = toolUse('SubagentHandback', { message: tok('REVISE') });
+             return [brief()].concat(hb(tok('PASS')), [ack(), resume('recheck'), u.line]); })());
+  {
+    // A hand-back record that ALSO carries text before the call: that text is pre-hand-back and dropped;
+    // text after the call in the same record is appended.
+    const id = 'toolu_' + (++n);
+    const line = J({ type: 'assistant', message: { content: [
+      { type: 'text', text: 'Early: ' + tok('PASS') },
+      { type: 'tool_use', id: id, name: 'SubagentHandback', input: { message: 'Delivered: ' + tok('REVISE') } }] } });
+    expectNoToken('text before the call in the SAME record does not outrank the hand-back REVISE',
+      [brief(), line, result(id, OK), ack()]);
+  }
+  {
+    // ...and the mirror: a stray REVISE in same-record lead-in text does not lock out a hand-back PASS.
+    const id = 'toolu_' + (++n);
+    const line = J({ type: 'assistant', message: { content: [
+      { type: 'text', text: 'Draft: ' + tok('REVISE') },
+      { type: 'tool_use', id: id, name: 'SubagentHandback', input: { message: 'Delivered: ' + tok('PASS') } }] } });
+    expectOk('same-record lead-in REVISE does not override the delivered hand-back PASS',
+      [brief(), line, result(id, OK), ack()]);
+  }
+  {
+    // Text AFTER the call in the same record is after-text: a REVISE there fails closed.
+    const id = 'toolu_' + (++n);
+    const line = J({ type: 'assistant', message: { content: [
+      { type: 'tool_use', id: id, name: 'SubagentHandback', input: { message: tok('PASS') } },
+      { type: 'text', text: 'Second thoughts: ' + tok('REVISE') }] } });
+    expectNoToken('same-record text AFTER the hand-back that restates REVISE fails closed',
+      [brief(), line, result(id, OK)]);
+  }
+  {
+    // Confirmed REVISE, then a rejected second attempt, then a plain-text PASS: the PASS was never
+    // delivered and must not win (the rejected attempt must not reopen the plain-text path).
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('confirmed hand-back REVISE -> rejected attempt -> plain-text PASS blocks',
+      [brief()].concat(hb(tok('REVISE')), [u.line, result(u.id, [{ type: 'text', text: '{"success":false}' }]), text(tok('PASS'))]));
+  }
+  {
+    // A text-mode run (no hand-back tool) whose reviewer tries the tool once: the harness answers "No
+    // such tool available", so plain text is the channel and a plain-text PASS clears -- exactly the
+    // old behaviour (Pass B lockout finding).
+    const u = toolUse('SubagentHandback', { message: tok('REVISE') });
+    expectOk('a "No such tool" hand-back is ignored: the following plain-text PASS APPROVES (text-mode identity)',
+      [brief(), text('Lead-in.'), u.line, result(u.id, '<tool_use_error>Error: No such tool available: SubagentHandback</tool_use_error>', { is_error: true }), text(tok('PASS'))]);
+  }
+  {
+    // ...and a "No such tool" call in the SAME record as text does not split or drop that text.
+    const id = 'toolu_' + (++n);
+    const line = J({ type: 'assistant', message: { content: [
+      { type: 'text', text: 'Verdict: ' + tok('PASS') },
+      { type: 'tool_use', id: id, name: 'SubagentHandback', input: { message: tok('REVISE') } }] } });
+    expectOk('a same-record "No such tool" hand-back leaves the record\'s text PASS as the delivered reply',
+      [brief(), line, result(id, '<tool_use_error>Error: No such tool available: SubagentHandback</tool_use_error>', { is_error: true })]);
+  }
+  {
+    // An is_error result that merely CONTAINS the phrase (e.g. a validation error echoing the reviewer's
+    // input) is not the no-such-tool rejection: the attempt stands and nothing was delivered.
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('an error that only CONTAINS "No such tool available" is not treated as the tool being absent',
+      [brief(), text(tok('PASS')), u.line, result(u.id, 'InputValidationError: message "No such tool available: SubagentHandback" too long', { is_error: true }), text(tok('PASS'))]);
+  }
+  {
+    // Any OTHER rejection (the tool exists but refused) still means nothing was delivered this turn.
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('a hand-back refused with success:false, then plain-text PASS in the same turn, fails closed',
+      [brief(), u.line, result(u.id, [{ type: 'text', text: '{"success":false}' }]), text(tok('PASS'))]);
+  }
+  {
+    // ...but a fresh RESUMED turn after a rejected attempt is judged on its own: plain-text PASS clears.
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectOk('after a rejected attempt, a resumed turn with a plain-text PASS APPROVES',
+      [brief(), u.line, result(u.id, '<tool_use_error>Error: No such tool available: SubagentHandback</tool_use_error>', { is_error: true }), resume('please reply in text'), text(tok('PASS'))]);
+  }
+  {
+    // A confirmed PASS hand-back followed by a second, REJECTED attempt in the same turn fails closed.
+    const u = toolUse('SubagentHandback', { message: tok('PASS') });
+    expectNoToken('a confirmed hand-back PASS followed by a rejected second attempt fails closed',
+      [brief()].concat(hb(tok('PASS')), [u.line, result(u.id, [{ type: 'text', text: '{"success":false}' }])]));
+  }
+
+  // CRASH GUARD: an uncaught throw exits 1 = no decision = a silent approve under bypassPermissions.
+  // Malformed records of every JSON type, in both user and assistant positions, must be tolerated.
+  const junk = ['null', '5', '"str"', '[]', '[1,2]', 'true', '{}', J({ type: 'user' }), J({ type: 'user', message: null }),
+    J({ type: 'user', message: 'x' }), J({ type: 'user', message: { content: [null, 5, 'x', { type: 'tool_result' }] } }),
+    J({ type: 'user', isMeta: true, origin: 'coordinator', message: { content: 'x' } }),
+    J({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 7, content: { a: 1 } }] } }),
+    J({ type: 'assistant' }), J({ type: 'assistant', message: 5 }), J({ type: 'assistant', message: { content: [null, 3, 'x'] } }),
+    J({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'SubagentHandback' }] } }),
+    J({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'SubagentHandback', id: 9, input: 'str' }] } }),
+    J({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'SubagentHandback', id: 'toolu_x', input: { message: 42 } }] } }),
+    '{"truncated": '];
+  {
+    fx.writeRaw([brief()].concat(junk));
+    fx.record(hash);
+    const r = callWith();
+    check('malformed records of every type never crash the gate (blocks as no-token, exit 2)',
+      ticketBlockReason(r) === 'no-token', 'code=' + r.code + ' err=' + r.err.slice(0, 200));
+  }
+  expectOk('a valid hand-back PASS survives surrounding malformed records',
+    [brief()].concat(junk.slice(0, 13), hb(tok('PASS')), [ack()]));
+
+  // ---- parity when the CALLER is itself a sub-agent (the unattended /wrap lane, GEN-518's case) ----
+  {
+    fx.writeRaw([brief()].concat(hb(tok('PASS')), [ack()]));
+    const v = verify();
+    fx.record(hash);
+    const r = run({ tool_name: MCP + 'notion-update-page', tool_input: ti, cwd: DIR,
+                    transcript_path: path.join(sessionDir, 'subagents', 'agent-a7401111111111111.jsonl') });
+    check('sub-agent caller: the gate approves a hand-back PASS', approved(r), 'code=' + r.code + ' err=' + r.err.slice(0, 160));
+    check('  ...and --ticket-verify agrees (ok)', v.out.trim() === 'ok' && v.code === 0, 'out=' + v.out.trim() + ' code=' + v.code);
+  }
+
+  // ---- the --ticket-verify CLI on its own: other verdict words, and bad usage ----
+  {
+    fx.writeRaw([brief()].concat(hb(tok('PASS')), [ack()]));
+    const metaFile = path.join(sessionDir, 'subagents', 'agent-' + agentId + '.meta.json');
+    const meta = fs.readFileSync(metaFile, 'utf8');
+    fs.writeFileSync(metaFile, JSON.stringify({ agentType: 'general-purpose' }), 'utf8');
+    let v = verify();
+    check('--ticket-verify: a non-check-reviewer sidecar prints reviewer-unverified (exit 3)',
+      v.out.trim() === 'reviewer-unverified' && v.code === 3, 'out=' + v.out.trim() + ' code=' + v.code);
+    fs.rmSync(metaFile, { force: true });
+    v = verify();
+    check('--ticket-verify: a missing sidecar prints reviewer-unverified (exit 3)',
+      v.out.trim() === 'reviewer-unverified' && v.code === 3, 'out=' + v.out.trim() + ' code=' + v.code);
+    fs.writeFileSync(metaFile, meta, 'utf8');
+    v = cli(['--ticket-verify', path.join(sessionDir, 'subagents', 'agent-a7409999999999999.jsonl'), '--hash', hash]);
+    check('--ticket-verify: a sidecar-less, transcript-less id prints reviewer-unverified (exit 3)',
+      v.out.trim() === 'reviewer-unverified' && v.code === 3, 'out=' + v.out.trim() + ' code=' + v.code);
+    const usageCases = [
+      ['no args', ['--ticket-verify']],
+      ['no --hash', ['--ticket-verify', transcriptPath]],
+      ['63-hex hash', ['--ticket-verify', transcriptPath, '--hash', hash.slice(1)]],
+      ['non-hex hash', ['--ticket-verify', transcriptPath, '--hash', 'z'.repeat(64)]],
+      ['wrong filename', ['--ticket-verify', path.join(sessionDir, 'subagents', 'notes.jsonl'), '--hash', hash]],
+      ['parent not subagents', ['--ticket-verify', path.join(sessionDir, 'agent-' + agentId + '.jsonl'), '--hash', hash]]
+    ];
+    for (const [label, args] of usageCases) {
+      const u = cli(args);
+      check('--ticket-verify usage error (' + label + '): exit 3, nothing on stdout, usage on stderr',
+        u.code === 3 && u.out === '' && u.err.indexOf('usage') !== -1, 'code=' + u.code + ' out=' + u.out.trim() + ' err=' + u.err.slice(0, 80));
+    }
+  }
+
+  fs.rmSync(path.join(PASS_DIR, 'rec.json'), { force: true });
+}
+
+console.log('\n== O. GEN-740: the --ticket-verify invocation is auto-approved ONLY in its exact pinned form ==');
+{
+  // The allow-list pins the script to a file NAMED auto-approve.js (the regex) AND to the running hook's
+  // own __filename, so the harness's auto-approve.working.js can never match. Run a byte-identical copy
+  // under the real name instead (under sess/, which H.cleanup removes).
+  const oDir = path.join(DIR, 'sess', 'o-hook');
+  fs.mkdirSync(oDir, { recursive: true });
+  const H_ = path.join(oDir, 'auto-approve.js');
+  fs.writeFileSync(H_, fs.readFileSync(H.HOOK));
+  const tp = 'C:\\Users\\x\\.claude\\projects\\p\\s\\subagents\\agent-a1234567890abcdef.jsonl';
+  const hx = 'ab'.repeat(32);
+  const shell = (tool, command) => {
+    const r = require('child_process').spawnSync(process.execPath, [H_],
+      { input: JSON.stringify({ tool_name: tool, tool_input: { command: command }, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') }), encoding: 'utf8' });
+    return { code: r.status, out: r.stdout || '', err: r.stderr || '' };
+  };
+  // Control: the pre-existing --ticket-hash allow-list must approve through the same copy, or this section
+  // is testing nothing.
+  {
+    const r = shell('Bash', 'node "' + H_ + '" --ticket-hash "C:\\tmp\\p.json" --tool update');
+    check('control: the existing --ticket-hash pinned form is approved through the renamed copy',
+      r.code === 0 && r.out.indexOf('contentHash CLI') !== -1, 'code=' + r.code + ' out=' + r.out.slice(0, 120));
+  }
+  const isVerifyApprove = r => r.code === 0 && r.out.indexOf('reviewer-verdict CLI') !== -1;
+  const good = [
+    ['plain node', 'node "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx],
+    ['& "node.exe"', '& "node.exe" "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx],
+    ['forward slashes in the script path', 'node "' + H_.replace(/\\/g, '/') + '" --ticket-verify "' + tp + '" --hash ' + hx]
+  ];
+  for (const [label, c] of good) {
+    for (const tool of ['Bash', 'PowerShell']) {
+      const r = shell(tool, c);
+      check('approved (' + tool + ', ' + label + ')', isVerifyApprove(r), 'code=' + r.code + ' out=' + r.out.slice(0, 120) + ' err=' + r.err.slice(0, 120));
+    }
+  }
+  const bad = [
+    ['a different auto-approve.js', 'node "C:\\evil\\auto-approve.js" --ticket-verify "' + tp + '" --hash ' + hx],
+    ['chained after the hash', 'node "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx + '; whoami'],
+    ['$ in the path', 'node "' + H_ + '" --ticket-verify "C:\\$env:X\\agent-a1234567890abcdef.jsonl" --hash ' + hx],
+    ['backtick in the path', 'node "' + H_ + '" --ticket-verify "C:\\a`b\\agent-a1234567890abcdef.jsonl" --hash ' + hx],
+    ['not a .jsonl', 'node "' + H_ + '" --ticket-verify "C:\\x\\subagents\\agent-a1234567890abcdef.json" --hash ' + hx],
+    ['63-hex hash', 'node "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx.slice(1)],
+    ['65-hex hash', 'node "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx + 'a'],
+    ['trailing extra arg', 'node "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx + ' --x'],
+    ['redirect after', 'node "' + H_ + '" --ticket-verify "' + tp + '" --hash ' + hx + ' > C:\\out.txt'],
+    ['newline', 'node "' + H_ + '" --ticket-verify "' + tp + '"\n --hash ' + hx],
+    ['--ticket-verifyX', 'node "' + H_ + '" --ticket-verifyX "' + tp + '" --hash ' + hx],
+    ['unquoted path', 'node "' + H_ + '" --ticket-verify ' + tp + ' --hash ' + hx],
+    // Pass B: PowerShell treats these as double quotes, so each can close the quoted path early.
+    ['U+201D curly quote in the path', 'node "' + H_ + '" --ticket-verify "x\u201D (calc.exe) \u201C.jsonl" --hash ' + hx],
+    ['U+201C curly quote in the path', 'node "' + H_ + '" --ticket-verify "x\u201C (calc.exe) \u201C.jsonl" --hash ' + hx],
+    ['U+201E curly quote in the path', 'node "' + H_ + '" --ticket-verify "x\u201E (calc.exe) \u201E.jsonl" --hash ' + hx],
+    ['any non-ASCII character', 'node "' + H_ + '" --ticket-verify "C:\\x\\\u05D0\\subagents\\agent-a1234567890abcdef.jsonl" --hash ' + hx]
+  ];
+  for (const [label, c] of bad) {
+    for (const tool of ['Bash', 'PowerShell']) {
+      const r = shell(tool, c);
+      check('NOT approved as the verify CLI (' + tool + ', ' + label + ')', !isVerifyApprove(r), 'code=' + r.code + ' out=' + r.out.slice(0, 120));
+    }
+  }
+  // The same curly-quote hole existed in the SHIPPED --ticket-hash allow-list; it must now refuse too.
+  const isHashApprove = r => r.code === 0 && r.out.indexOf('contentHash CLI') !== -1;
+  for (const [label, q] of [['U+201D', '”'], ['U+201C', '“'], ['U+201E', '„']]) {
+    const r = shell('PowerShell', 'node "' + H_ + '" --ticket-hash "x' + q + ' (calc.exe) ' + q + '.json" --tool update');
+    check('--ticket-hash allow-list refuses a ' + label + ' curly quote in the path', !isHashApprove(r), 'code=' + r.code + ' out=' + r.out.slice(0, 120));
+  }
+}
+
 H.cleanup();
 console.log('\n' + (state.fail === 0 ? 'ALL PASS' : 'FAILURES') + ': ' + state.pass + ' passed, ' + state.fail +
             ' failed, ' + state.pending.length + ' pending (red-by-design, awaits Step 4/5)');
