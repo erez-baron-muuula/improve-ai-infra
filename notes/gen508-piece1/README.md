@@ -1,5 +1,14 @@
 # GEN-508 piece 1a — build artifacts (REST arm parked 2026-08-05)
 
+> **2026-09-29 (GEN-639):** the script text below was changed so the Notion token goes in a temp curl
+> config file (`-K`), never on curl's command line — a process listing can read a command line, and a
+> Node spawn error printed one into a session log (GEN-638). The pin in the staged
+> `auto-approve.working.js` is **intentionally invalidated** (a non-hex sentinel), so no script text —
+> old or new — can pass it until piece 2 reviews this script and repins through `/vet-code`. The live
+> `~/.claude/hooks/auto-approve.js` still carries the OLD pin, which is inert while the REST arm is
+> unwired (its "BUILT, NOT WIRED" banner). The "47 lines, 3,077 bytes" and `38897e5b…` figures elsewhere
+> in this document describe the OLD text.
+
 Working copies for the ticket-quality gate. **Nothing here is installed** — the live
 `~/.claude/hooks/auto-approve.js` is untouched, and installing it goes through `/vet-code`.
 
@@ -35,7 +44,7 @@ work is skill/doc polish + live-verify + the install.** Read this section first 
 
 ### ⚠️ CRITICAL cold-resume gotchas
 
-1. **DO NOT edit `auto-approve.working.js` again** — even a comment — or its hash stops matching the
+1. *(Superseded: the piece-1a install consumed its vetting pass on 2026-08-16; this lock no longer applies.)* **DO NOT edit `auto-approve.working.js` again** — even a comment — or its hash stops matching the
    vetting record and Step 6 mint fails (needs a full re-vet). All remaining fixes are **skill/doc only.**
 2. **Mint evidence lives in session `51ae6376…`'s `subagents/` folder, not a new session's.** `/vet-code`
    Step 6's evidence check normally uses the *current* `$CLAUDE_SESSION_ID`. To mint from a NEW session,
@@ -347,7 +356,7 @@ the artifacts it refers to.
 |------|-----------|
 | `design-scoping-v3.md` | **Retired as a normative source** (2026-08-03, v6): it was merged into `design-converged.md`, because the two-document split was itself the defect three `/check` lenses diagnosed. Kept only for its §1 corpus-shape table and §3 measurements, which are cited from the design. **Do not build from it.** |
 | `auto-approve.working.js` | Full working copy of the hook with the `enforceTicketVetting` arm, **rebuilt against design v8 on 2026-08-05, then narrowed to the MCP surface the same day** (§4.5 present but unwired). Purely additive against the live hook: 7 hunks, 1,603 lines added, **0 removed** — the narrowing removed only lines this change had itself added, so it deletes nothing live. **The 7th hunk (live `auto-approve.js:637`) is the only one that touches pre-existing code**, and it is an insertion, not a rewrite: a one-line guard in the shared `findPassInDir` before the original line, which is untouched. The second code review found that reader fail-OPEN on a pass file containing the literal `null` — see "Second code review" below. Passes `node --check`. **Re-based on the live hook of 2026-08-05 09:14** — it had changed mid-session (GEN-641's `blockUnreadableGatedCommand`), so an earlier copy would have silently dropped that guard; re-check for drift before any install. |
-| `notion-rest-write.ps1` | The script that will be the only permitted route for a raw Notion REST write (design §4.5). **Deferred to piece 2 with the arm — it is NOT installed and its path is no longer in `PROTECTED_FILES`**, so piece 2 can create it. Its sha256 is still pinned in the hook. **LF line endings, no BOM** — a CRLF normalisation breaks the pin and blocks every gated REST write (fail-closed, reason `rest-script-mismatch`). Pin: `38897e5b4aa874ed…`, computed from the code block in `design-converged.md` §4.5, not from this file. Install it BEFORE re-adding its path to `PROTECTED_FILES`, not after. |
+| `notion-rest-write.ps1` | The script that will be the only permitted route for a raw Notion REST write (design §4.5). **Deferred to piece 2 with the arm — it is NOT installed and its path is no longer in `PROTECTED_FILES`**, so piece 2 can create it. Its sha256 was pinned in the hook; **the staged copy's pin is intentionally invalidated since 2026-09-29 (GEN-639) — see the note at the top.** **LF line endings, no BOM** — a CRLF normalisation breaks the pin and blocks every gated REST write (fail-closed, reason `rest-script-mismatch`). Pin: `38897e5b4aa874ed…`, computed from the code block in `design-converged.md` §4.5, not from this file. Install it BEFORE re-adding its path to `PROTECTED_FILES`, not after. |
 | `gen508-hook.diff` | The same change as a unified diff against the live hook, for review. Regenerated 2026-08-05. |
 | `test-gen508-v8-arm.js` | **The suite that gates the install, and it must be GREEN: 63 assertions, 0 failing.** Runs the hook as a real PreToolUse process (JSON on stdin, exit code as the verdict). Covers the MCP surface, the `--ticket-hash` CLI, the full record path, latency, and three assertions that the REST arm really is unwired. **Not** the deliverable-8 rebuild: it has no fail-open corpus sweep. |
 | `test-gen508-rest-parked.js` | The REST assertions, **parked for piece 2**: 25 assertions, of which **19 fail by design** while §4.5 is unwired. It exits 0 at exactly that baseline and non-zero if the number moves either way — fewer means someone rewired the arm and this file must move back into the suite above; more means something else broke. Failures here are NOT a regression. |

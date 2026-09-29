@@ -2551,7 +2551,12 @@ const REST_SCRIPT_KEY = normPath(REST_SCRIPT_PATH);
 // script text in the design plus the install assertion; (b) the check-to-execution window -- this
 // hook reads and hashes the script at decision time and the script runs afterwards, exactly as open
 // as the body-file window. Both are recorded as residuals, not covered by a broader sentence.
-const REST_SCRIPT_SHA256 = '38897e5b4aa874edb6c07e869f9f0c0eccabaee3bc0b65ec794a72d8a741f84c';
+// [2026-09-29, GEN-639] PIN INTENTIONALLY INVALIDATED -- do not "fix" this as drift. The design-converged.md
+// §4.5 script text was changed so the token goes in a temp curl config file, never on curl's command line
+// (the GEN-638 leak). This sentinel is not a sha256 hex, so restScriptPinOk() can never pass for ANY script
+// text, old or new, until piece 2 reviews the script and repins it through /vet-code. The "47 lines,
+// 3,077 bytes" above describe the OLD text.
+const REST_SCRIPT_SHA256 = 'INVALIDATED-GEN-639-repin-after-review';
 // The URL grammar. Deliberately narrow, and every exclusion buys something: no query string and no
 // `$`/backtick/brace/bracket, which also means curl's URL globbing can never expand one URL slot
 // into several requests (no need for `-g`), and a reviewer can always see WHICH page is written.
