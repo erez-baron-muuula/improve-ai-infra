@@ -320,8 +320,25 @@ function tokenize(seg) {
 }
 
 function segmentIsSafe(seg) {
-  const t = tokenize(seg);
+  const s = String(seg);
+  // GEN-743: three shapes must never ride the read-only fast-path, in EITHER shell.
+  //  - A parenthesis makes PowerShell (and a bash subshell) EVALUATE an inner command as an argument
+  //    -- `echo (Get-Date)` runs Get-Date -- so a segment containing one is not a bare read-only command.
+  //  - A token beginning with two slashes/backslashes is a UNC path; even READING it opens an outbound
+  //    SMB connection that can leak the Windows login hash.
+  //  - A "smart" quote is a real quote delimiter to PowerShell, so it must not sit unexamined in a
+  //    segment the fast-path approves (defence-in-depth alongside scanChain's smart-quote handling).
+  // All three fail toward a prompt (return false), never toward a silent approve.
+  if (s.indexOf('(') !== -1) return false;
+  if (/[\u2018\u2019\u201A\u201B\u201C\u201D\u201E]/.test(s)) return false;
+  const t = tokenize(s);
+  // Empty token list = no recognized command word -> NOT provably safe here (the shell-agnostic contract).
+  // The "a pure quoted-string segment is a harmless no-op" carve-out is applied in blockMixedChain, and
+  // only for PowerShell with no backtick present (in bash a bare quoted word executes; a PS backtick can
+  // blank a REAL command to '' too). shellCommandIsSafe filters '' out before calling this, so this line
+  // only guards a whitespace-only segment reaching the mixed-chain check.
   if (t.length === 0) return false;
+  if (t.some(tok => /^[\\/]{2}/.test(tok))) return false; // UNC: \\host\share or //host/share
   const cmd = t[0].toLowerCase();
 
   if (cmd === 'git') {
@@ -346,6 +363,11 @@ function segmentIsSafe(seg) {
 // string interpolation and command substitution.
 function isSafeSyncFromClaude(command) {
   if (typeof command !== 'string') return false;
+  // GEN-743: PRINTABLE ASCII ONLY (same guard GEN-740 added to the ticket CLIs). PowerShell treats the
+  // curly quotes U+201C/D/E as real double quotes, so `-CommitMessage "..."` with a curly quote can close
+  // the value early and chain code after it while the ASCII-only exclusion class below never sees it.
+  // A commit message with a non-ASCII character simply falls through to a normal prompt (rare, not a block).
+  if (/[^\x20-\x7E]/.test(command)) return false;
   const re = /^&\s+(['"])G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync\.ps1\1\s+-Direction\s+From-Claude(\s+-CommitMessage\s+(['"])[^'"`$]*\3)?\s*$/i;
   return re.test(command.trim());
 }
@@ -426,8 +448,28 @@ const PS_CTRL_KEYWORDS = new Set(['foreach', 'for', 'while', 'do', 'until', 'if'
 function scanChain(command, tool) {
   const isPS = (tool === 'PowerShell');
   const s = String(command);
+  // GEN-743: PowerShell treats the Unicode "smart" quotes as REAL quote delimiters (language spec
+  // ch.15): U+201C/D/E as double quotes, U+2018/9/A/B as single quotes. If the scanner recognizes only
+  // ASCII quotes, a string closed with a smart quote reads as still-open here, so a `;`/`&&`/`||` that
+  // PowerShell sees at top level is swallowed as in-string text -> a real chain scans NO-CHAIN and the
+  // mixed-chain block and the pass-gates miss it. So in PS mode a quote delimiter is any of the set.
+  // Bash treats these as ordinary letters, so there the sets stay ASCII-only.
+  const isDQ = isPS
+    ? (c => c === '"' || c === '“' || c === '”' || c === '„')
+    : (c => c === '"');
+  const isSQ = isPS
+    ? (c => c === "'" || c === '‘' || c === '’' || c === '‚' || c === '‛')
+    : (c => c === "'");
   let seg = '', bare = '';
   const segs = [];
+  // GEN-645: a segment made ENTIRELY of a quoted span blanks to '' (quoted chars are not appended to
+  // seg) and used to drop out of the `parts.length > 1` verdict test, so `cmd ; "x"` scanned NO-CHAIN
+  // even though it is a real two-command chain. Track, per segment, whether it held any NON-WHITESPACE
+  // ORIGINAL character (quote delimiters and quoted content included). A separator with a contentful
+  // span on both sides is a real chain; a whitespace-only tail (`ls;` / `ls; `) stays empty -> NO-CHAIN.
+  const segHas = [];
+  let hasNonWs = false;
+  const mark = c => { if (c !== ' ' && c !== '\t') hasNonWs = true; };
   let i = 0;
   const n = s.length;
   let state = 'none'; // none | sq (single-quoted) | dq (double-quoted)
@@ -435,41 +477,49 @@ function scanChain(command, tool) {
     const c = s[i];
     const d = (i + 1 < n) ? s[i + 1] : '';
     if (state === 'sq') {
-      if (c === "'") {
-        if (isPS && d === "'") { i += 2; continue; } // PS: doubled '' = literal quote
-        state = 'none'; i++; continue;
+      if (isSQ(c)) {
+        if (isPS && d === c) { mark(c); i += 2; continue; } // PS: doubled '' = literal quote (same char only)
+        mark(c); state = 'none'; i++; continue;
       }
-      i++; continue; // POSIX: NOTHING is special inside '...' (no escapes)
+      mark(c); i++; continue; // POSIX: NOTHING is special inside '...' (no escapes)
     }
     if (state === 'dq') {
-      if (!isPS && c === '\\') { i += 2; continue; }              // bash: \ escapes next
-      if (isPS && c === '`') { i += 2; continue; }                // PS: ` escapes next
-      if (isPS && c === '"' && d === '"') { i += 2; continue; }   // PS: doubled "" = literal quote
+      if (!isPS && c === '\\') { mark(c); i += 2; continue; }              // bash: \ escapes next
+      if (isPS && c === '`') { mark(c); i += 2; continue; }                // PS: ` escapes next
+      if (isPS && isDQ(c) && d === c) { mark(c); i += 2; continue; }       // PS: doubled "" = literal quote (same char only)
       // Substitution is ACTIVE inside double quotes in both shells.
       if (c === '$' && (d === '(' || d === '{')) return { verdict: 'AMBIGUOUS' };
       if (!isPS && c === '`') return { verdict: 'AMBIGUOUS' };    // bash backtick substitution
-      if (c === '"') { state = 'none'; i++; continue; }
-      i++; continue;
+      if (isDQ(c)) { mark(c); state = 'none'; i++; continue; }
+      mark(c); i++; continue;
     }
     // state === 'none' (outside any quote)
     if (!isPS && c === '\\') { seg += ' '; bare += ' '; i += 2; continue; } // bash: \; is a literal ;
     if (c === '`') {
-      if (isPS) { seg += ' '; bare += ' '; i += 2; continue; }    // PS: `; is a literal ;
+      if (isPS) { seg += ' '; bare += ' '; mark(c); i += 2; continue; }    // PS: `; is a literal ;
       return { verdict: 'AMBIGUOUS' };                            // bash: backtick substitution
     }
-    if (c === "'") { state = 'sq'; seg += ' '; bare += ' '; i++; continue; }
-    if (c === '"') { state = 'dq'; seg += ' '; bare += ' '; i++; continue; }
+    if (isSQ(c)) { state = 'sq'; seg += ' '; bare += ' '; mark(c); i++; continue; }
+    if (isDQ(c)) { state = 'dq'; seg += ' '; bare += ' '; mark(c); i++; continue; }
     if (c === '$' && (d === '(' || d === '{')) return { verdict: 'AMBIGUOUS' };
     if (!isPS && c === '<' && d === '<') return { verdict: 'AMBIGUOUS' };   // heredoc
-    if (c === ';') { segs.push(seg); seg = ''; bare += ' ; '; i++; continue; }
-    if (c === '&' && d === '&') { segs.push(seg); seg = ''; bare += ' && '; i += 2; continue; }
-    if (c === '|' && d === '|') { segs.push(seg); seg = ''; bare += ' || '; i += 2; continue; }
-    seg += c; bare += c; i++;
+    if (c === ';') { segs.push(seg); segHas.push(hasNonWs); seg = ''; hasNonWs = false; bare += ' ; '; i++; continue; }
+    if (c === '&' && d === '&') { segs.push(seg); segHas.push(hasNonWs); seg = ''; hasNonWs = false; bare += ' && '; i += 2; continue; }
+    if (c === '|' && d === '|') { segs.push(seg); segHas.push(hasNonWs); seg = ''; hasNonWs = false; bare += ' || '; i += 2; continue; }
+    seg += c; bare += c; mark(c); i++;
   }
   if (state !== 'none') return { verdict: 'AMBIGUOUS' }; // unbalanced quote
-  segs.push(seg);
-  const parts = segs.map(x => x.trim()).filter(Boolean);
-  if (segs.length > 1 && parts.length > 1) return { verdict: 'CHAINED', segments: parts, bare };
+  segs.push(seg); segHas.push(hasNonWs);
+  // A real chain = more than one segment AND at least two of them held non-whitespace content. (GEN-645:
+  // was `parts.length > 1` over the blanked seg text, which silently dropped a fully-quoted segment.)
+  const contentCount = segHas.filter(Boolean).length;
+  if (segHas.length > 1 && contentCount > 1) {
+    // Segments for blockMixedChain's per-segment check. Keep every contentful span; a fully-quoted one
+    // trims to '' -- which segmentIsSafe treats as NOT safe (an empty token list), the correct reading
+    // of a bare quoted string as not a read-only command -- so it is preserved as '' rather than dropped.
+    const usable = segs.map(x => x.trim()).filter((t, idx) => segHas[idx]);
+    return { verdict: 'CHAINED', segments: usable, bare };
+  }
   return { verdict: 'NO-CHAIN' };
 }
 
@@ -515,9 +565,23 @@ function blockMixedChain(input, tool, cmd) {
     if (typeof cmd !== 'string' || /[\r\n]/.test(cmd)) return; // multi-line: out of scope -> prompt
     const r = scanChain(cmd, tool);
     if (r.verdict !== 'CHAINED') return;                        // NO-CHAIN / AMBIGUOUS -> prompt
-    if (r.segments.every(segmentIsSafe)) return;                // all read-only: not mixed-risk
+    // Per-segment safety. An all-read-only CHAINED line is EXPLICITLY allowed by the no-chaining rule
+    // ("chaining is only acceptable when every part is read-only and safe"), so an all-read-only chain --
+    // even one carrying a bare label string, e.g. `cd x; git status; "done"; git log` -- must NOT be
+    // refused. A scanChain-blanked '' segment is such a harmless no-op ONLY in PowerShell (in bash a bare
+    // quoted word executes as a command) AND only when '' is UNAMBIGUOUS. scanChain blanks a quoted
+    // string literal to '' but ALSO blanks a backtick-escaped real command name (`` `i`e`x `` = iex), so
+    // if the command contains a backtick a blanked segment could hide executable code -- treating it as a
+    // no-op is the fail-open GEN-743 Pass B v2 found. Backtick is the ONLY PowerShell escape that blanks
+    // (`$(`/`${` return AMBIGUOUS earlier; bash `\` is handled by the carve-out being PowerShell-only), so
+    // the carve-out is sound exactly when the shell is PowerShell and no backtick is present. The
+    // command-wide backtick test is deliberately conservative (a backtick anywhere disables the no-op
+    // carve-out for the whole line) -- fail-closed, and a backtick in a legit read-only chain is rare.
+    const psNoOpOk = (tool === 'PowerShell' && cmd.indexOf('`') === -1);
+    const segSafe = psNoOpOk ? (sg => sg.trim() === '' || segmentIsSafe(sg)) : segmentIsSafe;
+    if (r.segments.every(segSafe)) return;                      // all read-only: not mixed-risk
     if (hasControlConstruct(r.bare, tool)) return;              // one logical construct -> prompt
-    firstUnsafe = r.segments.find(sg => !segmentIsSafe(sg)) || '';
+    firstUnsafe = r.segments.find(sg => !segSafe(sg)) || '';
   } catch (e) {
     return; // any internal error -> normal prompt path (fail open to a PROMPT)
   }
@@ -3623,9 +3687,14 @@ function isSafeTicketHash(command) {
   // carries no shell metacharacter, and the `$` anchor with no `m` flag keeps it the LAST token, so a
   // self-approved invocation can carry nothing chained, expanded or redirected after it.
   const m = command.trim().match(
-    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-hash\s+"([^"<>|&;`$]+\.json)"\s+--tool\s+"?(?:create|update|duplicate|move)"?$/i
+    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$%]+auto-approve\.js)"\s+--ticket-hash\s+"([^"<>|&;`$%]+\.json)"\s+--tool\s+"?(?:create|update|duplicate|move)"?$/i
   );
   if (!m) return false;
+  // GEN-743: `%` is excluded in the classes above (a cmd.exe %VAR% expansion could ride a .cmd node
+  // shim); and a payload path beginning with two slashes/backslashes is a UNC path -- reading it opens
+  // an outbound SMB connection that can leak the Windows login hash. Refuse it. (Paths stay __filename-
+  // pinned below.) Trimmed so a leading space in the class cannot slip a UNC path past the check.
+  if (/^[\\/]{2}/.test(m[2].trim())) return false;
   return m[1].replace(/\//g, '\\').toLowerCase() === String(__filename).replace(/\//g, '\\').toLowerCase();
 }
 
@@ -3638,9 +3707,10 @@ function isSafeTicketVerify(command) {
   if (/[^\x20-\x7E]/.test(command)) return false;   // printable ASCII only -- see isSafeTicketHash
 
   const m = command.trim().match(
-    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$]+auto-approve\.js)"\s+--ticket-verify\s+"([^"<>|&;`$]+\.jsonl)"\s+--hash\s+[0-9a-f]{64}$/i
+    /^(?:&\s+)?"?node(?:\.exe)?"?\s+"([^"<>|&;`$%]+auto-approve\.js)"\s+--ticket-verify\s+"([^"<>|&;`$%]+\.jsonl)"\s+--hash\s+[0-9a-f]{64}$/i
   );
   if (!m) return false;
+  if (/^[\\/]{2}/.test(m[2].trim())) return false; // GEN-743: UNC transcript path (SMB hash-leak; trimmed); `%` excluded above
   return m[1].replace(/\//g, '\\').toLowerCase() === String(__filename).replace(/\//g, '\\').toLowerCase();
 }
 
