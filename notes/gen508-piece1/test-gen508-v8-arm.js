@@ -1211,6 +1211,102 @@ console.log('\n== O. GEN-740: the --ticket-verify invocation is auto-approved ON
   }
 }
 
+console.log('\n== P. GEN-743/645: smart-quote + quoted-segment chain scanning, bracket/UNC read-only rejection ==');
+{
+  // Benign data only: the "second command" past a separator is a harmless token (foo/ls); smart-quote
+  // characters are built from code points, never pasted, and never a program-launch payload.
+  const RDQ = String.fromCharCode(0x201D), LDQ = String.fromCharCode(0x201C);
+  const shellP = (tool, command) => run({ tool_name: tool, tool_input: { command }, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') });
+  const isBlock = r => r.code === 2;
+  const isReadOnly = r => r.code === 0 && /Auto-approved: read-only/.test(r.out);
+  const isDefer = r => r.code === 0 && !/Auto-approved/.test(r.out);
+
+  // scanChain smart-quote smuggle (GEN-743): a smart quote closes an ASCII-opened string, exposing a real
+  // separator the old scanner swallowed as in-string. PS treats them as quotes; bash does not.
+  check('GEN-743 PS: a smart-quote-hidden chain is a hard refusal (was a silent defer)',
+    isBlock(shellP('PowerShell', '"a' + RDQ + ' ; foo ; ' + LDQ + 'b"')), 'expected BLOCK');
+  check('GEN-743 bash: smart quotes are ordinary letters, so the same line is NOT a PS-style chain',
+    isDefer(shellP('Bash', '"a' + RDQ + ' ; foo ; ' + LDQ + 'b"')), 'expected defer, not block');
+
+  // GEN-645: a fully-quoted segment must not make a real chain read as a single command.
+  check('GEN-645 PS: cmd ; "quoted" is a hard refusal (was NO-CHAIN)',
+    isBlock(shellP('PowerShell', 'foo ; "bar"')), 'expected BLOCK');
+  check('GEN-645 PS: "quoted" ; cmd is a hard refusal',
+    isBlock(shellP('PowerShell', '"bar" ; foo')), 'expected BLOCK');
+  check('GEN-645 bash: cmd ; "quoted" is a hard refusal',
+    isBlock(shellP('Bash', 'foo ; "bar"')), 'expected BLOCK');
+
+  // GEN-743 Pass B v2: a scanChain-blanked '' segment is a harmless no-op ONLY in PowerShell AND only
+  // when '' is unambiguous (no backtick, PS's one escape that can blank a REAL command). So:
+  //  - PS all-read-only chain incl. a bare label (no backtick) -> ALLOWED (no-chaining rule permits it)
+  //  - bash `<read-only> ; "word"` -> REFUSED (a bare quoted word executes in bash)
+  //  - PS backtick-obfuscated command chained after a read-only cmd -> REFUSED (fail-open closed)
+  check('GEN-743 PS: an all-read-only chain with a bare label is allowed (no-chaining rule permits it)',
+    !isBlock(shellP('PowerShell', 'cd x ; git status ; "done" ; git log')), 'must not block');
+  check('GEN-743 PS: <read-only> ; "label" is allowed (PS bare string is a no-op)',
+    !isBlock(shellP('PowerShell', 'ls ; "foo"')), 'must not block');
+  check('GEN-743 bash: <read-only> ; "word" is refused (bash executes the quoted word)',
+    isBlock(shellP('Bash', 'ls ; "foo"')), 'expected BLOCK');
+  const BT = String.fromCharCode(96); // backtick, built not pasted
+  check('GEN-743 PS: a backtick-escape-obfuscated command chained after a read-only cmd is refused (fail-open closed)',
+    isBlock(shellP('PowerShell', 'git status ; ' + BT + 'f' + BT + 'o' + BT + 'o')), 'expected BLOCK');
+
+  // must-not-regress: a trailing separator alone stays NO-CHAIN, and an all-read-only chain still approves.
+  check('ls; stays NO-CHAIN (not misclassified as chained)',
+    !isBlock(shellP('PowerShell', 'ls;')), 'must not block');
+  check('an all-read-only chain still auto-approves: git status ; ls',
+    isReadOnly(shellP('PowerShell', 'git status ; ls')), 'expected read-only approve');
+
+  // segmentIsSafe bracket rejection (GEN-743 change 4).
+  check('a bracket sub-expression no longer rides the read-only fast-path: echo (Get-Date)',
+    !isReadOnly(shellP('PowerShell', 'echo (Get-Date)')), 'must not read-only-approve');
+  check('a bracket segment chained with a non-safe token is a hard refusal',
+    isBlock(shellP('PowerShell', 'echo (Get-Date) ; foo')), 'expected BLOCK');
+
+  // segmentIsSafe UNC rejection.
+  check('a UNC read no longer rides the read-only fast-path: cat \\\\host\\share\\x',
+    !isReadOnly(shellP('PowerShell', 'cat \\\\host\\share\\x')), 'must not read-only-approve');
+  check('a normal read-only command (no bracket/UNC) still approves: cat file.txt',
+    isReadOnly(shellP('PowerShell', 'cat file.txt')), 'expected read-only approve');
+
+  // isSafeSyncFromClaude (GEN-743 change 3): real command approves; smart-quote form does not.
+  const syncOk = '& "G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync.ps1" -Direction From-Claude -CommitMessage "GEN-743 tidy"';
+  check('the real config-sync command still auto-approves',
+    shellP('PowerShell', syncOk).out.indexOf('config-sync') !== -1, 'expected config-sync approve');
+  const syncSmuggle = '& "G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync.ps1" -Direction From-Claude -CommitMessage "a' + RDQ + ' ; foo ; ' + LDQ + 'b"';
+  const rSync = shellP('PowerShell', syncSmuggle);
+  check('a smart-quote-smuggled sync commit message is NOT config-sync-approved and is refused',
+    rSync.out.indexOf('config-sync') === -1 && isBlock(rSync), 'must not approve; expected BLOCK');
+}
+
+console.log('\n== P2. GEN-743: the two ticket CLIs reject UNC paths and % (renamed copy for the __filename pin) ==');
+{
+  const p2Dir = path.join(DIR, 'sess', 'p2-hook');
+  fs.mkdirSync(p2Dir, { recursive: true });
+  const H2 = path.join(p2Dir, 'auto-approve.js');
+  fs.writeFileSync(H2, fs.readFileSync(H.HOOK));
+  const shellP = (tool, command) => require('child_process').spawnSync(process.execPath, [H2],
+    { input: JSON.stringify({ tool_name: tool, tool_input: { command }, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') }), encoding: 'utf8' });
+  const hx = 'ab'.repeat(32);
+  const isHash = r => r.status === 0 && (r.stdout || '').indexOf('contentHash CLI') !== -1;
+  const isVerify = r => r.status === 0 && (r.stdout || '').indexOf('reviewer-verdict CLI') !== -1;
+  // controls: the ordinary local-path forms still approve
+  check('control: --ticket-hash on a normal local .json still approves',
+    isHash(shellP('Bash', 'node "' + H2 + '" --ticket-hash "C:\\tmp\\p.json" --tool update')), 'expected approve');
+  check('control: --ticket-verify on a normal local .jsonl still approves',
+    isVerify(shellP('Bash', 'node "' + H2 + '" --ticket-verify "C:\\x\\subagents\\agent-a1234567890abcdef.jsonl" --hash ' + hx)), 'expected approve');
+  // GEN-743: UNC payload path rejected
+  check('--ticket-hash refuses a UNC \\\\host payload path',
+    !isHash(shellP('PowerShell', 'node "' + H2 + '" --ticket-hash "\\\\host\\share\\p.json" --tool update')), 'must not approve');
+  check('--ticket-verify refuses a UNC \\\\host transcript path',
+    !isVerify(shellP('PowerShell', 'node "' + H2 + '" --ticket-verify "\\\\host\\share\\agent-a1234567890abcdef.jsonl" --hash ' + hx)), 'must not approve');
+  // GEN-743: % rejected
+  check('--ticket-hash refuses a % in the payload path',
+    !isHash(shellP('PowerShell', 'node "' + H2 + '" --ticket-hash "C:\\tmp\\%TEMP%\\p.json" --tool update')), 'must not approve');
+  check('--ticket-verify refuses a % in the transcript path',
+    !isVerify(shellP('PowerShell', 'node "' + H2 + '" --ticket-verify "C:\\x\\%TEMP%\\agent-a1234567890abcdef.jsonl" --hash ' + hx)), 'must not approve');
+}
+
 H.cleanup();
 console.log('\n' + (state.fail === 0 ? 'ALL PASS' : 'FAILURES') + ': ' + state.pass + ' passed, ' + state.fail +
             ' failed, ' + state.pending.length + ' pending (red-by-design, awaits Step 4/5)');
