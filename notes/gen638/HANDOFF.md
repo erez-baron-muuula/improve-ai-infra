@@ -6,7 +6,7 @@
 [GEN-425](https://app.notion.com/p/39c6e495d07c8182a59ed6ae3d9a2300) (both still open, they are step 2).
 **Approved plan:** [`plan.md`](plan.md) in this folder (converged `/check`, 2 rounds; approved by Erez 2026-09-29).
 **Step 1 detailed design:** [`step1-approach.md`](step1-approach.md) (converged `/check`, 4 rounds).
-**Last updated:** 2026-09-29 (session `6588823e-9859-4fb6-9a96-c308ce4a7a02`).
+**Last updated:** 2026-09-30 (session `092b3490-8479-43f8-96f9-52ee1dcd2d3f`: step 2 mostly shipped, Atlassian write path held).
 
 ## SAFETY — before touching anything in this bundle
 
@@ -28,7 +28,7 @@
 | Step | What | Status |
 |---|---|---|
 | 1 | Close the command-line leak (GEN-639 + recipes + /vet-code check) | **DONE 2026-09-29** — details below |
-| 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **NEXT** — not started |
+| 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **MOSTLY DONE 2026-09-30** — helper, Slack scripts, atlassian-get, key-sheet guard, all rule/skill/task text shipped; **Atlassian write path HELD** (atlassian-put.ps1 + staging-gate sandbox exemption + staging skill text) pending a redesign — see [`step2-approach.md`](step2-approach.md) STATUS section. **NEXT: that redesign (xhigh).** |
 | 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | Not started |
 | 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | Not started (needs Erez) |
 | 5 | Verify every key user still works; re-scan shows 0 hits of new values; update GEN-638/163/425 | Not started |
@@ -46,7 +46,20 @@
 - GEN-508's not-installed `notes/gen508-piece1/notion-rest-write.ps1` + its design block fixed; the STAGED
   `auto-approve.working.js` pin set to a non-hex sentinel (commit `4df1d25`); live hook untouched (REST arm unwired).
 
-## Step 2 — what the next session should do (design is in plan.md step 2; the concrete elaboration needs its own /check)
+## Step 2 — status 2026-09-30 (session 092b3490) — read this, not the older text below
+
+- **Shipped:** `~/.claude/scripts/set-claude-key.ps1`, `~/.claude/scripts/atlassian-get.ps1`, the Drive Slack scripts (they read `claude-slack-token`), the key-sheet guard in `auto-approve.js`, the global `CLAUDE.md` key rule, the notion-ticket-lookup skill + design doc, the Documentation and InvoiceAutomation `CLAUDE.md` edits (pushed), and the Forge reminder task. Evidence records are in `~/.claude-staging/{vetting,check}-passes/gen638s2-*`.
+- **Next session — the held Atlassian write path:** redesign the staging-gate sandbox exemption as an exact whole-command template, harden `atlassian-put.ps1`'s URL check, drop the raw-curl sandbox exemption, then install `atlassian-put.ps1` + the hook change + the staging skill text via `/vet-code` + `/vet-rule`. The spec and all starting files are in `step2-approach.md` (STATUS) and `step2-held/`.
+- **Erez's manual follow-up:** store the Atlassian and Slack keys with the helper, on each PC, in his own PowerShell window. Until he does, Slack pin/post stops with a message naming the command, and Atlassian REST is unavailable. He can store the current values now or wait for the new ones at step 4.
+- **Guard facts that constrain future work:**
+  - Once live, the guard refuses any non-local tool call containing the sheet's Drive id, and any shell/Monitor command naming its `.gsheet` shortcut.
+    - Pass diffs to reviewers by file path, not inline.
+    - Keep the id inside script files.
+    - Run sweeps for the file name with the Grep tool.
+  - Drive `search_files` / `list_recent_files` need `excludeContentSnippets: true`.
+- **Noticed, not ours:** `Documentation/CLAUDE.md` carries another session's UNCOMMITTED edits (a HISTORY appender rule, an end-session content-review check, and removal of the "Erez is non-technical" line). They were left unstaged and untouched; only the GEN-638 lines were committed.
+
+## Step 2 — what the next session should do (original, superseded by the status above; design is in plan.md step 2)
 
 Known targets that still point sessions at the key sheet (verify live before relying — these are 2026-09-29 facts):
 - Global `~/.claude/CLAUDE.md` rule starting "Never ask Erez to paste, share, or type API tokens" (locked; `/vet-rule`

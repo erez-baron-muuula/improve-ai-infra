@@ -1,0 +1,62 @@
+diff --git "a/C:\\Users\\Erez\\AppData\\Local\\Temp\\claude\\C--Users-Erez-AI-Projects-Improve-AI-Infra\\092b3490-8479-43f8-96f9-52ee1dcd2d3f\\scratchpad\\gen638-step2\\auto-approve.guard-only.js" "b/C:\\Users\\Erez\\AppData\\Local\\Temp\\claude\\C--Users-Erez-AI-Projects-Improve-AI-Infra\\092b3490-8479-43f8-96f9-52ee1dcd2d3f\\scratchpad\\gen638-step2\\auto-approve.working.js"
+index 6f32a48..29c5dbe 100644
+--- "a/C:\\Users\\Erez\\AppData\\Local\\Temp\\claude\\C--Users-Erez-AI-Projects-Improve-AI-Infra\\092b3490-8479-43f8-96f9-52ee1dcd2d3f\\scratchpad\\gen638-step2\\auto-approve.guard-only.js"
++++ "b/C:\\Users\\Erez\\AppData\\Local\\Temp\\claude\\C--Users-Erez-AI-Projects-Improve-AI-Infra\\092b3490-8479-43f8-96f9-52ee1dcd2d3f\\scratchpad\\gen638-step2\\auto-approve.working.js"
+@@ -811,6 +811,12 @@ function blockStaging(reason) {
+ // True if the shell command is a mutating HTTP call aimed at an Atlassian host.
+ function isAtlassianMutatingHttp(command) {
+   if (typeof command !== 'string' || command === '') return false;
++  // GEN-638: a call to atlassian-put.ps1 is a Jira/Confluence write whatever its shape -- curl
++  // runs inside the script, so none of the tests below can see it, and its method is fixed
++  // inside the script (there is no -Method to read). Matched on the name ANYWHERE (GEN-508's
++  // lesson), before the host and client checks, which a script call need not pass. Cost: a shell
++  // command that merely mentions the script (grep, cat) is treated as a write -- use Read/Grep.
++  if (/atlassian-put/i.test(command)) return true;
+   if (!/atlassian\.net|api\.atlassian\.com/i.test(command)) return false;
+   if (!/\b(curl|curl\.exe|invoke-restmethod|invoke-webrequest|iwr|irm|wget)\b/i.test(command)) return false;
+   return /(-X|--request)\s*['"]?(PUT|POST|PATCH|DELETE)\b/i.test(command)
+@@ -818,6 +824,22 @@ function isAtlassianMutatingHttp(command) {
+     || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i.test(command);
+ }
+ 
++// GEN-638: true only if the command names at least one Atlassian address and EVERY one of them,
++// with its query string and fragment cut, carries a registered sandbox key. Any ".." in an
++// address voids the exemption (curl collapses /MD-3649/../MD-1), and an atlassian-put command
++// must name exactly one address (the script sends to one -Url; a second one is text Claude added,
++// e.g. a # comment, that could only serve to borrow the sandbox exemption).
++function commandTargetsOnlySandbox(command, reg) {
++  // A curl config file (-K / --config) can carry extra target URLs this text check cannot see.
++  if (/(^|\s)(-K|--config)(\s|=|$)/.test(String(command))) return false;
++  const m = String(command).match(/(?:https?:\/\/)?[a-z0-9.-]*atlassian\.(?:net|com)\/[^\s"'`]*/gi);
++  if (!m || m.length === 0) return false;
++  if (/atlassian-put/i.test(command) && m.length !== 1) return false;
++  const paths = m.map(u => u.replace(/[?#].*$/, ''));
++  if (paths.some(p => p.indexOf('..') !== -1)) return false;
++  return paths.every(p => commandReferencesSandbox(p, reg));
++}
++
+ function commandReferencesSandbox(command, reg) {
+   const lc = String(command).toLowerCase();
+   const hit = k => {
+@@ -860,7 +882,8 @@ function enforceStaging(tool, ti, command) {
+     return approve('Auto-approved: staging pass consumed (Confluence ' + (ti.pageId || '?') + ').');
+   }
+ 
+-  if (SHELL_TOOLS.has(tool) && isAtlassianMutatingHttp(command)) {
++  // GEN-638: Monitor runs a shell command too, so it gets the same Atlassian-write check.
++  if ((SHELL_TOOLS.has(tool) || tool === 'Monitor') && isAtlassianMutatingHttp(command)) {
+     // GEN-337(e): a chained command must never ride through on a staged write's
+     // approval -- isAtlassianMutatingHttp() substring-matches, so without this
+     // pre-check `curl ...atlassian... -d ... && <anything>` would consume a pass
+@@ -899,7 +922,10 @@ function enforceStaging(tool, ti, command) {
+         'elsewhere, do not reissue it as a shell command at all -- write the file with the Edit or ' +
+         'Write tool, which this gate does not touch.');
+     }
+-    if (commandReferencesSandbox(command, reg)) return; // editing a sandbox via REST -> exempt
++    // GEN-638: exempt only when EVERY Atlassian address in the command is a sandbox address --
++    // testing the whole command let a non-sandbox write through when any other text (a body-file
++    // name like redline-MD-3649.json, a trailing # comment, a second URL) carried a sandbox key.
++    if (commandTargetsOnlySandbox(command, reg)) return; // editing a sandbox via REST -> exempt
+     const file = findPassFile(p => p.surface === 'shell');
+     if (!file) blockStaging('No staging pass for a direct Atlassian write command.');
+     consumePassFile(file);
