@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-09-29 (2) — GEN-748 + GEN-684 installed via /vet-code (follow-up re-nudge; regex freeze fixed), live-verified; GEN-748 Review, GEN-684/351 Done, GEN-313 Wont Do, GEN-619 Low, GEN-472 noted <!-- toc-session:49ffa193-f878-4f95-b5d0-5ce8a4f33956 -->
 - 2026-09-29 — GEN-748 plan approved (bundled with GEN-684 + GEN-619, one /vet-code cycle); root cause confirmed; execution handed to a fresh xhigh session <!-- toc-session:c097488f-a4b7-4862-a6fd-1a4aa9e26c52 -->
 - 2026-09-29 - GEN-743/645/670 shipped: shell chain-guard smart-quote/quoted-segment/read-only hardening (installed, live-verified); GEN-756 filed <!-- toc-session:924f6ad4-a8e4-4b80-807d-d2dafb1c2b28 -->
 - 2026-09-27 (3) — GEN-740 built: ticket gate reads hand-back verdicts, --ticket-verify CLI, curly-quote allow-list hole closed; GEN-740 → Review; filed GEN-743, GEN-744 <!-- toc-session:05b3cc83-0b0a-485a-92c9-39a944d0ead0 -->
@@ -223,6 +224,54 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-09-29 (2) — GEN-748 + GEN-684 installed via /vet-code (For-you follow-up re-nudge; marker-regex freeze fixed); GEN-748 → Review; GEN-684/351 Done, GEN-313 Wont Do, GEN-619 kept (Low), GEN-472 noted
+<!-- session:49ffa193-f878-4f95-b5d0-5ce8a4f33956 -->
+Executed the approved plan (`C:\Users\Erez\.claude\plans\devise-a-plan-for-scalable-wilkes.md`) through the full `/vet-code` gate.
+- **Premises.**
+  - A note on a `stop_hook_active` Stop continues the conversation (hooks doc, 8-continuation cap).
+  - `prompt_id` stays stable across a note-driven follow-up (gen450 probe, 8/8 pairs).
+  - Freeze baseline re-measured: 8.4 s at 100K.
+- **Design changes, from real-corpus evidence.**
+  - Erez dropped the text-only re-nudge trigger (2b): on real data it fired 3 times, all false, 2 of them would have duplicated a delivered block.
+  - GEN-619 was dropped from the bundle: its incidents were inline blocks, where the hook is silent by design.
+- **Built.**
+  - `stop-foryou-nudge.js` re-sends its note on a follow-up Stop only when all of these hold:
+    - its note opened the follow-up (the LAST `stop_hook_summary` in a 2 MB tail);
+    - at least 1 tool call came after that note;
+    - the final message is non-empty and no block exists;
+    - a slot is free (2 per prompt, claimed by exclusive create).
+  - `MARKER_RE` bounded in both hooks (`\s{0,64}`, plus the U+FE0F pin form).
+  - The model-read step's quadratic `replace(/\s+$/)` replaced by `trimEnd()`; it took 4.8 s at 100K.
+- **Reviews.**
+  - Design `/check`: converged in 2 rounds. Pre-mortem round 1 asked for observability, answered by a transcript-based scheduled scan.
+  - Pass A (in-session, high) and Pass B (independent Opus 5.5, verified from its transcript) both ran twice, all PASS.
+  - Applied: tail cache removed, 2 MB follow-up window, non-empty-message guard, header comment fixes.
+- **Verification.**
+  - Fixtures: 44/44.
+  - First-Stop regression: 261/261 byte-identical to the old hook.
+  - `MARKER_RE` replay: 13,140 real texts, 1,273 matches before and after.
+  - Re-nudge replay: 4 fires on 243 follow-ups that can be judged (1 true, 1 borderline, 2 cheap false). Erez signed off on those.
+  - Pass-consumption: 5/5.
+  - Installed byte-identical via single-line `update-config.ps1 -ContentFile`, both passes consumed.
+  - Live reproduction passed: 2 re-nudges fired in one prompt, then the block.
+- **Corpus caveat.** Claude Code ≤2.1.260 wrote Stop summaries in a batch after the follow-up; ≥2.1.270 writes them before. Only the 243 in-order follow-ups can be judged. The scan checks the write order.
+- **Scheduled.** `gen748-renudge-verify`, one-time, 2026-10-06 13:00. It runs `notes/gen748/renudge-scan.js` against 3 bars and reschedules itself until two consecutive clears.
+- **Banked.** `notes/gen748/` (README + fixture, replay, scan and regression scripts).
+- **Tickets.**
+  - GEN-748: Resolution section added, set to Review.
+  - GEN-684: outcome note added, set to Done.
+  - GEN-619: finding note added, stays Backlog, Gain 3 / Priority Low.
+  - GEN-351: closing note, Done.
+  - GEN-313: note, Wont Do.
+  - GEN-472: filler evidence plus a feasibility note (a Stop hook cannot retract a shown reply).
+- **Gotchas.** A `/vet-ticket` hash mismatch when the payload contains backslashes; the Edit tool turning `\uXXXX` escapes into literal characters. Both appended to hook refs.
+Unresolved items filed: none
+Ref appends: `hooks/refs/notion.md` (backslash drift in /vet-ticket hashes + send-once pre-check); `hooks/refs/editing.md` (Edit tool converts `\uXXXX` escapes to literal chars).
+Reversals judged non-learning: an initial "5 fires on 899 follow-ups" corpus figure, corrected to "4 on 243 judgeable" after the batched-write-order discovery; the conclusions did not change.
+Grounding flag: 2 count-nudges this session, 5 lifetime, newest 0 days ago.
+
+---
+
 ## 2026-09-29 — GEN-748 plan (bundled with GEN-684 + GEN-619), approved; execution handed to a fresh xhigh session
 <!-- session:c097488f-a4b7-4862-a6fd-1a4aa9e26c52 -->
 - Erez asked for a plan for GEN-748 and whether to bundle it with GEN-21 tickets; clarified GEN-21 -> GEN-86 (GEN-748's actual parent).
