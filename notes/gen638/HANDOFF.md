@@ -56,7 +56,8 @@
 - **Live success verified 2026-10-04:** Erez stored a NEW Atlassian key on this PC (Atlassian token name "Claude Code – Erez PC – 2026-10 2"). Unchanged-content PUTs: MD-3649 returned 204 (identical on re-fetch); page 1182400513 returned 200, version 3 → 4 (identical on re-fetch). The older exposed Atlassian keys are still valid: revoke them at step 4, after checking what still uses them.
 - **Working rule from now on:** never type `atlassian-put` in a shell command, not even in `cat`, `grep`, `git add <file>` or a `git commit -m` message. It is refused with no override. Use the Read/Grep/Write tools, `git add -A <folder>`, and `git commit -F <file>`. A future /vet-code of the script must apply with the Write tool and hash by folder (see the script header).
 - **Shipped copies + tests:** [`step2-shipped/`](step2-shipped/). [`step2-held/`](step2-held/) is SUPERSEDED (history only).
-- **Follow-up queued (not filed):** older weaknesses in the shared pass reader (a malformed pass can crash it open; a failed consume still approves in the MCP and curl arms; break-glass lets a multi-line curl write through without a pass). These were offered as a separate background task on 2026-10-04.
+- **Follow-up filed:** [GEN-766](https://app.notion.com/p/3ef6e495d07c8158a0fad3c85a2d40d9) covers older weaknesses in the shared pass reader: a malformed pass can crash it open; a failed consume still approves in the MCP and curl arms; and break-glass lets a multi-line curl write through without a pass. It is not part of GEN-638.
+- **Next-session opener:** [`NEXT-SESSION.md`](NEXT-SESSION.md) has a ready-to-paste first message.
 
 ## Step 2 — status 2026-09-30 (session 092b3490) — superseded by the 2026-10-04 status above
 

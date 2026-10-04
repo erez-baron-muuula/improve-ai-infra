@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-04 — GEN-638 step 2 complete: Atlassian write path redesigned (no URL; key/page id), installed and live-verified; GEN-765 Done; filed GEN-766 <!-- toc-session:f460f324-f190-412b-aaf8-25a25d989044 -->
 - 2026-09-30 — GEN-638 step 2 mostly shipped (key helper, Slack and Atlassian-read scripts, key-sheet guard, all rule text); Atlassian write path held for redesign (GEN-765); filed GEN-764 <!-- toc-session:092b3490-8479-43f8-96f9-52ee1dcd2d3f -->
 - 2026-09-29 (3) — GEN-638 bundle planned (5 steps); step 1 shipped: GEN-639 Done, key-on-command-line leak closed in the hook, lookup script, recipes and /vet-code; cold-pickup handoff in notes/gen638 <!-- toc-session:6588823e-9859-4fb6-9a96-c308ce4a7a02 -->
 - 2026-09-29 (2) — GEN-748 + GEN-684 installed via /vet-code (follow-up re-nudge; regex freeze fixed), live-verified; GEN-748 Review, GEN-684/351 Done, GEN-313 Wont Do, GEN-619 Low, GEN-472 noted <!-- toc-session:49ffa193-f878-4f95-b5d0-5ce8a4f33956 -->
@@ -226,6 +227,49 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-04 — GEN-638 step 2 complete: Atlassian write path redesigned, installed and live-verified (GEN-765 Done)
+<!-- session:f460f324-f190-412b-aaf8-25a25d989044 -->
+
+**Session start:** the backup sweep had quarantined this repo for a "suspected Atlassian token" in `notes/gen638/step2-held/test-helper.ps1`. It was checked without printing it: a dummy test value (placeholder word, far shorter than a real token). With Erez's OK, its prefix was split (`'AT' + 'AT…'`) so the scanner no longer matches; committed `notes/gen638` change and pushed.
+
+**Redesign (GEN-765, sub-item of GEN-163):** the held 2026-09-30 design failed Pass B three times because the hook text-matched a free-form `-Url` that PowerShell/curl parsed differently. The new design has the write script take NO URL: only `-Jira <KEY>` or `-ConfluencePage <id>`, from which it builds the address (Jira v3 for ADF; Confluence v1 with version.number + 1). Plan `notes/gen638/step2-redesign.md`: /check converged in 2 rounds and Erez approved it. Install order was hook first, then script, then skill (a reviewer showed the reverse order would leave an unguarded window).
+- `auto-approve.js` (/vet-code; 2 Pass A + 2 Pass B rounds on Opus 5.5, final "safe to ship"; 110/110 fixtures; replay of 602 real calls with 13 intended refusals and 0 unexplained):
+  - an anchored PowerShell-only template for the write script, with a target-bound `{"surface":"rest","target":...}` pass;
+  - any other command naming the script is refused with NO break-glass;
+  - the raw-curl sandbox exemption and `commandReferencesSandbox` are removed;
+  - Monitor Atlassian writes are refused.
+- Plan deviation, stricter than approved and shown to Erez before install: break-glass was removed from the shape refusal after Pass B showed it was a fail-open.
+- The write script (new; /vet-code, 2 rounds of each pass):
+  - exits 0 only on HTTP 2xx; the status is read from the `-w` trailer only;
+  - refuses nested-script calls (a call-stack check, probed live);
+  - takes a local drive-letter body path only;
+  - pins curl;
+  - runs `Set-PSDebug -Off`;
+  - 33/33 unit tests plus a drift check against the hook's patterns.
+- `staging/SKILL.md` (/vet-rule: /check PASS round 1, 4 advisories folded in).
+- Live, without a key: the sandbox call was allowed; a non-sandbox call with no pass was refused; a `rest` pass was consumed.
+- Erez then created and stored a NEW Atlassian token ("Claude Code – Erez PC – 2026-10 2") via `set-claude-key.ps1`. Real unchanged-content PUTs: MD-3649 returned 204 and page 1182400513 returned 200 (version 3 → 4), both identical on re-fetch.
+- Drive `list_recent_files` honours `excludeContentSnippets` (verified live).
+- GEN-765 body rewritten to what was built (/vet-ticket, 3 reviewer rounds) → Done. Shipped copies and tests: `notes/gen638/step2-shipped/`; `step2-held/` marked SUPERSEDED. Cold-pickup opener: `notes/gen638/NEXT-SESSION.md`.
+
+**Decisions:**
+- Old exposed Atlassian keys stay valid until GEN-638 step 4.
+- Erez named the token himself.
+- The broken autolink in GEN-765's body (`set-claude-key.ps1` became a link) was left as cosmetic.
+
+**GEN-58:** logged a Class T new element (an escape hatch reused on a refusal with nothing behind it) on Vol. 8; index bumped (T seen 5x; Vol. 8 now 30 write-ups — its roll-over to Vol. 9 was already overdue).
+
+**Ref-file appends:**
+- `hooks/refs/shell.md`: never type the write script's name in a shell command.
+- `hooks/refs/notion.md`: bare filenames get auto-linked; backtick them.
+
+Unresolved items filed: GEN-766 (Make the staging and vetting gates fail closed on malformed or unconsumable passes)
+Reversals judged non-learning: none.
+Dropped learnings: none.
+Next: GEN-638 step 3 (end-of-session tripwire, xhigh) — paste `notes/gen638/NEXT-SESSION.md`.
+
+---
+
 ## 2026-09-30 — GEN-638 step 2: keys out of the key sheet (mostly shipped); Atlassian write path held for redesign
 <!-- session:092b3490-8479-43f8-96f9-52ee1dcd2d3f -->
 
