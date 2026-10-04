@@ -28,7 +28,7 @@
 | Step | What | Status |
 |---|---|---|
 | 1 | Close the command-line leak (GEN-639 + recipes + /vet-code check) | **DONE 2026-09-29** — details below |
-| 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **DONE 2026-10-04** — everything shipped; the Atlassian write path ([GEN-765](https://app.notion.com/p/3ea6e495d07c8168add0d12ac3fee87f)) was redesigned ([`step2-redesign.md`](step2-redesign.md)) and installed. Pending: a live success PUT once Erez stores the Atlassian key. |
+| 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **DONE 2026-10-04** — everything shipped; the Atlassian write path ([GEN-765](https://app.notion.com/p/3ea6e495d07c8168add0d12ac3fee87f)) was redesigned ([`step2-redesign.md`](step2-redesign.md)) and installed and live-verified (real PUTs to both sandboxes succeeded). |
 | 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | Not started. **NEXT (xhigh).** |
 | 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | Not started (needs Erez) |
 | 5 | Verify every key user still works; re-scan shows 0 hits of new values; update GEN-638/163/425 | Not started |
@@ -53,7 +53,7 @@
   - `~/.claude/scripts/atlassian-put.ps1` (/vet-code: 33/33 unit + drift checks; a fake-key PUT to MD-3649 got 404 and exit 1). Takes `-Jira <KEY>` or `-ConfluencePage <id>`, never a URL; exits 0 only on HTTP 2xx; refuses calls nested in another script; local drive-letter body path only.
   - `~/.claude/skills/staging/SKILL.md` (/vet-rule: /check PASS round 1).
 - **Live-verified without a key:** the sandbox call is allowed and stops at the key read; a non-sandbox call with no pass is refused; with a `rest` pass it is approved and the pass consumed.
-- **PENDING (needs Erez):** store the Atlassian key (`set-claude-key.ps1 -Key atlassian`), then run one real PUT on Jira sandbox MD-3649 and one on Confluence sandbox page 1182400513 (with the version + 1 body), each re-fetched to confirm.
+- **Live success verified 2026-10-04:** Erez stored a NEW Atlassian key on this PC (Atlassian token name "Claude Code – Erez PC – 2026-10 2"). Unchanged-content PUTs: MD-3649 returned 204 (identical on re-fetch); page 1182400513 returned 200, version 3 → 4 (identical on re-fetch). The older exposed Atlassian keys are still valid: revoke them at step 4, after checking what still uses them.
 - **Working rule from now on:** never type `atlassian-put` in a shell command, not even in `cat`, `grep`, `git add <file>` or a `git commit -m` message. It is refused with no override. Use the Read/Grep/Write tools, `git add -A <folder>`, and `git commit -F <file>`. A future /vet-code of the script must apply with the Write tool and hash by folder (see the script header).
 - **Shipped copies + tests:** [`step2-shipped/`](step2-shipped/). [`step2-held/`](step2-held/) is SUPERSEDED (history only).
 - **Follow-up queued (not filed):** older weaknesses in the shared pass reader (a malformed pass can crash it open; a failed consume still approves in the MCP and curl arms; break-glass lets a multi-line curl write through without a pass). These were offered as a separate background task on 2026-10-04.

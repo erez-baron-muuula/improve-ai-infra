@@ -9,8 +9,9 @@ a Jira key or Confluence page id instead of a URL, so the hook reads the target 
 through /vet-code or /vet-rule with Erez's approval: `auto-approve.js` (anchored `atlassian-put` template,
 target-bound `rest` pass, raw-curl sandbox exemption removed, Monitor writes refused), `atlassian-put.ps1`,
 and `staging/SKILL.md`. Shipped copies, the installed diff and the tests are in
-[`step2-shipped/`](step2-shipped/). Pending, needs Erez's Atlassian key stored on this PC: one real PUT
-on Jira sandbox MD-3649 and one on Confluence sandbox page 1182400513, each re-fetched to confirm.
+[`step2-shipped/`](step2-shipped/). Live-verified the same day once Erez stored a new Atlassian key:
+real PUTs to Jira sandbox MD-3649 (204) and Confluence sandbox page 1182400513 (200, version 3 → 4),
+both identical on re-fetch.
 The text below describes the 2026-09-30 state and the rejected -Url design; it is kept as history.
 
 ## STATUS 2026-09-30 — mostly shipped; the Atlassian write path is HELD for a redesign
