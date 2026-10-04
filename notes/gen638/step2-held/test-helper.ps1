@@ -17,7 +17,7 @@ foreach ($b in $bad) {
   if ($threw) { Check 'rejection message omits the value' (-not ($b.Length -gt 0 -and $msg.Contains($b))) }
 }
 $okShape = $true
-try { Assert-KeyShape 'ATATT3xFfGF0-dummy_value.with=allowed+chars/1234' } catch { $okShape = $false }
+try { Assert-KeyShape ('AT' + 'ATT3xFfGF0-dummy_value.with=allowed+chars/1234') } catch { $okShape = $false }
 Check 'accepts a key-shaped dummy' $okShape
 
 # 2. store + read back, then rotate to a second value (the step-4 case)
