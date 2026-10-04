@@ -6,7 +6,7 @@
 [GEN-425](https://app.notion.com/p/39c6e495d07c8182a59ed6ae3d9a2300) (both still open, they are step 2).
 **Approved plan:** [`plan.md`](plan.md) in this folder (converged `/check`, 2 rounds; approved by Erez 2026-09-29).
 **Step 1 detailed design:** [`step1-approach.md`](step1-approach.md) (converged `/check`, 4 rounds).
-**Last updated:** 2026-10-04 (session `59955ba8-477c-4c99-85e6-8948f28c04bc`: step 3 SHIPPED — the key-leak tripwire is installed and wired into `/wrap` as Step 0b; see "Step 3 — status 2026-10-04" below. Earlier the same day, session `f460f324` finished step 2).
+**Last updated:** 2026-10-04 late (session `ba11276e`: step 4 started — Notion and Gemini replaced, see the status table and `step4-inventory.md`). Before that (session `59955ba8-477c-4c99-85e6-8948f28c04bc`: step 3 SHIPPED — the key-leak tripwire is installed and wired into `/wrap` as Step 0b; see "Step 3 — status 2026-10-04" below. Earlier the same day, session `f460f324` finished step 2).
 
 ## SAFETY — before touching anything in this bundle
 
@@ -30,8 +30,8 @@
 | 1 | Close the command-line leak (GEN-639 + recipes + /vet-code check) | **DONE 2026-09-29** — details below |
 | 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **DONE 2026-10-04** — everything shipped; the Atlassian write path ([GEN-765](https://app.notion.com/p/3ea6e495d07c8168add0d12ac3fee87f)) was redesigned ([`step2-redesign.md`](step2-redesign.md)) and installed and live-verified (real PUTs to both sandboxes succeeded). |
 | 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | **DONE 2026-10-04** — `~/.claude/scripts/key-leak-tripwire.ps1` installed (/vet-code) and `/wrap` Step 0b added (/vet-rule); design [`step3-approach.md`](step3-approach.md), shipped copies + tests in [`step3/`](step3/) |
-| 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | Not started (needs Erez). **NEXT (medium).** |
-| 5 | Verify every key user still works; re-scan shows 0 hits of new values; update GEN-638/163/425 | Not started |
+| 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | **IN PROGRESS 2026-10-04** — inventory in [`step4-inventory.md`](step4-inventory.md) (this is Erez's only PC). Done: **Notion** (new "Muuula 1" token stored + verified; tripwire `-All` clean; old token valid until 2026-10-11 21:16 GMT+3) and **Gemini** (new key in Script Properties, old key deleted; first-run proof = scheduled task `gen638-gemini-key-check`, 2026-10-05 10:00). **Next (medium):** key 3 Slack, then Atlassian (revoke the 3 old tokens, keep "Claude Code – Erez PC – 2026-10 2"; decide Forge's own login), GitHub (revoke old PATs), then everything else in the key sheet (Erez reviews its rows himself). |
+| 5 | Verify every key user still works; re-scan shows 0 hits of new values; update GEN-638/163/425 | Not started. Includes: after 2026-10-11 21:16 GMT+3 confirm Notion REFUSES the old token (it is no longer stored here — Erez would have to check it in Notion's UI, or simply confirm the integration page shows no pending old token). |
 
 ### Step 1 — what shipped (all installed, reviewed, live-verified; installed + Drive copies hash-match the reviewed copies)
 - `~/.claude/hooks/notion-fetch-staleness.js` (/vet-code): Notion REST call is in-process (Node https); token only in
