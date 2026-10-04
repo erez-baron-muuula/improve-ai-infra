@@ -6,7 +6,7 @@
 [GEN-425](https://app.notion.com/p/39c6e495d07c8182a59ed6ae3d9a2300) (both still open, they are step 2).
 **Approved plan:** [`plan.md`](plan.md) in this folder (converged `/check`, 2 rounds; approved by Erez 2026-09-29).
 **Step 1 detailed design:** [`step1-approach.md`](step1-approach.md) (converged `/check`, 4 rounds).
-**Last updated:** 2026-09-30 (session `092b3490-8479-43f8-96f9-52ee1dcd2d3f`: step 2 mostly shipped, Atlassian write path held).
+**Last updated:** 2026-10-04 (session `f460f324-f190-412b-aaf8-25a25d989044`: step 2 FULLY shipped — the held Atlassian write path was redesigned and installed; see "Step 2 — status 2026-10-04" below).
 
 ## SAFETY — before touching anything in this bundle
 
@@ -28,8 +28,8 @@
 | Step | What | Status |
 |---|---|---|
 | 1 | Close the command-line leak (GEN-639 + recipes + /vet-code check) | **DONE 2026-09-29** — details below |
-| 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **MOSTLY DONE 2026-09-30** — helper, Slack scripts, atlassian-get, key-sheet guard, all rule/skill/task text shipped; **Atlassian write path HELD** (atlassian-put.ps1 + staging-gate sandbox exemption + staging skill text) pending a redesign — see [`step2-approach.md`](step2-approach.md) STATUS section. **NEXT: that redesign (xhigh).** |
-| 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | Not started |
+| 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **DONE 2026-10-04** — everything shipped; the Atlassian write path ([GEN-765](https://app.notion.com/p/3ea6e495d07c8168add0d12ac3fee87f)) was redesigned ([`step2-redesign.md`](step2-redesign.md)) and installed. Pending: a live success PUT once Erez stores the Atlassian key. |
+| 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | Not started. **NEXT (xhigh).** |
 | 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | Not started (needs Erez) |
 | 5 | Verify every key user still works; re-scan shows 0 hits of new values; update GEN-638/163/425 | Not started |
 
@@ -46,7 +46,19 @@
 - GEN-508's not-installed `notes/gen508-piece1/notion-rest-write.ps1` + its design block fixed; the STAGED
   `auto-approve.working.js` pin set to a non-hex sentinel (commit `4df1d25`); live hook untouched (REST arm unwired).
 
-## Step 2 — status 2026-09-30 (session 092b3490) — read this, not the older text below
+## Step 2 — status 2026-10-04 (session f460f324) — read this first
+
+- **Redesign shipped** (plan [`step2-redesign.md`](step2-redesign.md), approved by Erez, /check 2 rounds). Installed, each with Erez's approval:
+  - `~/.claude/hooks/auto-approve.js` (/vet-code: 2 Pass A + 2 Pass B rounds on Opus, final Pass B "safe to ship"; 110/110 fixtures; replay of 602 real calls: 13 intended changes, 0 unexplained). Any Bash/PowerShell/Monitor command naming `atlassian-put` must be the exact anchored PowerShell template, else it is refused with NO break-glass. Non-sandbox targets need `{"surface":"rest","target":"<key or page id>"}`. Raw curl writes always need a `shell` pass (the sandbox exemption was removed). Monitor Atlassian writes are refused.
+  - `~/.claude/scripts/atlassian-put.ps1` (/vet-code: 33/33 unit + drift checks; a fake-key PUT to MD-3649 got 404 and exit 1). Takes `-Jira <KEY>` or `-ConfluencePage <id>`, never a URL; exits 0 only on HTTP 2xx; refuses calls nested in another script; local drive-letter body path only.
+  - `~/.claude/skills/staging/SKILL.md` (/vet-rule: /check PASS round 1).
+- **Live-verified without a key:** the sandbox call is allowed and stops at the key read; a non-sandbox call with no pass is refused; with a `rest` pass it is approved and the pass consumed.
+- **PENDING (needs Erez):** store the Atlassian key (`set-claude-key.ps1 -Key atlassian`), then run one real PUT on Jira sandbox MD-3649 and one on Confluence sandbox page 1182400513 (with the version + 1 body), each re-fetched to confirm.
+- **Working rule from now on:** never type `atlassian-put` in a shell command, not even in `cat`, `grep`, `git add <file>` or a `git commit -m` message. It is refused with no override. Use the Read/Grep/Write tools, `git add -A <folder>`, and `git commit -F <file>`. A future /vet-code of the script must apply with the Write tool and hash by folder (see the script header).
+- **Shipped copies + tests:** [`step2-shipped/`](step2-shipped/). [`step2-held/`](step2-held/) is SUPERSEDED (history only).
+- **Follow-up queued (not filed):** older weaknesses in the shared pass reader (a malformed pass can crash it open; a failed consume still approves in the MCP and curl arms; break-glass lets a multi-line curl write through without a pass). These were offered as a separate background task on 2026-10-04.
+
+## Step 2 — status 2026-09-30 (session 092b3490) — superseded by the 2026-10-04 status above
 
 - **Shipped:** `~/.claude/scripts/set-claude-key.ps1`, `~/.claude/scripts/atlassian-get.ps1`, the Drive Slack scripts (they read `claude-slack-token`), the key-sheet guard in `auto-approve.js`, the global `CLAUDE.md` key rule, the notion-ticket-lookup skill + design doc, the Documentation and InvoiceAutomation `CLAUDE.md` edits (pushed), and the Forge reminder task. Evidence records are in `~/.claude-staging/{vetting,check}-passes/gen638s2-*`.
 - **Next session — the held Atlassian write path:** redesign the staging-gate sandbox exemption as an exact whole-command template, harden `atlassian-put.ps1`'s URL check, drop the raw-curl sandbox exemption, then install `atlassian-put.ps1` + the hook change + the staging skill text via `/vet-code` + `/vet-rule`. The spec and all starting files are in `step2-approach.md` (STATUS) and `step2-held/`.

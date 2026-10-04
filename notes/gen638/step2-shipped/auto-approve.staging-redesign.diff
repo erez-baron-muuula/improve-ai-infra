@@ -1,0 +1,139 @@
+diff --git a/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/f460f324-f190-412b-aaf8-25a25d989044/scratchpad/gen638r/auto-approve.live.js b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/f460f324-f190-412b-aaf8-25a25d989044/scratchpad/gen638r/auto-approve.working.js
+index 6f32a48..b843707 100644
+--- a/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/f460f324-f190-412b-aaf8-25a25d989044/scratchpad/gen638r/auto-approve.live.js
++++ b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/f460f324-f190-412b-aaf8-25a25d989044/scratchpad/gen638r/auto-approve.working.js
+@@ -668,11 +668,11 @@ function blockMixedChain(input, tool, cmd) {
+ // usual fail-safe stance stays, and an unrecognized write shape still yields no target and falls
+ // through. What it blocks is a call the gate already owns whose surrounding command cannot be proven
+ // to contain nothing else.
+-//   Narrow caveat for staging, stated because the contract above does not cover it: its sandbox
+-//   EXEMPTION (commandReferencesSandbox) is evaluated AFTER this point, so an unreadable command that
+-//   only touches the sandbox is refused too. That ordering is deliberate -- a multi-line command can
+-//   name a sandbox key on one line and write a production page on another -- and its call site
+-//   honours break-glass for THIS block only, so the false positive is always clearable.
++//   Staging's raw-curl arm has had no sandbox exemption since GEN-638 (2026-10-04): a raw
++//   Atlassian write always needs a pass, so an unreadable one is simply refused. Sandbox drafting
++//   over REST goes through atlassian-put.ps1's anchored single-line template instead. The raw-curl
++//   call site honours break-glass for THIS block only, so a false positive is always clearable
++//   (the atlassian-put shape refusal and the Monitor write refusal deliberately do not).
+ //
+ // Why the stance is inverted here. The three sites used to `return` on the comment "AMBIGUOUS ->
+ // prompt". A prompt only happens in a permission mode that gives one, and the permission mode is
+@@ -818,14 +818,38 @@ function isAtlassianMutatingHttp(command) {
+     || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i.test(command);
+ }
+ 
+-function commandReferencesSandbox(command, reg) {
+-  const lc = String(command).toLowerCase();
+-  const hit = k => {
+-    if (!k) return false;
+-    const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+-    return new RegExp('(?<![a-z0-9])' + esc + '(?![a-z0-9])').test(lc);
+-  };
+-  return reg.jira.some(hit) || reg.confluence.some(hit);
++// GEN-638 (redesign 2026-10-04): the ONE command shape that may run atlassian-put.ps1. The script
++// takes no URL -- only a Jira key or a Confluence page id, from which it builds the address itself --
++// so the hook never has to read a URL. The target is an unquoted bareword of [A-Za-z0-9-], which
++// PowerShell cannot expand, splice or split, so the target this regex captures IS the string the
++// script receives. (A text match on a free-form -Url failed review three times: quote splices and
++// %2e%2e made the text differ from what PowerShell and curl used.) The body path is an allowlisted
++// ASCII charset inside one pair of ASCII quotes: no $ or backtick (no expansion), no quote of any
++// kind (PowerShell also treats curly quotes as string delimiters), no ; | & < >. Parameter names are
++// exact, case-sensitive and in this order; anything else -- -J, -Jira:X, an en-dash, a lowercase
++// $home, another path -- does not match and is refused. The target patterns below MUST stay
++// identical to the script's own validators ($JiraKeyPattern / $ConfluencePagePattern); a test
++// fixture compares them. The name trigger also catches a Windows 8.3 short name (ATLASS~1.PS1), which
++// would run the real script without the long name appearing in the command. Accepted cost: it also
++// refuses any other short name beginning ATLASS (e.g. an installed Atlassian app) -- use the long path.
++// It does NOT close the deliberate-evasion class (run-time-assembled names etc. stay out of reach).
++const ATLASSIAN_PUT_NAME_RE = /atlassian-put|atlass~[0-9]/i;
++const ATLASSIAN_PUT_TEMPLATE_RE = /^[ \t]*&[ \t]+"\$HOME\\\.claude\\scripts\\atlassian-put\.ps1"[ \t]+-(Jira|ConfluencePage)[ \t]+([A-Za-z0-9-]+)[ \t]+-BodyFile[ \t]+(?:'([A-Za-z0-9_.:\\\/ -]+)'|"([A-Za-z0-9_.:\\\/ -]+)")[ \t]*$/;
++const ATLASSIAN_PUT_JIRA_KEY_RE = /^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,6}$/;
++const ATLASSIAN_PUT_CONF_PAGE_RE = /^[1-9][0-9]{0,15}$/;
++
++// Returns {kind: 'jira'|'confluence', target} only when the WHOLE command is the template above and
++// the target passes its kind's pattern; otherwise null.
++function matchAtlassianPutTemplate(command) {
++  if (typeof command !== 'string' || /[\r\n]/.test(command)) return null;
++  const m = ATLASSIAN_PUT_TEMPLATE_RE.exec(command);
++  if (!m) return null;
++  // Belt-and-braces: no word inside the body path may start with '-', so even a lost quote could not
++  // turn part of the path into a second -Jira / -ConfluencePage parameter.
++  if (/(^|[ \t])-/.test(m[3] !== undefined ? m[3] : m[4])) return null;
++  const kind = m[1] === 'Jira' ? 'jira' : 'confluence';
++  const re = kind === 'jira' ? ATLASSIAN_PUT_JIRA_KEY_RE : ATLASSIAN_PUT_CONF_PAGE_RE;
++  return re.test(m[2]) ? { kind, target: m[2] } : null;
+ }
+ 
+ // Staging guard. Hard-blocks (exit 2) a non-sandbox content write lacking a matching pass;
+@@ -860,7 +884,54 @@ function enforceStaging(tool, ti, command) {
+     return approve('Auto-approved: staging pass consumed (Confluence ' + (ti.pageId || '?') + ').');
+   }
+ 
+-  if (SHELL_TOOLS.has(tool) && isAtlassianMutatingHttp(command)) {
++  // GEN-638: atlassian-put.ps1 is a Jira/Confluence write whatever else the command says -- curl runs
++  // inside it, so the raw-curl test below cannot see it. Any shell or Monitor command that names it
++  // must be EXACTLY the anchored template (PowerShell tool only); everything else is refused, pass
++  // untouched -- including a mere mention (cat, git add <file>): inspect the file with Read/Grep.
++  // Checked before the raw-curl arm, which a script call need not trip.
++  const namesPut = (SHELL_TOOLS.has(tool) || tool === 'Monitor') && typeof command === 'string' && ATLASSIAN_PUT_NAME_RE.test(command);
++  const putCall = namesPut && tool === 'PowerShell' ? matchAtlassianPutTemplate(command) : null;
++  // NO break-glass here (unlike GEN-641's unreadable-command refusal): for a call outside the template
++  // this refusal is the ONLY check -- no pass lookup follows -- so clearing it would let a reshaped call
++  // (e.g. -Jira "MD-1" quoted) write with no pass. Nothing legitimate needs it: writes use the template,
++  // inspection uses Read/Grep, bookkeeping uses `git add -A <folder>` / `git commit -F <file>`.
++  if (namesPut && !putCall) {
++    process.stderr.write(
++      'Refused (staging lock): this command names atlassian-put but is not the one allowed form, so ' +
++      'what it would write cannot be proven. Run it ALONE, in the PowerShell tool, exactly as: ' +
++      '& "$HOME\\.claude\\scripts\\atlassian-put.ps1" -Jira <KEY> -BodyFile "<path>"  (or ' +
++      '-ConfluencePage <pageId> in place of -Jira <KEY>) -- the key or page id unquoted, the body ' +
++      'path in quotes using only letters, digits, space and _ . : \\ / -. To inspect or ' +
++      'search the script, use the Read or Grep tool; for git, use `git add -A <folder>` and ' +
++      '`git commit -F <message file>` so the command itself does not name the script. No override.\n'
++    );
++    process.exit(2);
++  }
++  if (putCall) {
++    const call = putCall;
++    const t = call.target.toLowerCase();
++    if ((call.kind === 'jira' ? reg.jira : reg.confluence).includes(t)) return; // sandbox -> exempt
++    // typeof guard: a non-string target in a malformed pass must be a non-match, never a throw (an
++    // uncaught throw exits 1, which does not block).
++    const restFile = findPassFile(p => p.surface === 'rest' && typeof p.target === 'string' && p.target.toLowerCase() === t);
++    if (!restFile) blockStaging('No staging pass for the REST write to ' + call.target + ' (it needs a "rest" pass whose target is ' + call.target + ').');
++    // Single use is the point of a pass: if it cannot be consumed (file locked), refuse rather than
++    // approve and leave it replayable.
++    if (!consumePassFile(restFile)) blockStaging('The staging pass for ' + call.target + ' could not be consumed (file locked?); re-mint it and retry.');
++    return approve('Auto-approved: staging pass consumed (REST write to ' + call.target + ').');
++  }
++
++  if ((SHELL_TOOLS.has(tool) || tool === 'Monitor') && isAtlassianMutatingHttp(command)) {
++    // GEN-638: Monitor is never a sanctioned Atlassian write path, so a write detected there is
++    // refused outright (no need to decide which shell's chain rules apply). No break-glass: no pass
++    // lookup follows, so clearing it would be an unpassed write.
++    if (tool === 'Monitor') {
++      process.stderr.write(
++        'Refused (staging lock): a Monitor command looks like a Jira/Confluence write. Writes go ' +
++        'through the staging skill, never through Monitor.\n'
++      );
++      process.exit(2);
++    }
+     // GEN-337(e): a chained command must never ride through on a staged write's
+     // approval -- isAtlassianMutatingHttp() substring-matches, so without this
+     // pre-check `curl ...atlassian... -d ... && <anything>` would consume a pass
+@@ -899,9 +970,12 @@ function enforceStaging(tool, ti, command) {
+         'elsewhere, do not reissue it as a shell command at all -- write the file with the Edit or ' +
+         'Write tool, which this gate does not touch.');
+     }
+-    if (commandReferencesSandbox(command, reg)) return; // editing a sandbox via REST -> exempt
++    // GEN-638: no sandbox exemption here any more -- every single-line raw Atlassian write needs a
++    // pass (the break-glass return above still clears the multi-line/unreadable refusal). A text
++    // match on a free-form URL cannot be made sound (Pass B beat it three times); sandbox drafting
++    // over REST goes through atlassian-put.ps1 above, whose target the hook can read exactly.
+     const file = findPassFile(p => p.surface === 'shell');
+-    if (!file) blockStaging('No staging pass for a direct Atlassian write command.');
++    if (!file) blockStaging('No staging pass for a direct Atlassian write command (a raw REST write needs a "shell" pass even to a sandbox; to draft on a sandbox, use atlassian-put.ps1, which is exempt there).');
+     consumePassFile(file);
+     return approve('Auto-approved: staging pass consumed (direct Atlassian write).');
+   }
