@@ -64,7 +64,7 @@ for (let i = 0; i < uniq.length; i += (ONLY_B ? 37 : 20)) {
       if (a.code === b.code && a.out === b.out) same++; else diff.push(j.mode + ' ' + j.row.f + ':' + j.row.line + ' live=' + a.out.slice(0, 80) + ' | work=' + b.out.slice(0, 80));
       if (b.out) nudges++;
       if ((same + diff.length) % 50 === 0) console.log('progress', same + diff.length, '/', jobs.length, 'differ so far', diff.length);
-      if (b.out.indexOf('at or above the floor') !== -1 || b.out.indexOf('below the floor') !== -1) confirmed++;
+      if (b.out.indexOf('at or above the floor') !== -1 || b.out.indexOf('below the floor') !== -1 || b.out.indexOf('meets the STANDARD floor') !== -1) confirmed++;
     }
   }
   await Promise.all(Array.from({ length: 8 }, worker));
