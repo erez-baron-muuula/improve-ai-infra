@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-04 (2) — GEN-638 step 3 shipped: key-leak tripwire live and added to /wrap as Step 0b; Notion still found in 2 old logs (step 4 next); GEN-58 Class T logged <!-- toc-session:59955ba8-477c-4c99-85e6-8948f28c04bc -->
 - 2026-10-04 — GEN-638 step 2 complete: Atlassian write path redesigned (no URL; key/page id), installed and live-verified; GEN-765 Done; filed GEN-766 <!-- toc-session:f460f324-f190-412b-aaf8-25a25d989044 -->
 - 2026-09-30 — GEN-638 step 2 mostly shipped (key helper, Slack and Atlassian-read scripts, key-sheet guard, all rule text); Atlassian write path held for redesign (GEN-765); filed GEN-764 <!-- toc-session:092b3490-8479-43f8-96f9-52ee1dcd2d3f -->
 - 2026-09-29 (3) — GEN-638 bundle planned (5 steps); step 1 shipped: GEN-639 Done, key-on-command-line leak closed in the hook, lookup script, recipes and /vet-code; cold-pickup handoff in notes/gen638 <!-- toc-session:6588823e-9859-4fb6-9a96-c308ce4a7a02 -->
@@ -227,6 +228,57 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-04 (2) — GEN-638 step 3 shipped: key-leak tripwire installed and wired into /wrap (Step 0b)
+<!-- session:59955ba8-477c-4c99-85e6-8948f28c04bc -->
+
+**Design:** /suggest, then /check converged in 2 rounds (3 lenses; round-1 pre-mortem caught that a found key could hide a co-occurring check failure when /wrap branched on exit code only). Erez approved the plan; saved as `notes/gen638/step3-approach.md`.
+
+**Built and vetted (/vet-code), installed with Erez's OK:** `~/.claude/scripts/key-leak-tripwire.ps1`.
+- Reads every key in `set-claude-key.ps1`'s list plus Git's stored GitHub login, in memory only. It plain-text-matches each value against every file under `~/.claude/projects` and `%APPDATA%\Claude\local-agent-mode-sessions` written since the last clean run, and prints names, paths, dates, counts and codes only. Exit codes: 2 = found, 1 = could not complete, 0 = clean. Per-PC state lives in `~/.claude/hooks/key-tripwire-scans.jsonl`.
+- Pass A (in-session /code-review high) ran 2 rounds: 10 findings, 8 fixed, 1 skipped as a residual, 1 needing no change. Pass B (Opus 5.5) ran 2 rounds; round 1 was REVISE with 2 material fail-opens: a run that found a key became the next run's mark, so the next wrap would report the still-exposed key as clean; and the mark was chosen by highest start time, so a wrong clock could skip files. Both fixed; round 2 PASS.
+- Further fixes from review:
+  - full scan for a key the mark run didn't check, and for a mark dated in the future;
+  - a missing projects folder counts as a problem, not "clean";
+  - git trace settings stripped (environment and `-c`), and git runs in TEMP.
+- GitHub is read via `cmd.exe <` from a temp file, because this host's console input encoding adds a BOM to .NET `Process.StandardInput`.
+- Tests: 72/72 (`notes/gen638/step3/test-key-leak-tripwire.ps1`; random in-memory test value).
+
+**/wrap Step 0b "Key check" (/vet-rule), applied with Erez's OK:** /check converged in 2 rounds (4 lenses). Round-1 pre-mortem raised 2 material findings:
+- the ticket wording promised a separately titled ticket, but /wrap's duplicate check could merge it into GEN-638;
+- "never open a flagged file" conflicted with re-reading this session's own transcript after a `/compact`.
+Both fixed. Installed hash ce031bcc…; the pass was consumed.
+
+**Live results:**
+- **Notion** found in 2 logs:
+  - `f00041c7-…jsonl` (Improve AI Infra), the original 2026-08-03/04 leak session. `plan.md` wrongly said this log was gone; corrected.
+  - `9f9b18c6-…jsonl` (InvoiceAutomation), 2026-09-27.
+  - An independent byte-level search confirmed exactly these 2 files.
+- **Atlassian** (new key) and the current **GitHub** login: clean. **Slack**: not stored.
+- Full scan of ~4,250 files takes ~7 s; incremental ~1 s.
+- The plain PowerShell-tool call ran with no permission prompt; exit code 2 came through.
+- Until Notion is replaced, every /wrap reports it and re-scans everything.
+
+**Notion:**
+- GEN-58: Class T new element (a detector's next-run state advanced past a finding it had just reported) on Vol. 8. Index: T seen 6x; Vol. 8 at 31 write-ups, roll-over still overdue.
+- GEN-638: the "Also surfaced" key-check finding was appended at this wrap.
+- GEN-638 stays In Progress; next is step 4 (Erez replaces keys).
+
+**Ref-file appends (hooks/refs/shell.md):**
+- PS name-collision bullet: dot-sourcing a script re-declares its typed `param()` block in your scope; dot-source inside `& { param($f) . $f; ,$X } $path`.
+- PS→native stdin bullet: .NET `Process.StandardInput` writes the console-input BOM too; use `cmd.exe <` from a file.
+
+Key check: notion found in 2 log(s)
+Unresolved items filed: none (the Notion finding was merged into GEN-638, reviewer PASS, 1 review round)
+Not filed:
+- the stale "global steps" list in /wrap Step 0, which predates this work and every step overrides it in its own text;
+- tripwire advisories accepted as residuals and recorded in `notes/gen638/HANDOFF.md`: Test-Path false on an access error; no escalation for a chronic could-not-check; the state-record version is ignored.
+Reversals judged non-learning: none.
+Dropped learnings: none.
+Grounding flag: 1 count-nudge this session, 7 lifetime, newest 0 days ago.
+Next: GEN-638 step 4 (medium) — paste `notes/gen638/NEXT-SESSION.md`.
+
+---
+
 ## 2026-10-04 — GEN-638 step 2 complete: Atlassian write path redesigned, installed and live-verified (GEN-765 Done)
 <!-- session:f460f324-f190-412b-aaf8-25a25d989044 -->
 
