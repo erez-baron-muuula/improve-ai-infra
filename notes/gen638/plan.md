@@ -45,7 +45,7 @@ So rotating only the Notion token isn't enough. More keys are exposed, and both 
    - If a key is missing on a PC, scripts stop with the message "key X not set up on this PC — run the helper". They never fall back to the sheet or ask for the value in chat.
    - Update the global `CLAUDE.md` rule (starts "Never ask Erez to paste") and the `staging` skill so they point at Credential Manager (`/vet-rule`).
    - What happens to the sheet itself is Erez's call.
-3. **Tripwire for leaks nobody has thought of.**
+3. **Tripwire for leaks nobody has thought of.** *(Shipped 2026-10-04: see `step3-approach.md` and `HANDOFF.md`. Correction to Context above: the 2026-08-04 leak log does still exist — `f00041c7-…jsonl`, last written 2026-09-27.)*
    - Add a `/wrap` step that checks whether any stored Credential Manager value appears in the current session's log. It reports only the key's name, as "rotate X" in the "For you" block.
    - Safety constraints, enforced in its `/vet-code` pass:
      - Comparison is plain in-memory text matching.

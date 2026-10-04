@@ -1,0 +1,21 @@
+## Step 0b — Key check (GEN-638)
+Runs in every session — it is not project-gated, so Step 0's no-project skip does not apply to it — and BEFORE Step 1, so a found key becomes an unresolved item that Step 1 files in this same wrap.
+
+Run the installed tripwire once, from the PowerShell tool, as a call of its own:
+`& "C:\Users\Erez\.claude\scripts\key-leak-tripwire.ps1"`
+It checks whether the value of any key Claude reads from this PC's own store (the `set-claude-key.ps1` key list in Credential Manager, plus Git's stored GitHub login) appears in any Claude session log on this PC written since its last clean check — including sessions that ended without `/wrap`. It prints one JSON object of key names, file paths, dates, counts and reason codes, never a value.
+
+**Never open a file it reports as `found`** — not with Read, Grep, a shell command or a sub-agent, and not to "confirm" the finding: opening it copies the key into this session. This wins over any later step that would read this session's on-disk transcript (Step 1 and Step 4 after a `/compact`): if a `found` file is this session's own log (its name or folder is this session's `$CLAUDE_SESSION_ID`), compose those steps from the in-context summary instead, and say in the report that the transcript was not reopened because it holds a leaked key.
+
+**Read the JSON whatever the exit code, and report every item in it**, so a found key never hides a problem from the same run:
+- Each `checks` entry with `status` `found` → a line under a "Key check" sub-heading in the "📌 For you" block, in plain words: which key; where (the project folder and date of each listed file, plus the `moreFiles` count); and what to do — make a new key at the service that issued it, store it with `powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\.claude\scripts\set-claude-key.ps1" -Key <name>` in his own PowerShell window (for `github` / `github-login`: sign in to GitHub again through Git), cancel the old key, then have Claude run the check once with `-All` so the new key is checked against every log, not only recent ones. A found key is reported again at every wrap until it is replaced.
+- Each found key is also an unresolved item for Step 1, filed through Step 1's own machinery (its unattended gate flow and duplicate checks): a To Do ticket titled `Rotate the <name> key — its value appeared in a session log`, assigned to Erez (only he can replace a key), under the AI-infra epic, its ID listed in Step 1's `Unresolved items filed` line like any other. An open ticket with that exact title is skipped (sub-step 5), and an open ticket that already tracks replacing that key takes the finding as an `Also surfaced` line instead (sub-step 6); either way the "📌 For you" line still appears.
+- Any problem — a `checks` entry with `status` `could-not-check`, or any entry in `problems` → ⚠ in the roll-up, and one plain line per problem under the "Key check" sub-heading saying what was not checked (for `could-not-check`: that key was not checked at all). The next wrap re-checks the same logs automatically.
+- `not-stored` and `too-short` are statuses, not problems: no line.
+- Nothing found and no problem → ✓ only.
+
+**The exit code is only a cross-check** (2 = a key found, 1 = could not complete, 0 = complete and nothing found). If the JSON cannot be read: exit 2 → ⚠ "a key was found but the details could not be read — run the check again before anything else"; exit 1 → ⚠ "the key check could not complete"; exit 0 → ⚠ "the key check's result could not be confirmed". If the call is refused or fails before the script runs → ⚠ with the reason. Never a ✓ without readable JSON.
+
+**Traceability:** record each found key and each problem in the Step 4 HISTORY.md entry on its own line (`Key check: <name> found in <N> log(s)` / `Key check: could not check — <codes>`); when the wrap logs no project, the script's own state file already holds the record. Any found key or problem counts as "a note the steps require surfacing," forcing the full Step 7 report rather than the all-clean fast-path.
+
+**Read-only** apart from the one line the script appends to its own per-PC state file (`~/.claude/hooks/key-tripwire-scans.jsonl`, never synced) — never edit or truncate that file.

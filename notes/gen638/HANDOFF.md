@@ -6,7 +6,7 @@
 [GEN-425](https://app.notion.com/p/39c6e495d07c8182a59ed6ae3d9a2300) (both still open, they are step 2).
 **Approved plan:** [`plan.md`](plan.md) in this folder (converged `/check`, 2 rounds; approved by Erez 2026-09-29).
 **Step 1 detailed design:** [`step1-approach.md`](step1-approach.md) (converged `/check`, 4 rounds).
-**Last updated:** 2026-10-04 (session `f460f324-f190-412b-aaf8-25a25d989044`: step 2 FULLY shipped — the held Atlassian write path was redesigned and installed; see "Step 2 — status 2026-10-04" below).
+**Last updated:** 2026-10-04 (session `59955ba8-477c-4c99-85e6-8948f28c04bc`: step 3 SHIPPED — the key-leak tripwire is installed and wired into `/wrap` as Step 0b; see "Step 3 — status 2026-10-04" below. Earlier the same day, session `f460f324` finished step 2).
 
 ## SAFETY — before touching anything in this bundle
 
@@ -29,8 +29,8 @@
 |---|---|---|
 | 1 | Close the command-line leak (GEN-639 + recipes + /vet-code check) | **DONE 2026-09-29** — details below |
 | 2 | Stop reading the key sheet in sessions (GEN-163), incl. GEN-425's Documentation `CLAUDE.md` GitHub recipe | **DONE 2026-10-04** — everything shipped; the Atlassian write path ([GEN-765](https://app.notion.com/p/3ea6e495d07c8168add0d12ac3fee87f)) was redesigned ([`step2-redesign.md`](step2-redesign.md)) and installed and live-verified (real PUTs to both sandboxes succeeded). |
-| 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | Not started. **NEXT (xhigh).** |
-| 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | Not started (needs Erez) |
+| 3 | End-of-session tripwire (`/wrap` step that flags any stored Credential Manager value appearing in the session log) | **DONE 2026-10-04** — `~/.claude/scripts/key-leak-tripwire.ps1` installed (/vet-code) and `/wrap` Step 0b added (/vet-rule); design [`step3-approach.md`](step3-approach.md), shipped copies + tests in [`step3/`](step3/) |
+| 4 | Erez rotates every exposed working key and stores new values via the step-2 helper on each PC | Not started (needs Erez). **NEXT (medium).** |
 | 5 | Verify every key user still works; re-scan shows 0 hits of new values; update GEN-638/163/425 | Not started |
 
 ### Step 1 — what shipped (all installed, reviewed, live-verified; installed + Drive copies hash-match the reviewed copies)
@@ -46,7 +46,38 @@
 - GEN-508's not-installed `notes/gen508-piece1/notion-rest-write.ps1` + its design block fixed; the STAGED
   `auto-approve.working.js` pin set to a non-hex sentinel (commit `4df1d25`); live hook untouched (REST arm unwired).
 
-## Step 2 — status 2026-10-04 (session f460f324) — read this first
+## Step 3 — status 2026-10-04 (session 59955ba8) — read this first
+
+- **Shipped, each with Erez's approval:**
+  - `~/.claude/scripts/key-leak-tripwire.ps1` (/vet-code). Design /check converged in 2 rounds. Pass A (in-session /code-review high) ran 2 rounds: 10 findings, 8 fixed, 1 skipped as a residual, 1 needing no change. Pass B (Opus 5.5) ran 2 rounds; round 1 had 2 material findings, both fixed; round 2 PASS. 72/72 tests (`step3/test-key-leak-tripwire.ps1`; random in-memory test value, never a real key). The installed file hash-matches `step3/key-leak-tripwire.ps1`.
+  - `~/.claude/skills/wrap/SKILL.md`: new **Step 0b — Key check**, plus the frontmatter description and the report-label list (/vet-rule; /check converged in 2 rounds, 4 lenses; the exact text is in `step3/wrap-step0b.md`; installed hash `ce031bcc…`).
+- **What it does:** reads every key in `set-claude-key.ps1`'s list plus Git's stored GitHub login, in memory only. It plain-text-matches each value against every file under `~/.claude/projects` and `%APPDATA%\Claude\local-agent-mode-sessions` written since the last clean run. It prints JSON with names, paths, dates, counts and codes only, and exits 2 = found, 1 = could not complete, 0 = clean. Per-PC state lives in `~/.claude/hooks/key-tripwire-scans.jsonl`.
+- **Changed from the approved design during code review** (Erez saw and approved these before install):
+  - A run that FOUND a key is never the incremental mark, so a found key is re-reported at every run until it is replaced.
+  - The mark is the last-appended clean run, not the run with the highest start time.
+  - A key name the mark run didn't check forces a full scan.
+  - A mark dated in the future forces a full scan.
+  - A missing `~/.claude/projects` is a problem, not "clean".
+  - GitHub is read through `cmd.exe <` from a temp file. The design said raw bytes to .NET StandardInput, but this host's console input encoding adds a BOM there.
+- **Live results (install-time `-All` baseline, 4,226 files, ~7 s, no problems):**
+  - **notion found** in 2 session logs, confirmed independently by a byte-level search:
+    - `C--Users-Erez-AI-Projects-Improve-AI-Infra\f00041c7-…jsonl`, content dated 2026-08-03/04. This is the original GEN-638 leak session; `plan.md` wrongly says that log "wasn't found".
+    - `C--Users-Erez-AI-Projects-InvoiceAutomation\9f9b18c6-…jsonl`, 2026-09-27.
+  - **atlassian** (the new key stored 2026-10-04): clean.
+  - **github**: the CURRENT Git login is clean.
+  - **slack**: not stored on this PC.
+- **Consequence until step 4:** Notion is still exposed, so no clean mark exists. Every `/wrap` therefore re-scans everything (~7 s) and reports Notion. Expected.
+- **Permission check:** the plain `& "…\key-leak-tripwire.ps1"` call from the PowerShell tool ran with no prompt or block, so no auto-approve exception was needed.
+- **GEN-58:** logged a Class T new element on Vol. 8: the incremental mark advanced past a just-reported finding. Index bumped: T seen 6x; Vol. 8 has 31 write-ups and its roll-over is overdue.
+- **Residuals:**
+  - Only exact matches are caught, not encoded or split copies.
+  - Keys not stored on this PC (Gemini, Forge, old values) aren't checked.
+  - Copies outside the session folders aren't scanned.
+  - Detection is after the fact.
+  - A clock wrong by >5 min that is corrected between runs can skip files.
+  - A replaced value is checked only against logs written since the mark, so run `-All` after replacing a key (already in Step 0b's instructions).
+
+## Step 2 — status 2026-10-04 (session f460f324)
 
 - **Redesign shipped** (plan [`step2-redesign.md`](step2-redesign.md), approved by Erez, /check 2 rounds). Installed, each with Erez's approval:
   - `~/.claude/hooks/auto-approve.js` (/vet-code: 2 Pass A + 2 Pass B rounds on Opus, final Pass B "safe to ship"; 110/110 fixtures; replay of 602 real calls: 13 intended changes, 0 unexplained). Any Bash/PowerShell/Monitor command naming `atlassian-put` must be the exact anchored PowerShell template, else it is refused with NO break-glass. Non-sandbox targets need `{"surface":"rest","target":"<key or page id>"}`. Raw curl writes always need a `shell` pass (the sandbox exemption was removed). Monitor Atlassian writes are refused.
@@ -91,6 +122,13 @@ Known targets that still point sessions at the key sheet (verify live before rel
   What happens to the sheet itself is Erez's call.
 
 ## Step 4 inputs (exposure found 2026-09-29; counts only)
+**Update 2026-10-04 (tripwire baseline):**
+- Of the keys stored on this PC, only **Notion** is still found in logs (2 files, see "Step 3 — status").
+- The current Atlassian key and the current GitHub login are clean.
+- The exposed GitHub, Slack and Atlassian values below are OLD values that are no longer stored here, so the tripwire can't see them. They still need revoking at the service that issued them.
+- After rotating, run `& "C:\Users\Erez\.claude\scripts\key-leak-tripwire.ps1" -All` (step 5's re-scan).
+
+**Original 2026-09-29 counts:**
 Distinct values by type across all session logs + git-ignored `notes/gen716-phase0/*.jsonl`: Notion 1 (the live
 token), GitHub PAT 2, Slack 1, Atlassian 3, Google `AIza…` 38 (many likely public/harmless). The Gemini key's live copy
 is Apps Script Script Properties `GEMINI_API_KEY` (Erez enters the new value himself). Before step 4, list each key's
