@@ -26,6 +26,7 @@ stored value changed.
 Gemini progress: 2026-10-04 Erez found the old key in AI Studio, created a new one in the same project and put it in
 Script Property `GEMINI_API_KEY`; he then deleted the old key in AI Studio (same day). Proof is the next daily run (no side-effect-free Gemini test
 exists in `Code.js`): scheduled task `gen638-gemini-key-check` reads the run logs 2026-10-05 10:00.
+2026-10-05 check: NOT YET PROVEN. Only run since the switch (2026-10-05 05:32 UTC) completed but found 0 new invoice emails, so no Gemini call was made; no key errors logged. Needs a later run or a manual "Process this invoice now" on a real invoice.
 
 Other PCs: none — Erez confirmed 2026-10-04 that this is the only PC he uses Claude or Git on.
 
