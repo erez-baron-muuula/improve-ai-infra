@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-06 (3) — GEN-748 re-nudge verification scan run 1: all bars clear; next run 20 Oct. <!-- toc-session:e8da7d4b-4653-4a0e-b6c9-03f66b25a774 -->
 - 2026-10-06 (2) — GEN-638 final check-in: Gemini key proven working; Notion old-token check waits until after Oct 11. <!-- toc-session:ef69529d-cba7-4f87-867f-2cda924b4d66 -->
 - 2026-10-06 — GEN-638 step 4 done and Gemini proven (only the Notion old-token check left, reminder 12 Oct); Eden password work moved to GEN-732; GEN-777/778/779 filed <!-- toc-session:1bac4088-e9d0-4a18-b9ae-451339f4fb50 -->
 - 2026-10-04 (4) — GEN-638 step 4 started: inventory of every exposed key and its users; Notion and Gemini replaced and verified (Gemini's first-run check scheduled 2026-10-05). <!-- toc-session:ba11276e-f13d-42a6-949b-789c12bb4f09 -->
@@ -232,6 +233,20 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-06 (3) — GEN-748 re-nudge verification scan, run 1: all bars clear
+<!-- session:e8da7d4b-4653-4a0e-b6c9-03f66b25a774 -->
+
+Scheduled task `gen748-renudge-verify` ran `notes/gen748/renudge-scan.js` from the 2026-09-29T09:57Z install boundary.
+
+- Counts: 32 transcript files, 178 For-you-note summaries / 178 For-you-opened follow-ups, noteThenAssistant 146, noteThenSummary 0, 6 fires, 0 misses, 0 suspect duplicates, firesThenBlock 2. Script fireRate 0.0337; excluding the 2 install-day live-test fires (49ffa193:1598, 1625), 4/176 = 0.023 (bar 0.05).
+- Each FIRE read by hand: 220449af:824 correct (the "approved, go ahead" GCP/Firebase/AdMob findings had not been delivered; the next follow-up, line 831, carried the block once, with no duplicate); 220449af:890, 902 and 1313 harmless (one-line waiting-on-reviewer replies).
+- Bars: anchor alive clear, over-fire clear, miss clear. Verdict clear.
+- Run logged to `~/.claude/scheduled-tasks/gen748-renudge-verify/scan-log.jsonl` (new file, run 1). Next run rescheduled one-time for 2026-10-20 10:00. If that run is also clear, it proposes GEN-748 Review → Done.
+
+Unresolved items filed: none
+
+---
+
 ## 2026-10-06 (2) — GEN-638 final check-in: Gemini key proven
 <!-- session:ef69529d-cba7-4f87-867f-2cda924b4d66 -->
 - Scheduled task `gen638-final-checks` ran early (2026-10-06; its Oct 12 run is still scheduled and will fire again).
