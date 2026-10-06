@@ -27,6 +27,7 @@ Gemini progress: 2026-10-04 Erez found the old key in AI Studio, created a new o
 Script Property `GEMINI_API_KEY`; he then deleted the old key in AI Studio (same day). Proof is the next daily run (no side-effect-free Gemini test
 exists in `Code.js`): scheduled task `gen638-gemini-key-check` reads the run logs 2026-10-05 10:00.
 2026-10-05 check: NOT YET PROVEN. Only run since the switch (2026-10-05 05:32 UTC) completed but found 0 new invoice emails, so no Gemini call was made; no key errors logged. Needs a later run or a manual "Process this invoice now" on a real invoice.
+2026-10-06 check: PASS. The 2026-10-06 05:32 UTC daily run processed a real invoice (Israel Electric Corporation) with Gemini answers (vendor match, filing decision); further Gemini calls ran 07:23-12:30 UTC. Logs 2026-10-03..06 show no HTTP 400/403, "API key not valid", API_KEY_INVALID, PERMISSION_DENIED or "API key expired".
 
 Slack progress: 2026-10-05 Product Bot has no revoke option in its settings, so Erez removed the app from the workspace
 (Manage apps → Configuration → Remove App), which cancels its keys, then reinstalled it and stored the new bot key with the

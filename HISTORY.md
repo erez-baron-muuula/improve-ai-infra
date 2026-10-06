@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-06 — GEN-638 step 4 done (Slack, Atlassian/Forge, GitHub, test Redis); Eden password work moved to GEN-732 (live Redis change started, storage key logs on); GEN-777/778 filed <!-- toc-session:1bac4088-e9d0-4a18-b9ae-451339f4fb50 -->
+- 2026-10-06 — GEN-638 step 4 done and Gemini proven (only the Notion old-token check left, reminder 12 Oct); Eden password work moved to GEN-732; GEN-777/778/779 filed <!-- toc-session:1bac4088-e9d0-4a18-b9ae-451339f4fb50 -->
 - 2026-10-04 (4) — GEN-638 step 4 started: inventory of every exposed key and its users; Notion and Gemini replaced and verified (Gemini's first-run check scheduled 2026-10-05). <!-- toc-session:ba11276e-f13d-42a6-949b-789c12bb4f09 -->
 - 2026-10-04 (3) — Sonnet 5.5 launch checked; minimum model now set by kind of work (strong/standard floors), hook + rule updated, GEN-767 Done, GEN-768 filed <!-- toc-session:c3d80e51-9f99-4e56-a988-c1d6dac50998 -->
 - 2026-10-04 (2) — GEN-638 step 3 shipped: key-leak tripwire live and added to /wrap as Step 0b; Notion still found in 2 old logs (step 4 next); GEN-58 Class T logged <!-- toc-session:59955ba8-477c-4c99-85e6-8948f28c04bc -->
@@ -241,9 +241,11 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - **Tripwire `-All`:** clean.
 
 **Still open on GEN-638 (step 5):**
-- Gemini proof is waiting for a real invoice run.
-- After 2026-10-11 21:16 GMT+3, confirm the old Notion token no longer works.
-- Then update GEN-638/163/425.
+- **Gemini key: proven (PASS)** later the same day. The 2026-10-06 05:32 UTC run processed a real invoice with Gemini, and there are no key errors since 3 Oct. The test run of the new reminder recorded this in `step4-inventory.md`.
+- **Old Notion token:** after 2026-10-11 21:16 GMT+3, Erez confirms on the integrations page that it is gone.
+- Then update GEN-638/163/425 and close.
+- **Reminder:** one-time task `gen638-final-checks` (12 Oct 09:00), created after Erez asked "did you create a reminder for me?". Its test run was pre-approved.
+- **Miss logged:** GEN-58 Vol. 9, Class K new element [dated-follow-up-no-reminder], plus a ticket at Erez's request: GEN-779 (Make sure every dated follow-up handed to Erez comes with a reminder; reviewer PASS, 1 round; filed via the card, approved by Erez).
 
 **Eden offboarding → password changes (GEN-732, Memory Islands).** Erez: "I don't want Eden to have access to passwords".
 - **Duplicate avoided:** the requested offboarding ticket would have duplicated GEN-732, so an "Also surfaced" item was appended to GEN-732 instead (/vet-ticket, 2 rounds).
@@ -253,7 +255,7 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 
 **Reasoning slip logged on GEN-58 (Class C, recurrence of the [platform-limit] element):** I said the zero-downtime slot swap "needs the build system" without checking. The app actually runs from a stored package.
 
-Unresolved items filed: GEN-777 (Move the game's player database off the retiring Azure Cache for Redis; reviewer PASS, 1 round), GEN-778 (Build injection ref: scheduled-tasks; reviewer PASS, 1 round). Also appended a progress note to GEN-732 (reviewer PASS after 2 rounds).
+Unresolved items filed: GEN-779 (on Erez's request, after the first wrap), GEN-777 (Move the game's player database off the retiring Azure Cache for Redis; reviewer PASS, 1 round), GEN-778 (Build injection ref: scheduled-tasks; reviewer PASS, 1 round). Also appended a progress note to GEN-732 (reviewer PASS after 2 rounds).
 Ref append: `hooks/refs/shell.md` Azure CLI bullet (cmd re-parse breaks `--query` with `(`/`[`; use `2>$null` + `$LASTEXITCODE`; PS 5.1 `ConvertFrom-Json` arrays; with the TLS env var set, `az ad`, `keyvault` and `rest` work).
 Auto-approvals added: `mcp__scheduled-tasks__list_task_runs`, `mcp__ee781d17-…__slack_list_channel_members`.
 Reversals judged non-learning: none beyond the GEN-58 entry.
