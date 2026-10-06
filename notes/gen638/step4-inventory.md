@@ -26,6 +26,40 @@ stored value changed.
 Gemini progress: 2026-10-04 Erez found the old key in AI Studio, created a new one in the same project and put it in
 Script Property `GEMINI_API_KEY`; he then deleted the old key in AI Studio (same day). Proof is the next daily run (no side-effect-free Gemini test
 exists in `Code.js`): scheduled task `gen638-gemini-key-check` reads the run logs 2026-10-05 10:00.
+2026-10-05 check: NOT YET PROVEN. Only run since the switch (2026-10-05 05:32 UTC) completed but found 0 new invoice emails, so no Gemini call was made; no key errors logged. Needs a later run or a manual "Process this invoice now" on a real invoice.
+
+Slack progress: 2026-10-05 Product Bot has no revoke option in its settings, so Erez removed the app from the workspace
+(Manage apps → Configuration → Remove App), which cancels its keys, then reinstalled it and stored the new bot key with the
+helper. Verified: read-only `auth.test` returns ok (team Muuula, bot user pin_bot); `key-leak-tripwire.ps1 -All` (4,301 files)
+shows all 4 stored keys clean. Removal drops the bot from its channels: re-invite to #tbd (C02PCFC1PJA) and #product
+(C030LSACURX), the two in `slack-posts.jsonl`; any other channel it pinned in shows up as a pin failure.
+
+Atlassian progress: 2026-10-05 Erez's token list showed only 3 tokens: "Claude Code – Erez PC – 2026-10" (never used),
+"…2026-10 2" (the stored one) and "Forge" (made 2026-06-04). So the older exposed values were already revoked or expired.
+Erez revoked the never-used one; `atlassian-get.ps1` on `/rest/api/2/myself` still works. Forge: the Forge token was
+treated as exposed (it was probably in the key sheet). Erez created a new plain 1-year token, ran `forge login`, and revoked
+the old "Forge" token. After that, `forge whoami --verbose` made a live GraphQL call that returned Erez Baron, which proves
+Forge is on the new token. The reminder task `renew-forge-atlassian-token` moved to 2027-09-14 (expiry ~2027-10-05).
+
+GitHub progress: 2026-10-05 Git on this PC signs in with a GitHub OAuth login (`gho_` type), not a personal access token.
+Erez's token lists showed: classic "Erez" (repo; expired 2026-08-31) and fine-grained "documentation" (never used; would
+have expired 2027-09-04). Erez deleted both. `git ls-remote` on the private Muuula/MemoryPirates repo still works afterwards.
+
+Key sheet rows (Erez listed the names 2026-10-05): Jira, Google ai key, github_pat, notion (Muuula 1), Slack Pin Bot,
+Atlassian forge, PlayerInfo Redis. The first six are covered above.
+
+PlayerInfo Redis progress: 2026-10-05. Azure has two caches: muuula-test (Basic, test-infra) and Muuula-Production
+(Premium). Host-name scan of the logs: only muuula-test appears. In-memory key comparison over 4,340 logs: muuula-test's
+SECONDARY key was in 2 logs (the sheet-leak log 9f9b18c6 and a63a1394), its primary in 0, and the production keys in 0.
+Vault MuuulaUnityVault `RedisConnectionString` (used by 6 function apps via REDIS_SECRET_NAME: 5 in test-infra plus
+Muuula-MemoryPirates-0-11-1) uses the PRIMARY key, and no vault secret uses the secondary. `RedisConnection.cs` reads
+REDIS_SECRET_NAME, falling back to the REDIS_CONNECTION_STRING env var. Pre-mortem /check: PASS. With Erez's go-ahead,
+Claude ran `az redis regenerate-keys --key-type Secondary -o none` (exit 0). Re-check: 0 logs hold either current test
+key, and the vault secret still matches the primary key. Az needs `AZURE_CLI_DISABLE_CONNECTION_VERIFICATION=1` on this
+PC (TLS interception). Eden is being offboarded (Erez, 2026-10-05), so no heads-up was sent.
+
+Step 4 result: every key-sheet row is replaced or cancelled. Still open for step 5: Gemini first-real-run proof; and
+after 2026-10-11 21:16 GMT+3, confirm the old Notion token no longer works.
 
 Other PCs: none — Erez confirmed 2026-10-04 that this is the only PC he uses Claude or Git on.
 
