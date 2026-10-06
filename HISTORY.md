@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-06 — GEN-638 step 4 done (Slack, Atlassian/Forge, GitHub, test Redis); Eden password work moved to GEN-732 (live Redis change started, storage key logs on); GEN-777/778 filed <!-- toc-session:1bac4088-e9d0-4a18-b9ae-451339f4fb50 -->
 - 2026-10-04 (4) — GEN-638 step 4 started: inventory of every exposed key and its users; Notion and Gemini replaced and verified (Gemini's first-run check scheduled 2026-10-05). <!-- toc-session:ba11276e-f13d-42a6-949b-789c12bb4f09 -->
 - 2026-10-04 (3) — Sonnet 5.5 launch checked; minimum model now set by kind of work (strong/standard floors), hook + rule updated, GEN-767 Done, GEN-768 filed <!-- toc-session:c3d80e51-9f99-4e56-a988-c1d6dac50998 -->
 - 2026-10-04 (2) — GEN-638 step 3 shipped: key-leak tripwire live and added to /wrap as Step 0b; Notion still found in 2 old logs (step 4 next); GEN-58 Class T logged <!-- toc-session:59955ba8-477c-4c99-85e6-8948f28c04bc -->
@@ -230,6 +231,36 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-06 — GEN-638 step 4 done (all key-sheet keys replaced); live Redis + storage key work moved to GEN-732
+<!-- session:1bac4088-e9d0-4a18-b9ae-451339f4fb50 -->
+**GEN-638 step 4 (Erez's key replacements, one at a time).** All done 2026-10-05/06, details in `notes/gen638/step4-inventory.md`; HANDOFF status table updated:
+- **Slack:** Product Bot had no revoke option, so the app was removed from the workspace (which cancels its keys) and reinstalled. The new bot key is stored with the helper. `auth.test` returns ok. The bot was re-invited to #tbd and #product and is confirmed a member.
+- **Atlassian:** only 3 tokens were left. The never-used "…2026-10" token was revoked. Forge got a new plain 1-year token, and the old "Forge" token was revoked. A live `forge whoami --verbose` call after the revoke proves Forge is on the new token. The reminder task `renew-forge-atlassian-token` moved to 2027-09-14.
+- **GitHub:** this PC's Git uses an OAuth login (`gho_`), not a PAT. Both PATs were deleted: the classic one had already expired, and the fine-grained "documentation" one had never been used. Git access to the private repo still works.
+- **Key sheet:** 7 rows, 6 already covered. The 7th, "PlayerInfo Redis", turned out to be the `muuula-test` spare key; production's host and keys appear in no log. Erez asked whether we could do it ourselves rather than Eden: /check pre-mortem PASS, then `az redis regenerate-keys Secondary`. Nothing used that key.
+- **Tripwire `-All`:** clean.
+
+**Still open on GEN-638 (step 5):**
+- Gemini proof is waiting for a real invoice run.
+- After 2026-10-11 21:16 GMT+3, confirm the old Notion token no longer works.
+- Then update GEN-638/163/425.
+
+**Eden offboarding → password changes (GEN-732, Memory Islands).** Erez: "I don't want Eden to have access to passwords".
+- **Duplicate avoided:** the requested offboarding ticket would have duplicated GEN-732, so an "Also surfaced" item was appended to GEN-732 instead (/vet-ticket, 2 rounds).
+- **Live Redis password:** Erez chose "wait for Azure's own restarts", after asking for and getting data on hiccup-free options. Step A is done (new spare key in vault `RedisProduction`). The daily scheduled check `redis-password-change-check` and the day-15 check-in on 21 Oct are set up, after 3 /check rounds plus a 2-round design review. Code is in Memory Islands Dev `ops/redis-password-change`.
+- **Production storage key** (`muuulaproduction` key1, also in 20 apps' settings): access logs are on, and they show which key each request uses. Review task on 8 Oct. Plan /check round 1 is REVISE; round 2 is still due. Erez chose the "1 quiet minute" listener after the data showed that no rule beats it: about 1,500 rules were tested on 28 nights, and it was fully quiet on 9 of 28 nights versus 1 of 28 for a fixed 01:30. A test restart measured about 3 s of errors and 5 s of slowness.
+- See the Memory Islands Dev HISTORY entry of the same date for operational detail.
+
+**Reasoning slip logged on GEN-58 (Class C, recurrence of the [platform-limit] element):** I said the zero-downtime slot swap "needs the build system" without checking. The app actually runs from a stored package.
+
+Unresolved items filed: GEN-777 (Move the game's player database off the retiring Azure Cache for Redis; reviewer PASS, 1 round), GEN-778 (Build injection ref: scheduled-tasks; reviewer PASS, 1 round). Also appended a progress note to GEN-732 (reviewer PASS after 2 rounds).
+Ref append: `hooks/refs/shell.md` Azure CLI bullet (cmd re-parse breaks `--query` with `(`/`[`; use `2>$null` + `$LASTEXITCODE`; PS 5.1 `ConvertFrom-Json` arrays; with the TLS env var set, `az ad`, `keyvault` and `rest` work).
+Auto-approvals added: `mcp__scheduled-tasks__list_task_runs`, `mcp__ee781d17-…__slack_list_channel_members`.
+Reversals judged non-learning: none beyond the GEN-58 entry.
+Dropped learnings: none.
+
+---
+
 ## 2026-10-04 (4) — GEN-638 step 4 started: key inventory; Notion and Gemini replaced
 <!-- session:ba11276e-f13d-42a6-949b-789c12bb4f09 -->
 
