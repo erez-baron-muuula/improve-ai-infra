@@ -250,7 +250,7 @@ GEN-453 (Notion page-text edits can report success while doing nothing, half, or
 - GEN-58 Vol. 9: two Class E traces (header now 33x; "[GEN-508 v7 body-binding enumerate-vs-whitelist]" element now 3x) and one Class A trace (header 40x); after the wrap, one Class K new element (header 21x; volume count 9).
 - Closed after the wrap (Erez asked why GEN-800 was filed instead of updating the tickets directly; that was a misjudgment, logged on GEN-58 Class K): "What was built" sections appended to GEN-453 and GEN-593 via /vet-ticket with Erez's card approval; GEN-453 renamed "Catch Notion page edits that report success but change nothing, only part, or a neighbouring block" and set Done; GEN-593 Done (Erez confirmed); GEN-800 Done.
 
-Unresolved items filed: GEN-797, GEN-798, GEN-799, GEN-800 (all reviewer PASS, 1 round); merged into GEN-555 (review briefs should state the threat model).
+Unresolved items filed: GEN-797, GEN-798, GEN-799, GEN-800 (all reviewer PASS, 1 round); merged into GEN-555 (review briefs should state the threat model); merged into GEN-606 at Erez's request (run the near-duplicate search before proposing a ticket, not at filing time; GEN-606 moved Backlog -> To Do).
 Noticed during the session, dropped from the post-compaction wrap: the old GEN-508 suite `notes/gen508-piece1/test-gen508.js` fails to start against the current gate. Already tracked by the open GEN-661 ("Restore the fail-open corpus sweep against the v8 ticket-gate scoping layer"), so no new ticket was filed.
 Reversals judged non-learning: none beyond the symptom-patch → root-rebuild reversal, already logged on GEN-58 Class E (recurring class tracked there; threat-model part merged into GEN-555).
 
