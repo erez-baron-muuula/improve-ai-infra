@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-08 — GEN-453 + GEN-593: Notion write checker and practice page installed and live-verified; GEN-797–800 filed. <!-- toc-session:35cfb8b3-1487-41fc-ae5f-ad0d1e455e0b -->
+- 2026-10-08 — GEN-453 + GEN-593: Notion write checker and practice page installed and live-verified; both closed Done; GEN-797–799 filed. <!-- toc-session:35cfb8b3-1487-41fc-ae5f-ad0d1e455e0b -->
 - 2026-10-06 (3) — GEN-748 re-nudge verification scan run 1: all bars clear; next run 20 Oct. <!-- toc-session:e8da7d4b-4653-4a0e-b6c9-03f66b25a774 -->
 - 2026-10-06 (2) — GEN-638 final check-in: Gemini key proven working; Notion old-token check waits until after Oct 11. <!-- toc-session:ef69529d-cba7-4f87-867f-2cda924b4d66 -->
 - 2026-10-06 — GEN-638 step 4 done and Gemini proven (only the Notion old-token check left, reminder 12 Oct); Eden password work moved to GEN-732; GEN-777/778/779 filed <!-- toc-session:1bac4088-e9d0-4a18-b9ae-451339f4fb50 -->
@@ -247,8 +247,8 @@ GEN-453 (Notion page-text edits can report success while doing nothing, half, or
 - Live acceptance: GEN-453 — a removed neighbouring block gave "CHECK REMOVED", a real edit through Claude Code got its line; GEN-593 — an append to Vol. 8 through Claude Code was refused, 0 probe text in Vol. 8.
 - Wording (Erez-approved): new bullet in `~/.claude/hooks/refs/notion.md` ("Notion page-text edits get a checker line…") plus stale pointer parenthetical fixed; GEN-58 "How to log" step 5 now says keep the pointer line plain because the checker reads it.
 - Notes and test rigs in `notes/gen453/` (README, design v3, root-cause, write-verify r1–r3, drive.js, noedit-suite.js, harness tests, wording proposal). r3 doc is partly stale vs the code ("landed", "merged elsewhere").
-- GEN-58 Vol. 9: two Class E traces (header now 33x; "[GEN-508 v7 body-binding enumerate-vs-whitelist]" element now 3x) and one Class A trace (header 40x).
-- GEN-453 stays In Progress until GEN-800 updates its description to what was built; GEN-593 Done needs Erez's confirmation (via GEN-800).
+- GEN-58 Vol. 9: two Class E traces (header now 33x; "[GEN-508 v7 body-binding enumerate-vs-whitelist]" element now 3x) and one Class A trace (header 40x); after the wrap, one Class K new element (header 21x; volume count 9).
+- Closed after the wrap (Erez asked why GEN-800 was filed instead of updating the tickets directly; that was a misjudgment, logged on GEN-58 Class K): "What was built" sections appended to GEN-453 and GEN-593 via /vet-ticket with Erez's card approval; GEN-453 renamed "Catch Notion page edits that report success but change nothing, only part, or a neighbouring block" and set Done; GEN-593 Done (Erez confirmed); GEN-800 Done.
 
 Unresolved items filed: GEN-797, GEN-798, GEN-799, GEN-800 (all reviewer PASS, 1 round); merged into GEN-555 (review briefs should state the threat model).
 Not yet filed (noticed during the session, dropped from the post-compaction wrap): the old GEN-508 suite `notes/gen508-piece1/test-gen508.js` fails to start against the current gate (it needs a `vet-ticket-SKILL.md` beside the hook copy, then errors while loading the gate's internals); it was skipped, not fixed or retired.
