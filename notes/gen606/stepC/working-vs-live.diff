@@ -1,0 +1,693 @@
+--- stop-foryou-nudge.live.js	2026-10-11 13:56:14.186759800 +0300
++++ stop-foryou-nudge.js	2026-10-11 14:47:41.102618200 +0300
+@@ -109,6 +109,17 @@
+  *
+  * Fails open: any error -> no output, exit 0. Never disrupts turn end.
+  *
++ * SEARCH-FIRST STAGE (GEN-606 step C, 2026-10-11): a second, independent job in
++ * the same process and the same single output write (so it inherits the GEN-467
++ * one-write etiquette -- see stop-claim-linter.js's "WHY IT LIVES HERE"). When
++ * the finished reply proposes a NEW ticket and no board search has succeeded
++ * since Erez's last message, it adds a note asking for that search: appended to
++ * the For-you note when that fires (mode A), or emitted ALONE when the block is
++ * already on screen (mode B -- the one place this hook notes a block-carrying
++ * reply, deliberately, measured and switchable off; see the stage's own header
++ * above runHook). It runs after forYouNote() and can only add text; it never
++ * changes or removes the For-you note.
++ *
+  * FOLLOW-UP RE-NUDGE (GEN-748, 2026-09-29): a Stop with stop_hook_active true
+  * ends a continuation that some Stop hook's note opened. This hook used to exit
+  * there unconditionally, so when a continuation IT opened was used to do the
+@@ -756,9 +767,11 @@
+   process.exitCode = 1;
+ }
+ 
+-// State dir for this hook's two caps: the empty-message fire sentinel (see
+-// detection comment below; one anomalous empty-payload fire per session) and
+-// the follow-up re-nudge slots (see header). Everything in it is TTL-pruned so
++// State dir for this hook's caps: the empty-message fire sentinel (see
++// detection comment below; one anomalous empty-payload fire per session), the
++// follow-up re-nudge slots (see header), and the search-first stage's
++// once-per-Erez-message slots and per-session "after" pending files (see that
++// stage). Everything in it is TTL-pruned so
+ // it can't grow unbounded. Same pattern as stop-claim-linter.js's STATE_DIR.
+ // (fs/os/path are required at the top of the file.)
+ const EMPTY_FIRE_DIR = path.join(os.tmpdir(), 'claude-foryou-nudge-state');
+@@ -832,7 +845,413 @@
+   } catch (e) { /* dir missing or unreadable -> nothing to prune */ }
+ }
+ 
++// --- Search-first stage (GEN-606 step C) -------------------------------------
++// Job: when the finished reply PROPOSES A NEW TICKET (an offer, a question, a
++// commitment, a plan step, or a ticket draft shown in chat) and no board search
++// has succeeded since Erez's last message, add a note asking Claude to search
++// for an existing home before Erez decides -- the search-before-proposing that
++// GEN-606 found missing (2026-08-02, 2026-10-08) and that /vet-ticket Step 0b
++// defines. A reminder, not a lock: oddly worded proposals slip past.
++//
++// Two modes, picked by whether the For-you note above fires on this Stop:
++//   A (it fires: no block written yet) -> SF_NOTE_WITH_BLOCK is appended to it,
++//     so the block is written leading with the search result. Any pattern.
++//   B (it is silent: the block is already on screen, or the continuation was
++//     not this hook's) -> SF_NOTE_ALONE is emitted alone, asking for the search
++//     and one plain sentence of result, never a second block. Only when the
++//     reply puts a decision to Erez (putsDecision) -- a plain "I'll file it"
++//     commitment reaches /vet-ticket, whose Step 0b searches before filing.
++//     Its text must NOT start with FORYOU_NOTE_PREFIX, so the follow-up
++//     re-nudge never treats its continuation as one this hook opened to get a
++//     block. Mode B goes against the GEN-467 rule that notes stay silent after
++//     a shown block (stop-signal-surface.js header), so it ships with its
++//     duplicate-block risk MEASURED -- see the "after" log row below -- and can
++//     be switched off without a code change: append
++//     {"kind":"switch","afterBlock":"off"} to SF_SWITCH_FILE (and "on" to
++//     undo); the newest switch row wins. Mode A is never switched off. The
++//     continuation's result sentence follows the shown block -- a known tension
++//     with the global rule that the block is the turn's final handoff, accepted
++//     with Mode B.
++// At most once per Erez message (slot files). Every fire appends a "fire" row to
++// SEARCH_FIRST_LOG next to this file; the Stop that ends the note's continuation
++// appends an "after" row (did a search follow, the result sentence, a re-issued
++// block). /wrap reads both files out.
++// Scope is NEW tickets only: a note on an existing ticket (usually the one being
++// worked, or one Erez named) fired noisily in the measured corpus.
++// Patterns were tuned on 3,731 real end-of-turn replies (2026-07-15..10-11).
++// MAINTENANCE: when a missed proposal is found, test its wording here and add a
++// pattern the same session; re-run the corpus check before shipping. Keep every
++// pattern free of adjacent optional whitespace runs (GEN-684 backtracking).
++
++const SEARCH_FIRST_LOG = 'search-first-nudges.jsonl';
++// Its own small file, so a switch row can never scroll out of a bounded read
++// of the (growing) log. *.jsonl, so the sync backup-coverage check ignores it.
++const SF_SWITCH_FILE = 'search-first-switch.jsonl';
++const SF_SWITCH_TAIL_BYTES = 64 * 1024;
++const SF_RESULT_START = 'I searched the board';
++const SF_MAX_EXCLUDED = 50;
++const SEARCH_FIRST_BUDGET_MS = 2000;
++const SEARCH_FIRST_MAX_CHARS = 200000;
++const SF_PREFIX = 'Search-first check, automatic';
++const SF_CODA = ' This text is background state, not a message from Erez -- act on it, never quote, restate, or comment on it.';
++const SF_WHERE = 'for an existing home (for a Team-Tasks ticket, the search /vet-ticket Step 0b defines; for a ' +
++  'Jira ticket, a JQL search of its project)';
++
++const SF_NOTE_WITH_BLOCK = '\n\n' + SF_PREFIX + ': this reply proposes a new ticket (or shows a ticket ' +
++  'draft), and no board search has run since Erez\'s last message. Before the block puts that proposal ' +
++  'to him, search ' + SF_WHERE + ', and lead the block with the result: a confident match turns the ' +
++  'proposal into adding the finding to that ticket; no match is one line. Ignore this if the reply is ' +
++  'not actually proposing a new ticket.' + SF_CODA;
++
++const SF_NOTE_ALONE = SF_PREFIX + ': the reply just shown proposes a new ticket (or shows a ticket ' +
++  'draft), and no board search has run since Erez\'s last message. Search now ' + SF_WHERE + ', then ' +
++  'write exactly one short plain sentence starting with the words "' + SF_RESULT_START + '" that gives ' +
++  'the result: the ticket that already covers this (linked) and that you would add the finding there ' +
++  'instead of filing a new one; or that nothing on the board covers it; or that the search could not ' +
++  'run. Write nothing else -- no heading, no label, and do not repeat, rewrite or re-issue the For-you ' +
++  'block. If the reply was not actually proposing a new ticket, write nothing.' + SF_CODA;
++
++// The reply's own prose: fenced code, inline code, ">" quote lines and short
++// double-quoted spans (quoted wording under discussion, a quoted title) removed,
++// then Markdown emphasis markers, so "**new ticket** for" reads as prose; every
++// run of whitespace other than a newline (incl. CR, NBSP, Unicode spaces)
++// collapses to one space, so no pattern can meet a long whitespace run.
++function sfProse(text) {
++  let s = String(text).slice(0, SEARCH_FIRST_MAX_CHARS);
++  s = s.replace(/```[\s\S]*?```/g, ' ');
++  s = s.replace(/`[^`\n]*`/g, ' ');
++  s = s.split(/\r?\n/).filter((l) => !/^\s*>/.test(l)).join('\n');
++  // A quote right after a digit is an inch mark, not an opening quote.
++  s = s.replace(/(?<!\d)"[^"\n]{0,200}"|\u201C[^\u201D\n]{0,200}\u201D/g, ' ');
++  s = s.replace(/^([ \t]*)\*[ \t]+/gm, '$1- ');   // "* item" bullets survive the strip below as "- item"
++  s = s.replace(/\*+|__/g, '');
++  s = s.replace(/[^\S\n]+/g, ' ');
++  return s;
++}
++
++const SF_TKT = '(?:\\w+[- ]){0,5}tickets?\\b';
++const SF_FUP = '(?:\\w+[- ]){0,5}follow-ups?\\b';
++const SF_ASK = '(?:should I|shall I|want me to|do you want me to|would you like me to|can I|may I)';
++const SF_OFFER = "(?:I can|happy to|I'd like to)";
++const SF_COMMIT = "(?:I'll|I will|I'm going to|let me)";
++const SF_VERB = '(?:file|open|create|raise|draft|capture)';
++const SF_GO = '(?:say (?:the word|yes|go)|approve(?: it| this| the draft)?|once you (?:approve|OK|ok) it|reply approve|if you (?:agree|approve|like|want)|OK it)';
++// "file this update on GEN-732", "a note on GEN-5", "the takeover ticket [GEN-732]":
++// an existing ticket. Applied to the ask / offer / commit / go families.
++const SF_NOT_EDIT = '(?!\\s+(?:update|note|change|comment|correction)\\b)(?![^.?!\\n]{0,30}\\b(?:on|onto) GEN-\\d+)(?!\\s*\\[?GEN-\\d)';
++const SF_WILL_TICKET = '\\s+(?:also\\s+|then\\s+|just\\s+)?' + SF_VERB + '\\s+(?:(?:it|this|that|one)\\s+(?:as\\s+)?)?' + SF_TKT + SF_NOT_EDIT;
++const SF_WILL_FUP = '\\s+(?:also\\s+|then\\s+|just\\s+)?(?:file|capture)\\s+(?:(?:it|this|that|one)\\s+(?:separately\\s+)?(?:as\\s+)?)?' + SF_FUP + SF_NOT_EDIT;
++
++// ctx: the match counts only if this paragraph or the one before names a ticket.
++// All regexes carry the g flag: every match in a paragraph is tried, so an
++// excluded first match cannot hide a real later one.
++const SF_PATTERNS = [
++  { name: 'ask-ticket', re: new RegExp('\\b' + SF_ASK + '\\s+(?:also\\s+|then\\s+|just\\s+)?' + SF_VERB + '\\b[^.?!\\n]{0,80}?\\btickets?\\b' + SF_NOT_EDIT, 'gi') },
++  { name: 'ask-followup', re: new RegExp('\\b' + SF_ASK + '\\s+(?:also\\s+|then\\s+|just\\s+)?(?:file|capture)\\b[^.?!\\n]{0,80}?\\bfollow-ups?\\b' + SF_NOT_EDIT, 'gi') },
++  { name: 'ask-file-it', re: new RegExp('\\b' + SF_ASK + '\\s+(?:also\\s+|then\\s+|just\\s+)?(?:file|draft)\\s+(?:it|this|that|these|them|both|one)\\b' + SF_NOT_EDIT, 'gi'), ctx: true },
++  { name: 'bare-ask', re: /(?:^|[\s(])(?:file|create|open) (?:this|that|the|these|both|it as a) (?:new |follow-up |\w+ )?tickets?\s*\?/gim },
++  { name: 'offer-ticket', re: new RegExp('\\b' + SF_OFFER + SF_WILL_TICKET, 'gi') },
++  { name: 'offer-followup', re: new RegExp('\\b' + SF_OFFER + SF_WILL_FUP, 'gi') },
++  { name: 'commit-ticket', re: new RegExp('\\b' + SF_COMMIT + SF_WILL_TICKET, 'gi') },
++  { name: 'commit-followup', re: new RegExp('\\b' + SF_COMMIT + SF_WILL_FUP, 'gi') },
++  { name: 'would-new', re: /\b(?:I'd|I would)\s+(?:(?:file|draft|open|create)\s+(?:it |this |that |one )?(?:as )?(?:a |an )?(?:\w+ )?(?:new|separate|follow-up|standalone|own)\b|file (?:it|this|that) as an? (?:\w+ )?ticket\b)/gi, ctx: true },
++  { name: 'go-file', re: new RegExp('\\b' + SF_GO + '[^.?!\\n]{0,40}\\b(?:and|,)\\s*I\'ll\\s+(?:file|create)\\b' + SF_NOT_EDIT, 'gi'), ctx: true },
++  { name: 'as-ticket', re: /(?<!\bfiled |\bcaptured )\b(?:file|capture|track|record|write (?:it|this|that) up)\s+(?:(?:it|this|that|these|them|both|one)\s+)?(?:up\s+)?as an? (?:\w+[- ]){0,3}(?:tickets?|follow-ups?|learning)\b/gi },
++  { name: 'own-ticket', re: /(?<!\bfiled )\b(?:as|into|to|for) (?:its|their) own (?:\w+[- ]){0,3}ticket\b|\b(?:needs?|wants?|deserves?|warrants?|merits?) (?:its|their) own (?:\w+[- ]){0,3}ticket\b|\bor file (?:it |this |that )?(?:separately|new\b|as (?:a |its own )?(?:new |separate )?ticket)/gi },
++  { name: 'new-ticket-for', re: /\b(?:a|an|one)(?: \w+){0,2} (?:new|separate|follow-up|standalone|proposed|draft)(?:[- ]\w+){0,2} ticket (?:for|to|on|about|covering|that)\b/gi },
++  { name: 'drafts-of', re: /\bdrafts? of (?:the|a) new ticket\b/gi },
++  { name: 'plan-step', re: /^[ \t]*(?:\d+\\?[.)]|[-\u2022])[ \t]+(?:File|Draft|Open|Create|Capture) (?:a|an|the|one) (?:\w+[- ]){0,5}(?:ticket|follow-up)\b/gm },
++  { name: 'and-file', re: /\b(?:and|then) file (?:a|an|one) (?:\w+[- ]){0,3}ticket\b/gi },
++];
++// Mode B fires only when the reply puts a decision to Erez: a pattern that is a
++// question / offer / go-ahead / draft (SF_DECISION), or a neutral new-ticket
++// phrase (SF_NEUTRAL: "file it as a ticket", "its own ticket", "a follow-up
++// ticket for") that is not part of a plain commitment -- "I'll file a follow-up
++// ticket for X" matches commit-ticket AND new-ticket-for, and is a commitment.
++const SF_DECISION = new Set(['ask-ticket', 'ask-followup', 'ask-file-it', 'bare-ask', 'offer-ticket',
++  'offer-followup', 'would-new', 'go-file', 'chat-draft']);
++const SF_NEUTRAL = new Set(['as-ticket', 'own-ticket', 'new-ticket-for']);
++const SF_COMMIT_PATTERNS = new Set(['commit-ticket', 'commit-followup']);
++function putsDecision(patterns) {
++  if (patterns.some((n) => SF_DECISION.has(n))) return true;
++  return patterns.some((n) => SF_NEUTRAL.has(n)) && !patterns.some((n) => SF_COMMIT_PATTERNS.has(n));
++}
++// A new-ticket draft shown in chat: a Title line without a GEN id, then a
++// body/placement line. Matched on the whole reply. A /vet-ticket card (Title,
++// then a one-line Summary within two lines) is the sanctioned single ask -- on
++// an edit card the title need not carry the GEN id -- so it is exempt.
++const SF_CHAT_DRAFT_RE = /^[ \t-]*Title:(?![^\n]*GEN-\d)[^\n]{1,}$[\s\S]{0,2500}?^[ \t-]*(?:Body|Parent|Epic|Where it goes|Properties|Placement|Description|Problem):/im;
++const SF_CARD_SUMMARY_RE = /^[ \t-]*Summary:/im;
++// The reasoning-failure log has a fixed home by rule (no search needed), checked
++// on the match's sentence and the one before it.
++const SF_FIXED_HOME_RE = /\bGEN-58\b|\bQA tracker\b|\breasoning[- ]failure\b|\bprocess log\b/i;
++// Not our board: a vendor's support ticket, or opening an existing ticket to look
++// at it. Checked on the match plus the 40 characters after it. "a ticket with
++// Microsoft" names a vendor (capitalised); "a ticket with these criteria" does not.
++const SF_NOT_OURS_RE = /\bsupport (?:ticket|request|case)s?\b|\bhelp ?desk\b|\bservice desk\b|\bopen (?:the|that|this|its|their)\b/i;
++const SF_VENDOR_RE = /\b(?:[Tt]ickets?|[Rr]equests?|[Cc]ases?) with (?:[A-Z][\w.&-]*|the vendor)/;
++const SF_TICKET_WORD_RE = /\b(?:tickets?|GEN-\d+|follow-ups?|epic|Team-Tasks|board|learnings?)\b/i;
++
++// The match's sentence and the one before it, looking back at most 1,500 and
++// ahead at most 1,000 characters (bounded, so many matches in one huge
++// paragraph cannot add up to a slow run).
++function sfSentenceWindow(p, idx) {
++  const from = Math.max(0, idx - 1500);
++  const before = p.slice(from, idx);
++  const ends = [];
++  const re = /[.?!](?:\s|$)/g;
++  let m;
++  while ((m = re.exec(before))) ends.push(m.index + 1);
++  const start = from + (ends.length >= 2 ? ends[ends.length - 2] : 0);
++  const after = p.slice(idx, idx + 1000);
++  const e = /[.?!](?:\s|$)/.exec(after);
++  return p.slice(start, idx + (e ? e.index + 1 : after.length));
++}
++
++// Every pattern the reply matches, in SF_PATTERNS order (chat-draft last), or
++// [] for none. Pure.
++function detectTicketProposals(text) {
++  if (typeof text !== 'string' || !text) return [];
++  const s = sfProse(text);
++  const paras = s.split(/\n\s*\n/);
++  const found = [];
++  for (const pat of SF_PATTERNS) {
++    let hit = false;
++    let excluded = 0;   // matches examined, capped, so a flood of excluded matches stays cheap
++    for (let i = 0; i < paras.length && !hit && excluded < SF_MAX_EXCLUDED; i++) {
++      const p = paras[i];
++      pat.re.lastIndex = 0;
++      let m;
++      while (!hit && excluded < SF_MAX_EXCLUDED && (m = pat.re.exec(p))) {
++        excluded++;
++        if (m[0] === '') { pat.re.lastIndex++; continue; }
++        if (SF_FIXED_HOME_RE.test(sfSentenceWindow(p, m.index))) continue;
++        const near = p.slice(m.index, m.index + m[0].length + 40);
++        if (SF_NOT_OURS_RE.test(near) || SF_VENDOR_RE.test(near)) continue;
++        // "If yes -> file it as a ticket": an arrow before it describes a rule, not an offer.
++        if (/(?:\u2192|->)\s*$/.test(p.slice(Math.max(0, m.index - 4), m.index))) continue;
++        if (pat.ctx && !SF_TICKET_WORD_RE.test(p) && !(i > 0 && SF_TICKET_WORD_RE.test(paras[i - 1]))) continue;
++        hit = true;
++      }
++    }
++    pat.re.lastIndex = 0;
++    if (hit) found.push(pat.name);
++  }
++  const d = SF_CHAT_DRAFT_RE.exec(s);
++  if (d && !SF_CARD_SUMMARY_RE.test(s.slice(d.index, d.index + 400).split(/\r?\n/).slice(1, 3).join('\n'))) found.push('chat-draft');
++  return found;
++}
++
++// A user entry Erez typed. Current transcripts mark it origin.kind "human";
++// older ones carry no origin, so fall back to: not a tool result, not a meta /
++// compact-summary entry, not command output or an interrupt notice.
++function isErezMessage(e) {
++  if (!e || e.type !== 'user' || e.isSidechain === true || !e.message) return false;
++  const c = e.message.content;
++  if (Array.isArray(c) && c.some((b) => b && b.type === 'tool_result')) return false;
++  if (e.origin && typeof e.origin === 'object') return e.origin.kind === 'human';
++  if (e.isMeta === true || e.isCompactSummary === true) return false;
++  const t = typeof c === 'string' ? c
++    : (Array.isArray(c) ? c.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('') : '');
++  if (/^\s*<(?:local-command-stdout|local-command-caveat|task-notification)>/.test(t)) return false;
++  if (/^\s*\[Request interrupted/.test(t)) return false;
++  return true;
++}
++
++// A search for an existing home -- NOT a by-id read: notion-fetch and
++// notion-ticket-lookup.ps1 open one known page and do not count (counting them
++// would have silenced the 2026-10-08 incident, whose turn had a notion-fetch of
++// another page). A /vet-ticket run counts: its Step 0b searched or recorded why
++// it was skipped. MCP tools match by name suffix (the server id can change).
++// A tool search counts only once its result came back clean: not is_error, and
++// (for a REST call, which exits 0 on an HTTP error) no Notion error object in
++// the result. An unreachable connector or a rejected query is no search. A REST
++// search counts only as an actual HTTP call (curl / Invoke-RestMethod / ...),
++// not a command that merely mentions the URL.
++const SF_SEARCH_TOOL_RE = /(?:^|__)(?:notion-search|notion-query-data-sources|notion-query-multiple-data-sources|searchJiraIssuesUsingJql)$/;
++const SF_REST_SEARCH_RE = /api\.notion\.com\/v1\/(?:search|databases\/[^\/\s"']+\/query|data_sources\/[^\/\s"']+\/query)/i;
++const SF_HTTP_CALL_RE = /\b(?:curl(?:\.exe)?|Invoke-RestMethod|Invoke-WebRequest|irm|iwr)\b|\bfetch\(|https\.request\(/i;
++const SF_RESULT_ERROR_RE = /"object"\s*:\s*"error"/;
++// 'skill' (counts at once), 'tool' (counts once its result is clean), or null.
++function boardSearchKind(c) {
++  if (!c || c.type !== 'tool_use' || typeof c.name !== 'string') return null;
++  if (SF_SEARCH_TOOL_RE.test(c.name)) return 'tool';
++  const inp = c.input && typeof c.input === 'object' ? c.input : {};
++  if (c.name === 'Skill' && String(inp.skill || '').replace(/^\//, '') === 'vet-ticket') return 'skill';
++  const cmd = String(inp.command || '');
++  if ((c.name === 'Bash' || c.name === 'PowerShell') && SF_REST_SEARCH_RE.test(cmd) && SF_HTTP_CALL_RE.test(cmd)) return 'tool';
++  return null;
++}
++
++function sfResultClean(c) {
++  if (c.is_error === true) return false;
++  let t = c.content;
++  if (Array.isArray(t)) t = t.filter((b) => b && b.type === 'text' && typeof b.text === 'string').map((b) => b.text).join('');
++  return !(typeof t === 'string' && SF_RESULT_ERROR_RE.test(t.slice(0, 4000)));
++}
++
++// Index of the newest successful search in the entries (-1: none). Main-chain
++// calls only; a tool search is placed at its call, counted once its result is clean.
++function latestSearchIndex(entries) {
++  const pending = new Map();
++  let latest = -1;
++  for (let i = 0; i < entries.length; i++) {
++    const e = entries[i];
++    if (!e || e.isSidechain === true || !e.message || !Array.isArray(e.message.content)) continue;
++    for (const c of e.message.content) {
++      if (!c) continue;
++      if (e.type === 'assistant') {
++        const k = boardSearchKind(c);
++        if (k === 'skill') latest = Math.max(latest, i);
++        else if (k === 'tool' && typeof c.id === 'string') pending.set(c.id, i);
++      } else if (e.type === 'user' && c.type === 'tool_result' && pending.has(c.tool_use_id) && sfResultClean(c)) {
++        latest = Math.max(latest, pending.get(c.tool_use_id));
++      }
++    }
++  }
++  return latest;
++}
++
++// Since Erez's last message (or across the whole tail when it is not in the
++// tail): did a board search succeed; the key of his message; and how many of
++// his messages have come since the newest successful search (0: this one; -1:
++// none in the tail), logged so repeat fires within one ticket flow can be told
++// apart. Pure.
++function searchWindowState(entries) {
++  if (!Array.isArray(entries) || !entries.length) return null;
++  const prompts = [];
++  for (let i = 0; i < entries.length; i++) { if (isErezMessage(entries[i])) prompts.push(i); }
++  const p = prompts.length ? prompts[prompts.length - 1] : -1;
++  const latest = latestSearchIndex(entries);
++  const searched = latest > p;
++  const searchAge = searched ? 0 : (latest < 0 ? -1 : prompts.filter((i) => i > latest).length);
++  return { searched: searched, promptKey: p >= 0 && entries[p].uuid ? String(entries[p].uuid) : null, searchAge: searchAge };
++}
++
++function sfStateName(prefix, sessionId, key) {
++  const sid = String(sessionId || 'nosession').replace(/[^\w.-]/g, '_');
++  return path.join(EMPTY_FIRE_DIR, prefix + sid + (key === undefined ? '' : '.' + String(key || 'nokey').replace(/[^\w.-]/g, '_')));
++}
++
++// One fire per (session, Erez message). The message is keyed twice -- by its
++// transcript uuid (survives task-notification turns, which get a new prompt_id)
++// and by the payload's prompt_id (survives a long continuation whose tail no
++// longer holds the message) -- and a fire needs BOTH slots free. Exclusive
++// create, so concurrent Stop processes can never both take one. No usable key,
++// or any state error -> false (fail silent).
++function claimSearchFirstSlot(sessionId, uuidKey, promptId) {
++  try {
++    const names = [];
++    if (uuidKey) names.push(sfStateName('searchfirst.u.', sessionId, uuidKey));
++    if (promptId) names.push(sfStateName('searchfirst.p.', sessionId, promptId));
++    if (!names.length) return false;
++    fs.mkdirSync(EMPTY_FIRE_DIR, { recursive: true });
++    pruneEmptyFireDir();
++    if (names.some((n) => fs.existsSync(n))) return false;
++    for (const n of names) { fs.closeSync(fs.openSync(n, 'wx')); }
++    return true;
++  } catch (e) {
++    return false;
++  }
++}
++
++// Whether Mode B is switched off: the newest {"kind":"switch"} row in
++// SF_SWITCH_FILE says afterBlock "off". No file, no switch row, or any read
++// error -> on.
++function afterBlockSwitchedOff() {
++  try {
++    const rows = readTranscriptTail(path.join(__dirname, SF_SWITCH_FILE), SF_SWITCH_TAIL_BYTES);
++    if (!rows) return false;
++    for (let i = rows.length - 1; i >= 0; i--) {
++      if (rows[i] && rows[i].kind === 'switch') return rows[i].afterBlock === 'off';
++    }
++    return false;
++  } catch (e) {
++    return false;
++  }
++}
++
++function logSearchFirst(row) {
++  try {
++    fs.appendFileSync(path.join(__dirname, SEARCH_FIRST_LOG), JSON.stringify(row) + '\n');
++  } catch (e) { /* the note still goes out; only the count is lost */ }
++}
++
++// The "after" row: on the Stop that ends a search-first note's continuation, say
++// what the continuation did (a successful search after the note; the result
++// sentence, and whether it names a ticket; a re-issued For-you block). The fire leaves a per-session pending file naming
++// its prompt_id (stable across the note-driven continuation -- see FOLLOW-UP
++// RE-NUDGE); the next continuation Stop of the same prompt consumes it. A stale
++// file (another prompt) is just removed. Never affects any note.
++function recordSearchFirstAfter(input, msg) {
++  try {
++    if (input.stop_hook_active !== true) return;
++    const pf = sfStateName('searchfirst-after.', input.session_id);
++    if (!fs.existsSync(pf)) return;
++    let pend = null;
++    try { pend = JSON.parse(fs.readFileSync(pf, 'utf8')); } catch (e) { pend = null; }
++    try { fs.unlinkSync(pf); } catch (e) { /* already gone */ }
++    if (!pend || pend.prompt_id !== (input.prompt_id || null)) return;
++    // The continuation runs from the last stop_hook_summary (the one the fire's
++    // Stop wrote; the current Stop's own summary is written only after every
++    // Stop hook finishes -- see FOLLOW-UP RE-NUDGE).
++    const entries = readTranscriptTail(input.transcript_path, FOLLOWUP_TAIL_BYTES);
++    let s = -1;
++    if (Array.isArray(entries)) {
++      for (let i = entries.length - 1; i >= 0; i--) {
++        const e = entries[i];
++        if (e && e.type === 'system' && e.subtype === 'stop_hook_summary') { s = i; break; }
++      }
++    }
++    const fu = s >= 0 ? followupState(entries) : null;
++    // anchorOk: that summary really carries this stage's note (mode B: a string
++    // starting with SF_PREFIX; mode A: the For-you note with SF_PREFIX inside),
++    // so a change in when the harness writes summaries shows up in the data
++    // instead of silently skewing searched / blockReissued.
++    const ctx = s >= 0 && Array.isArray(entries[s].hookAdditionalContext) ? entries[s].hookAdditionalContext : [];
++    const anchorOk = ctx.some((c) => typeof c === 'string' &&
++      (pend.mode === 'B' ? c.indexOf(SF_PREFIX) === 0 : c.indexOf(FORYOU_NOTE_PREFIX) === 0 && c.indexOf(SF_PREFIX) !== -1));
++    const text = String(msg || '');
++    // Leading Markdown (bold, a bullet, a quote) does not hide the sentence.
++    const line = text.trim().replace(/^[*_>#\s-]+/, '');
++    const resultLine = line.toLowerCase().indexOf(SF_RESULT_START.toLowerCase()) === 0;
++    logSearchFirst({
++      ts: new Date().toISOString(), kind: 'after', session_id: input.session_id || null, prompt_id: input.prompt_id || null,
++      mode: pend.mode, anchorOk: anchorOk,
++      searched: s >= 0 ? latestSearchIndex(entries) > s : null,
++      resultLine: resultLine,
++      resultMatch: resultLine && /GEN-\d+|app\.notion\.com|atlassian\.net/i.test(line),
++      blockReissued: pend.mode === 'B' && (MARKER_RE.test(text) || !!(fu && fu.markerAfter))
++    });
++  } catch (e) { /* fail silent */ }
++}
++
++// The search-first text to add on this Stop, or null. withForYou: the For-you
++// note is firing on this Stop (mode A); otherwise mode B.
++function searchFirstNote(input, msg, withForYou) {
++  const patterns = detectTicketProposals(msg);
++  if (!patterns.length) return null;
++  const mode = withForYou ? 'A' : 'B';
++  if (mode === 'B') {
++    if (!putsDecision(patterns)) return null;
++    if (afterBlockSwitchedOff()) return null;
++  }
++  const st = searchWindowState(readTranscriptTail(input.transcript_path, FOLLOWUP_TAIL_BYTES));
++  if (!st || st.searched) return null;
++  if (!claimSearchFirstSlot(input.session_id, st.promptKey, input.prompt_id)) return null;
++  try {
++    fs.writeFileSync(sfStateName('searchfirst-after.', input.session_id), JSON.stringify({ prompt_id: input.prompt_id || null, mode: mode }));
++  } catch (e) { /* no "after" row for this fire */ }
++  logSearchFirst({
++    ts: new Date().toISOString(), kind: 'fire', session_id: input.session_id || null, prompt_id: input.prompt_id || null,
++    mode: mode, patterns: patterns, blockShown: MARKER_RE.test(msg), continuation: input.stop_hook_active === true,
++    searchAge: st.searchAge
++  });
++  return mode === 'A' ? SF_NOTE_WITH_BLOCK : SF_NOTE_ALONE;
++}
++
+ function runHook() {
++  const startedAt = Date.now();
+   // Fail-open watchdog + stdin error handler (backported from stop-claim-linter.js
+   // when this hook became load-bearing under GEN-467): if stdin never emits 'end'
+   // or errors, exit cleanly so the hook can never hang or crash turn-end.
+@@ -846,100 +1265,33 @@
+   process.stdin.on('end', () => {
+     clearTimeout(watchdog);
+     let additionalContext = null;
++    let input = null;
++    let msg = '';
+     try {
+-      const input = JSON.parse(raw || '{}');
+-
+-      const msg = typeof input.last_assistant_message === 'string'
++      input = JSON.parse(raw || '{}');
++      msg = typeof input.last_assistant_message === 'string'
+         ? input.last_assistant_message
+         : '';
+-
+-      // A Stop ending a hook-opened continuation: silent unless every
+-      // follow-up re-nudge condition holds (see header, FOLLOW-UP RE-NUDGE).
+-      // The slot is claimed last, only once the nudge is certain. An empty
+-      // finished reply never re-nudges: with the transcript possibly lagging
+-      // (hooks reference: it "may not yet include the current turn's most recent
+-      // messages"), an empty payload could hide a block that was written.
+-      if (input.stop_hook_active === true) {
+-        if (!msg || MARKER_RE.test(msg)) { process.exit(0); }
+-        const st = followupState(readTranscriptTail(input.transcript_path, FOLLOWUP_TAIL_BYTES));
+-        if (!st || !st.openedByThisHook || st.toolCalls < 1 || st.markerAfter) { process.exit(0); }
+-        if (!claimRenudgeSlot(input.session_id, input.prompt_id)) { process.exit(0); }
+-      }
+-
+-      // Detection: marker absent from the finished reply. An empty/missing
+-      // last_assistant_message also fires the prompt (GEN-467): this hook is the
+-      // load-bearing block trigger, so a payload anomaly must fail toward
+-      // prompting (a false prompt costs one sentence; a missed one costs the
+-      // turn's block). The note's own "ignore silently if no block owed" clause
+-      // keeps a false fire harmless. Empty-message fires are capped at one per
+-      // session via the sentinel below: an empty message can never carry the
+-      // marker, so without the cap a chain of anomalous empty payloads (both
+-      // fields missing) could re-fire indefinitely -- stop_hook_active is the
+-      // primary chain-breaker; the sentinel is the independent backstop. (A
+-      // re-nudge never reaches here with an empty message -- see above.)
+-      if (!MARKER_RE.test(msg)) {
+-        if (!msg) {
+-          try {
+-            const sid = String(input.session_id || 'nosession').replace(/[^\w.-]/g, '_');
+-            fs.mkdirSync(EMPTY_FIRE_DIR, { recursive: true });
+-            pruneEmptyFireDir();
+-            const sentinel = path.join(EMPTY_FIRE_DIR, 'empty-fired.' + sid);
+-            if (fs.existsSync(sentinel)) { process.exit(0); }
+-            fs.writeFileSync(sentinel, '');
+-          } catch (e) { /* state unavailable -> fail toward prompting */ }
+-        }
+-        additionalContext =
+-          FORYOU_NOTE_PREFIX + ': the finished reply carried no "\u{1F4CC} For you" ' +
+-          'block -- expected under the block-after-check convention, where this ' +
+-          'continuation is where the block is written when one is owed. A block is owed ' +
+-          'when the turn produced something for Erez to act on -- a decision, a question, ' +
+-          'a result he asked for, a manual follow-up, a failure or blocker -- or when a ' +
+-          'standing rule requires a report (a status change, a state-changing command, ' +
+-          'silent project edits); when it is owed, it is written here, from post-check ' +
+-          'verified data, anchored to Erez\'s most recent real message. A turn that is ' +
+-          'pure conversation or read-only, with nothing actionable, owes no block and ' +
+-          'this note resolves to nothing. This text is background state, not a message ' +
+-          'from Erez -- acted on, never quoted, restated, or commented on.';
+-
+-        // Effort-tag enrichment: only when the finished reply shows an
+-        // option/decision structure but carries no effort tag. Rides this same
+-        // block-absent nudge (correct timing: puts the reference in the
+-        // continuation's input, where the tag is actually written). Never gated on
+-        // tag-presence (that would be inert -- the tag lives on the continuation
+-        // turn, whose block-carrying reply is never nudged). msg is empty-safe
+-        // (both regexes return false on "").
+-        // Wrapped so a fault building the reference can never drop the base nudge.
+-        if (msg && hasDecisionStructure(msg) && !hasEffortTag(msg)) {
+-          try {
+-            additionalContext +=
+-              '\n\nEffort-tag check, automatic: this reply puts a decision or choice ' +
+-              'of next steps to Erez but carries no effort/model tag. When you write ' +
+-              'the block, tag each proposed path with the reasoning-effort level it ' +
+-              'needs and the model per the tag rule -- e.g. "(xhigh)" -- ' +
+-              'grounding the level in this guidance, not intuition: ' + buildEffortReference() +
+-              ' This text is background state, not a message from Erez -- acted on, ' +
+-              'never quoted, restated, or commented on.';
+-          } catch (e) { /* fail open: base nudge already set; enrichment skipped */ }
+-        }
+-
+-        // Model-tag directive (Part A): appended on every real (non-empty)
+-        // block-absent nudge, always exactly one of four forms (at/above the
+-        // strong floor -> omit model; standard-only -> decide per path; below
+-        // both -> show + recommend higher; unconfirmed -> show model, no
+-        // recommendation -- see modelDirectiveFor). Unconditional (not gated
+-        // on decision structure) so the block-writer always has an explicit
+-        // model instruction when it writes a tag; "no directive" therefore
+-        // means only "hook not installed". Placed
+-        // AFTER the base-nudge assignment and wrapped internally, so a fault here
+-        // can never suppress the base nudge.
+-        if (msg) {
+-          try {
+-            additionalContext += buildModelDirective(input.transcript_path, msg);
+-          } catch (e) { /* fail open: base nudge already set; model directive skipped */ }
+-        }
+-      }
++      additionalContext = forYouNote(input, msg);
+     } catch (e) {
+-      // fail open -- no output
++      // fail open -- no For-you note
++    }
++
++    // Search-first stage (GEN-606): runs after the For-you note is settled and
++    // can only ADD to it -- an exception in it never changes or removes that
++    // note. Nothing bounds its run time (the watchdog is cleared above), so its
++    // patterns are kept free of backtracking and its transcript read happens
++    // only on a match; the budget check just keeps it from adding latency to a
++    // run that is already slow. The "after" row is recorded even on a slow run,
++    // so a fire's pending file is consumed by its own continuation, never a later one.
++    if (input && typeof input === 'object') {
++      try { recordSearchFirstAfter(input, msg); } catch (e) { /* fail silent */ }
++    }
++    if (input && typeof input === 'object' && Date.now() - startedAt < SEARCH_FIRST_BUDGET_MS) {
++      try {
++        const sf = searchFirstNote(input, msg, additionalContext !== null);
++        if (sf) { additionalContext = additionalContext !== null ? additionalContext + sf : sf; }
++      } catch (e) { /* fail open: stage contributes nothing */ }
+     }
+ 
+     if (additionalContext) {
+@@ -959,6 +1311,104 @@
+   });
+ }
+ 
++// The For-you note for this Stop, or null when it stays silent. Behaviour is
++// exactly the pre-GEN-606 handler's (each silent exit there is a `return null`
++// here), moved into a function so the search-first stage can run after it.
++function forYouNote(input, msg) {
++  let additionalContext = null;
++
++  // A Stop ending a hook-opened continuation: silent unless every
++  // follow-up re-nudge condition holds (see header, FOLLOW-UP RE-NUDGE).
++  // The slot is claimed last, only once the nudge is certain. An empty
++  // finished reply never re-nudges: with the transcript possibly lagging
++  // (hooks reference: it "may not yet include the current turn's most recent
++  // messages"), an empty payload could hide a block that was written.
++  if (input.stop_hook_active === true) {
++    if (!msg || MARKER_RE.test(msg)) { return null; }
++    const st = followupState(readTranscriptTail(input.transcript_path, FOLLOWUP_TAIL_BYTES));
++    if (!st || !st.openedByThisHook || st.toolCalls < 1 || st.markerAfter) { return null; }
++    if (!claimRenudgeSlot(input.session_id, input.prompt_id)) { return null; }
++  }
++
++  // Detection: marker absent from the finished reply. An empty/missing
++  // last_assistant_message also fires the prompt (GEN-467): this hook is the
++  // load-bearing block trigger, so a payload anomaly must fail toward
++  // prompting (a false prompt costs one sentence; a missed one costs the
++  // turn's block). The note's own "ignore silently if no block owed" clause
++  // keeps a false fire harmless. Empty-message fires are capped at one per
++  // session via the sentinel below: an empty message can never carry the
++  // marker, so without the cap a chain of anomalous empty payloads (both
++  // fields missing) could re-fire indefinitely -- stop_hook_active is the
++  // primary chain-breaker; the sentinel is the independent backstop. (A
++  // re-nudge never reaches here with an empty message -- see above.)
++  if (!MARKER_RE.test(msg)) {
++    if (!msg) {
++      try {
++        const sid = String(input.session_id || 'nosession').replace(/[^\w.-]/g, '_');
++        fs.mkdirSync(EMPTY_FIRE_DIR, { recursive: true });
++        pruneEmptyFireDir();
++        const sentinel = path.join(EMPTY_FIRE_DIR, 'empty-fired.' + sid);
++        if (fs.existsSync(sentinel)) { return null; }
++        fs.writeFileSync(sentinel, '');
++      } catch (e) { /* state unavailable -> fail toward prompting */ }
++    }
++    additionalContext =
++      FORYOU_NOTE_PREFIX + ': the finished reply carried no "\u{1F4CC} For you" ' +
++      'block -- expected under the block-after-check convention, where this ' +
++      'continuation is where the block is written when one is owed. A block is owed ' +
++      'when the turn produced something for Erez to act on -- a decision, a question, ' +
++      'a result he asked for, a manual follow-up, a failure or blocker -- or when a ' +
++      'standing rule requires a report (a status change, a state-changing command, ' +
++      'silent project edits); when it is owed, it is written here, from post-check ' +
++      'verified data, anchored to Erez\'s most recent real message. A turn that is ' +
++      'pure conversation or read-only, with nothing actionable, owes no block and ' +
++      'this note resolves to nothing. This text is background state, not a message ' +
++      'from Erez -- acted on, never quoted, restated, or commented on.';
++
++    // Effort-tag enrichment: only when the finished reply shows an
++    // option/decision structure but carries no effort tag. Rides this same
++    // block-absent nudge (correct timing: puts the reference in the
++    // continuation's input, where the tag is actually written). Never gated on
++    // tag-presence (that would be inert -- the tag lives on the continuation
++    // turn, whose block-carrying reply is never nudged). msg is empty-safe
++    // (both regexes return false on "").
++    // Wrapped so a fault building the reference can never drop the base nudge
++    // (the test too: since GEN-606 this body is a function, and a throw here
++    // would otherwise leave it before the base nudge is returned).
++    let enrich = false;
++    try { enrich = !!(msg && hasDecisionStructure(msg) && !hasEffortTag(msg)); } catch (e) { enrich = false; }
++    if (enrich) {
++      try {
++        additionalContext +=
++          '\n\nEffort-tag check, automatic: this reply puts a decision or choice ' +
++          'of next steps to Erez but carries no effort/model tag. When you write ' +
++          'the block, tag each proposed path with the reasoning-effort level it ' +
++          'needs and the model per the tag rule -- e.g. "(xhigh)" -- ' +
++          'grounding the level in this guidance, not intuition: ' + buildEffortReference() +
++          ' This text is background state, not a message from Erez -- acted on, ' +
++          'never quoted, restated, or commented on.';
++      } catch (e) { /* fail open: base nudge already set; enrichment skipped */ }
++    }
++
++    // Model-tag directive (Part A): appended on every real (non-empty)
++    // block-absent nudge, always exactly one of four forms (at/above the
++    // strong floor -> omit model; standard-only -> decide per path; below
++    // both -> show + recommend higher; unconfirmed -> show model, no
++    // recommendation -- see modelDirectiveFor). Unconditional (not gated
++    // on decision structure) so the block-writer always has an explicit
++    // model instruction when it writes a tag; "no directive" therefore
++    // means only "hook not installed". Placed
++    // AFTER the base-nudge assignment and wrapped internally, so a fault here
++    // can never suppress the base nudge.
++    if (msg) {
++      try {
++        additionalContext += buildModelDirective(input.transcript_path, msg);
++      } catch (e) { /* fail open: base nudge already set; model directive skipped */ }
++    }
++  }
++  return additionalContext;
++}
++
+ // Entry: the CLI only when argv[2] is one of its three commands; otherwise the
+ // registered Stop hook (which passes no args) -- so an unexpected argument can
+ // never divert the hook into CLI mode. require()-ing the file runs neither.
+@@ -983,5 +1433,13 @@
+   buildEffortReference: buildEffortReference,
+   modelListPath: modelListPath,
+   MARKER_RE: MARKER_RE,
+-  followupState: followupState
++  followupState: followupState,
++  detectTicketProposals: detectTicketProposals,
++  putsDecision: putsDecision,
++  latestSearchIndex: latestSearchIndex,
++  searchWindowState: searchWindowState,
++  isErezMessage: isErezMessage,
++  boardSearchKind: boardSearchKind,
++  SF_NOTE_WITH_BLOCK: SF_NOTE_WITH_BLOCK,
++  SF_NOTE_ALONE: SF_NOTE_ALONE
+ };

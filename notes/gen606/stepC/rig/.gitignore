@@ -1,0 +1,4 @@
+# corpus.jsonl / fires-*.jsonl / judge-input.txt hold raw transcript text (may carry secrets) -- never commit
+*.jsonl
+*.txt
+working/

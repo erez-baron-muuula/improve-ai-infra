@@ -1,6 +1,23 @@
-# GEN-606 + GEN-802 — cold-pickup handoff (written 2026-10-11)
+# GEN-606 + GEN-802 — cold-pickup handoff (written 2026-10-11, step C update same day)
 
-**Pick up here.** Steps A, B and D are done and live. **Step C (the automatic search reminder) remains.** It is hook code, so run it through `/vet-code` at **xhigh** effort on a strong-floor model (see `notes/effort-model-reference.md`).
+**Pick up here — READ "Step C status (session b4adc493)" FIRST.** Steps A, B and D are done and live. Step C was built, reviewed and fully tested on 2026-10-11 but **NOT installed**: Erez's feedback on the timing decision reopens the design (below). It is hook code, so it goes through `/vet-code` at **xhigh** effort on a strong-floor model (see `notes/effort-model-reference.md`).
+
+## Step C status (session b4adc493, 2026-10-11) — built, NOT installed
+
+**Erez's words on the open decision (verbatim):** "The for you is just meant to be a summary. No need to run the same logic twice. however, I also don't want to 83 out of 100 times, to fail."
+
+**What he was answering.** Measured on 3,798 real past replies: the reminder would have fired 100 times (~1/day); an independent blind judge found 98/100 were real new-ticket proposals (84 clearly warranted, 6 not needed, 10 unclear from excerpt). But **83 of the 100 proposals sat inside a reply that already carried the For-you block** (the block is written in the main reply ~3/4 of the time despite the block-after-check convention; e.g. 2026-10-01..15: 326 blocks in first replies vs 98 in hook continuations). The 2026-10-08 incident (GEN-661 duplicate) is one of those 83. Options put to him: (1) fire before AND after the block (after the block: search, then add one plain sentence under it — risk of a repeated block); (2) fire only before the block (misses the 83%).
+
+**Reading of his answer (confirm with him in one line before redesigning):** neither option. The For-you block is a summary of the reply, so the check should run ONCE, on the proposal itself, before the summary — not again on/after the block; and it must still catch the ~83% case. The likely design direction: make the proposal and its block land AFTER the end-of-turn check — i.e. get the For-you block out of the first reply in practice (the convention already says it belongs on the hook continuation), so the single "before the block" path (Mode A) covers nearly every proposal. Things to evaluate: why the model writes the block in the main reply 3/4 of the time (rule wording? the For-you note's own text?), whether a hook can make that reliable, and whether a Mode-A-only reminder then reaches ~all proposals. Alternative reading to rule out: he only meant "don't repeat the same explanation in my reply and again in the block" (communication feedback) — if so, it still doesn't pick an option.
+
+**What exists (all in `notes/gen606/stepC/`):**
+- `stop-foryou-nudge.working.js` — the complete working copy (live hook + search-first stage; For-you logic moved into `forYouNote()` unchanged). sha256 (LF) `dfc27cdef0a9f4ef3dd1e0033803ce310121a13ed4336a35bdef139eb7d1f256`. `working-vs-live.diff` against the live hook as of 2026-10-11.
+- `design-v1.md`, `design-v2.md` — the design, evidence (E1–E10), and every review change.
+- `rig/` — measurement scripts (they expect to run from a folder holding `corpus.jsonl` and a `working/` copy; `.gitignore` keeps raw-transcript outputs out of git). Fixtures: `notes/gen606/test-search-first.js` (74/74 on the working copy) + `notes/gen748/run-fixtures.js` (43/43) + `notes/gen767/test-pass-consume.js` (3/3).
+- Vetting evidence: `/check` converged in 2 rounds (4 check-reviewers); code review 2 rounds each of Pass A (in-session) and Pass B (opus-5-5, PASS both rounds, minors fixed); 627-reply differential vs live: 480 identical, 147 reminder-only additions, 0 unexplained. Record: `~/.claude-staging/vetting-passes/gen606-stop-foryou-nudge.record.json` — bound to the hash above; **any redesign changes the hash, so the record must be re-done** (new /check on the new design). No pass was minted; nothing live changed.
+- Stage behaviour worth keeping in a redesign: new-ticket-only detector (15 patterns + exclusions, tuned on the corpus); "search" = notion-search / query-data-sources / JQL / real REST query / a /vet-ticket run, NOT notion-fetch (counting fetch would have silenced the 10-08 incident); window = since Erez's last message (`origin.kind === "human"`); once per Erez message (uuid + prompt_id slots); log `search-first-nudges.jsonl` (fire + after rows) and switch file `search-first-switch.jsonl`; the /wrap readout (counts, re-evaluate bar, liveness) was designed but not built.
+- Side finding (pre-existing, not from this change): under heavy parallel load (32 concurrent hook processes) BOTH the live and the new hook drop their output ~2/3 of the time — the 5 s stdin watchdog fires under CPU starvation. Irrelevant at normal load; noted in `rig/regress-corpus.js`.
+
 
 ## Tickets
 - **GEN-606** "Check for an existing ticket before proposing where a finding should be recorded": https://app.notion.com/p/3b06e495d07c81138aa8d1d0d0423b43
@@ -74,4 +91,4 @@ It then injects one line telling Claude to search the board first and lead with 
 4. Consider whether the /check rule-check lens should gain a line on checking always-loaded additions against Erez's size goal and preferring a net-negative version. Per the GEN-58 class G lesson, this is a learning; at /wrap it is filed as a ticket.
 
 ## Pickup prompt for the new session
-"Continue GEN-606 + GEN-802: read `notes/gen606/HANDOFF.md` in the Improve AI Infra repo and build step C (the search-first reminder hook) through /vet-code. Effort xhigh."
+"Continue GEN-606 + GEN-802: read `notes/gen606/HANDOFF.md` in the Improve AI Infra repo — start at 'Step C status (session b4adc493)'. Confirm my reading of Erez's feedback in one line, then redesign step C so the search runs once, before the For-you summary, and still catches the ~83% of proposals that today land inside the block; reuse the built working copy; through /check then /vet-code. Effort xhigh."
