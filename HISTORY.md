@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-11 — GEN-606 + GEN-802: search-first + single-ask ticket filing installed in /vet-ticket, global rules file shrunk 581 chars after Erez rejected growing it; reminder hook (step C) handed off to a new session via notes/gen606/HANDOFF.md <!-- toc-session:d6c3e52d-ef53-41e6-99c4-62897c0a4e83 -->
+- 2026-10-11 — GEN-606 + GEN-802: search-first + single-ask ticket filing installed in /vet-ticket, global rules file shrunk 581 chars after Erez rejected growing it; step C handed off; config-health concurrent-wrap gap found and filed as GEN-813 <!-- toc-session:d6c3e52d-ef53-41e6-99c4-62897c0a4e83 -->
 - 2026-10-08 — GEN-453 + GEN-593: Notion write checker and practice page installed and live-verified; both closed Done; GEN-797–799 filed. <!-- toc-session:35cfb8b3-1487-41fc-ae5f-ad0d1e455e0b -->
 - 2026-10-06 (3) — GEN-748 re-nudge verification scan run 1: all bars clear; next run 20 Oct. <!-- toc-session:e8da7d4b-4653-4a0e-b6c9-03f66b25a774 -->
 - 2026-10-06 (2) — GEN-638 final check-in: Gemini key proven working; Notion old-token check waits until after Oct 11. <!-- toc-session:ef69529d-cba7-4f87-867f-2cda924b4d66 -->
@@ -263,9 +263,13 @@ Erez asked to work on GEN-606 and whether to add another GEN-86 ticket. Bundled 
 - **Still open:** step C, the end-of-turn search-first reminder in `stop-foryou-nudge.js` via /vet-code at xhigh. It comes with a new `search-first-nudges.jsonl` log and a /wrap readout step modeled on Step 3e. Erez chose a new session.
 - **Deviation from plan:** the /wrap readout was deferred to step C, because the log it reads doesn't exist until the hook does.
 - **Handoff:** `notes/gen606/HANDOFF.md` plus memory pointer `gen606-bundle.md`.
-- **Unresolved items filed:** none new. Merged into GEN-674 (intake-bar evidence: check always-loaded additions against the size goal, offer the net-negative version first; reviewer PASS, 1 round).
+- **Unresolved items filed:** GEN-813 (filed in the second wrap, at Erez's request). Merged into GEN-674 (intake-bar evidence: check always-loaded additions against the size goal, offer the net-negative version first; reviewer PASS, 1 round).
 - **Reversals judged non-learning:** none. The one reversal (growing the rules file → net shrink) is logged on GEN-58 and merged into GEN-674.
-- **Config-health:** the global-file change check reported no change even though `CLAUDE.md` was edited this session. Not investigated; the edit itself passed /check.
+- **Config-health miss, investigated after the first wrap at Erez's request:** the high-water marker is one per-machine value.
+  - A concurrent Invoice Automation session (`6747d9f7…`) wrapped at 12:33–12:34 and advanced it to HEAD.
+  - HEAD already contained this session's 12:27 `CLAUDE.md` commit `793752d`, so this session's `detect-global` saw no change.
+  - Filed GEN-813 "Make /wrap's rules-file health check cover every rules edit a session made, even when another session's wrap ran first" (To Do, Medium, under GEN-86), via /vet-ticket with a reviewer PASS in one round. Not shown to Erez, at his instruction.
+  - The edit was then scanned by hand in the second wrap: no finding on it.
 - **Dead end:** one rebuild of the working copies was blocked once by the auto-mode classifier as self-modification. It was a scratch-only write, and it succeeded on retry after Erez's go. This is not a GEN-316 credential case.
 
 ---
