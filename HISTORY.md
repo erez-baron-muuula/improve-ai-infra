@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-11 (3) — GEN-606 + GEN-802 finished: pre-display hold probed and ruled out; search-first reminder installed (Option 1); /wrap Step 3g readout added; both tickets in Review for Erez <!-- toc-session:60db0146-9afd-4357-9f97-2ba65eea67fa -->
 - 2026-10-11 (2) — GEN-606 step C search-first reminder built and fully vetted but not installed; Erez reopened the timing design (check once, before the summary, still catch the 83%); GEN-819 filed, GEN-556 appended <!-- toc-session:b4adc493-011f-4b6b-a8a9-57df3f7fe594 -->
 - 2026-10-11 — GEN-606 + GEN-802: search-first + single-ask ticket filing installed in /vet-ticket, global rules file shrunk 581 chars after Erez rejected growing it; step C handed off; config-health concurrent-wrap gap found and filed as GEN-813 <!-- toc-session:d6c3e52d-ef53-41e6-99c4-62897c0a4e83 -->
 - 2026-10-08 — GEN-453 + GEN-593: Notion write checker and practice page installed and live-verified; both closed Done; GEN-797–799 filed. <!-- toc-session:35cfb8b3-1487-41fc-ae5f-ad0d1e455e0b -->
@@ -236,6 +237,50 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-11 (3) — GEN-606 + GEN-802 finished: search-first reminder installed, /wrap readout added, both tickets in Review
+<!-- session:60db0146-9afd-4357-9f97-2ba65eea67fa -->
+
+Erez picked up the GEN-606 step C handoff. Opus 5.5.
+
+**Reading of Erez's feedback corrected.** The handoff's reading ("search once, before the For-you summary") was offered back to him for a one-line confirmation, and he rejected it. What he actually wants, in his words: "I want the search to be done before this proposal is even written... you draft a proposal without showing it to me, you search the board, and only then, you show me the results."
+
+**A pre-display hold was probed and ruled out.**
+- Claude Code 2.1.295 has a `MessageDisplay` hook. The docs say it "holds each batch until your hook returns", and its `displayContent` replaces the text on screen; it is display-only.
+- The plan was to hold an unsearched proposal off screen until the search was done. Every desktop session runs with `--include-partial-messages`, and in app/SDK mode the hook fires once per message, after the message completes.
+- Probe: a throwaway hook in a scratch folder's project settings swapped PINEAPPLE for [held] after 4 s. In the desktop app Erez saw PINEAPPLE first, then [held]. Text cannot be kept off screen, so the approach is dead.
+- The probe's input fields: session_id, transcript_path, cwd, scratchpad_dir, prompt_id, turn_id, message_id, index, final, delta.
+- The probe was torn down the same session. Only an empty `scratchpad/md-probe` folder stayed, held open by the probe session.
+- The conclusion: only the step-A instruction (/vet-ticket Step 0b) can put the search before the proposal; the hook can only catch a slip right after it.
+
+**Decision and install.**
+- Erez chose Option 1: catch the slip right away, before or after the block. That is the built working copy, unchanged.
+- He approved the 7 imperfect historical fires (2 borderline, 5 not needed, out of 100).
+- Before install, everything was re-run: fixtures 74/74, gen748 43/43, gen767 pass-consume 3/3. The working copy matched the vetted hash, and the live hook had been unchanged since 2026-10-04.
+- The review evidence (4 check-reviewers and 2 Pass B runs on opus-5-5) was verified in session b4adc493's subagents folder. Erez was told it came from that session, not this one.
+- Installed `~/.claude/hooks/stop-foryou-nudge.js` via `update-config.ps1 -Op write-file`. Installed hash `dfc27cde…`, byte-identical to the vetted copy; the pass was consumed and a live-fire test passed.
+
+**/wrap Step 3g (the search-first reminder readout).**
+- Added via /vet-rule. /check converged in 3 rounds with sonnet reviewers:
+  - Round 1, pre-mortem material finding: the switch-off-or-keep bar was a lifetime count, so it would nag at every wrap forever. Fixed: the bar counts only rows newer than the newest switch row, and "keep" appends an `on` row that restarts the count.
+  - Round 2: the switch row's timestamp was a hand-typed placeholder. Fixed: the shell stamps it, and the confirm step checks it.
+  - Round 3: PASS.
+- Installed hash `55c8e464…`; the pass was consumed.
+
+**Close-out.**
+- GEN-606 and GEN-802 bodies were updated to what was built, through /vet-ticket with reviewer PASS. One GEN-606 note corrected the session attribution: part 1 was installed in d6c3e52d.
+- A follow-up edit relabelled GEN-606's three parts, which Notion rendered as "1., 1., 1.".
+- Both tickets moved to Review, assignee Erez. Verification: over his next 5 ticket proposals, he sees a search result before any ask, and is asked only once.
+
+**Not done from the approved plan:** the planned GEN-58 entry. The probe showed the original design was right that nothing can act before text appears, and Erez's correction of the reading was the confirmation step working, so there was no reasoning failure to log.
+
+Reversals judged non-learning: Erez rejected the inherited reading of his feedback. The one-line confirmation step existed for exactly this and caught it before any design work, so no habit to fix.
+
+Unresolved items filed: none. Merged into GEN-812: 2 of 4 /vet-ticket reviewers this session omitted the verdict block, and the GEN-812 wrap reviewer did too (reviewer PASS, 1 round after a restatement).
+
+Notes: of the 7 ticket reviewers this session, 3 omitted the verdict block on their first hand-back (GEN-802 close-out, GEN-606 re-review, GEN-812 append); all 3 were fixed by a SendMessage restatement.
+
+---
+
 ## 2026-10-11 (2) — GEN-606 step C (search-first reminder) built and fully vetted, NOT installed: Erez reopened the timing design
 <!-- session:b4adc493-011f-4b6b-a8a9-57df3f7fe594 -->
 
