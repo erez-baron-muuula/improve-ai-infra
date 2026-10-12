@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-12 — GEN-638 bundle complete: Gemini proven, old Notion token confirmed gone, key scan clean; GEN-638, GEN-163 and GEN-425 renamed to outcomes and closed Done via /vet-ticket <!-- toc-session:61e64356-9a30-44ee-a5ea-85e4a4bbb9e7 -->
+- 2026-10-12 — GEN-638 bundle complete: Gemini proven, old Notion token confirmed gone, key scan clean; GEN-638, GEN-163 and GEN-425 closed Done; key-sheet deletion filed for Erez (GEN-824) <!-- toc-session:61e64356-9a30-44ee-a5ea-85e4a4bbb9e7 -->
 - 2026-10-11 (3) — GEN-606 + GEN-802 finished: pre-display hold probed and ruled out; search-first reminder installed (Option 1); /wrap Step 3g readout added; both tickets in Review for Erez <!-- toc-session:60db0146-9afd-4357-9f97-2ba65eea67fa -->
 - 2026-10-11 (2) — GEN-606 step C search-first reminder built and fully vetted but not installed; Erez reopened the timing design (check once, before the summary, still catch the 83%); GEN-819 filed, GEN-556 appended <!-- toc-session:b4adc493-011f-4b6b-a8a9-57df3f7fe594 -->
 - 2026-10-11 — GEN-606 + GEN-802: search-first + single-ask ticket filing installed in /vet-ticket, global rules file shrunk 581 chars after Erez rejected growing it; step C handed off; config-health concurrent-wrap gap found and filed as GEN-813 <!-- toc-session:d6c3e52d-ef53-41e6-99c4-62897c0a4e83 -->
@@ -256,7 +256,15 @@ Started as the scheduled task `gen638-final-checks`; continued live with Erez in
 
 **Process note:** two title-only reviewers in a row returned a report without the machine-read verdict line; a SendMessage asking for only the block fixed it. Brief short reviews with "reports without the block cannot be used".
 
-**Still open / not done:** nothing in the bundle. Whether to keep or delete the key sheet itself remains Erez's call. The other 37 `AIza…` values in old logs stay uncheckable from this PC (stated as an accepted limit on GEN-638). The phone push for the scheduled run did not send (Remote Control inactive).
+**Key sheet:** Erez decided to delete "API tokens and keys - AI". Claude cannot (the auto-approve guard blocks any tool call carrying its Drive id; deletion is Erez's action), so it is filed for him as GEN-824.
+
+**Wrap (2026-10-12):**
+Unresolved items filed: GEN-824 "Delete the old key sheet now that every key in it is replaced" (To Do, Erez, under GEN-86; reviewer PASS, 1 round). Merged: GEN-174 (Forge token renewal ticket is stale: new token 2026-10-05, expiry ~2027-10-05, sheet no longer the store) and GEN-254 (leaked-credentials ticket likely largely resolved by GEN-638 step 4; lists what is unverified) — both reviewer PASS, 1 round. GEN-824 was created with body content rather than the Task Template.
+Not appended: this session's verdict-block data for GEN-812 (2 of 9 reviewers omitted the block; both fixed by one SendMessage) — GEN-812 is In Progress in a concurrent Improve AI Infra session (`notes/gen812/`), so it was left to that session rather than editing a ticket under active work.
+Dropped learnings: (1) refresh the record file a reviewer will verify against before asking it to verify (the GEN-163 round-1 REVISE) — case-specific; (2) `read-cloud-logs.js` defaults to 200 entries — its header already says "capped".
+Reversals judged non-learning: none.
+
+**Still open / not done:** nothing in the bundle except GEN-824 (Erez). The other 37 `AIza…` values in old logs stay uncheckable from this PC (stated as an accepted limit on GEN-638). The phone push for the scheduled run did not send (Remote Control inactive).
 
 ---
 
