@@ -247,7 +247,8 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 **Found:** hook-injected text is capped at 10,000 chars (docs); notion.md (22k) and shell.md (20k) reach sessions only as a 2,000-char preview. Filed GEN-825 (card approved by Erez).
 **Tickets:** GEN-812 → Review (result note appended), then → **Done** at the first /wrap on Erez's "close it" (acceptance 10/10 met; `reviewer-verdict-guard.accepted` created to retire the acceptance line); GEN-798 → Done (result note; plan-approved); GEN-825 filed (To Do, High). GEN-58 Vol. 9: class I new element "effort tag on the wrong object" (Erez caught it).
 **Acceptance already reached at this wrap:** 10 of the first 10 live ticket reviews (3 sessions) clean — 7 first-try, 3 auto-fixed by a bounce; put to Erez as a close proposal.
-Unresolved items filed: none. Merged into GEN-611: effort tag attached to a later task, not the path being decided (reviewer PASS, 1 round).
+Unresolved items filed: none. Merged into GEN-611: effort tag attached to a later task, not the path being decided (reviewer PASS, 1 round). Merged into GEN-460 (at Erez's request, card approved): three BACKUP-COVERAGE warnings this session; add hook marker files as a bucket-2 pattern and run the check at install time (reviewer PASS, 1 round).
+**After the wraps:** added the guard's `.accepted/.off/.testonly` marker files to sync.ps1 `$IgnoreFiles` at Erez's request; sync re-run clean.
 Reversals judged non-learning: notion.md sign-off line rewrite → delete (Erez's point; the advice already lived in vet-ticket Step 7 — case-specific).
 Not filed: wrap Step 1's "evidence-precondition failure = hard error" vs the new vet-ticket Step 7 "re-ask first" (rule-check advisory, small ambiguity on the unattended lane); optional guard refinements are listed in GEN-812's body.
 Loose end: GEN-812's result note says the notes-size ticket is "to be proposed" — it is GEN-825.
