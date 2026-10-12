@@ -129,10 +129,12 @@ console.log('\n== 5. the --ticket-hash allow-list regex is still tightly pinned 
   // and .json paths still exclude every shell metacharacter, and the tool arg is a CLOSED ENUM anchored to
   // the end (`$`, no `m` flag) -- so nothing can be chained/expanded/redirected after it and the tool arg
   // itself carries no metacharacter. A future change to the argv contract must deliberately update these.
+  // GEN-743 deliberately added `%` to both classes (a cmd.exe %VAR% expansion could ride a .cmd node shim);
+  // these pins were not updated with it, which is what left them red until 2026-10-12.
   check('the regex still excludes shell metacharacters in the script path',
-        hookSrc.indexOf('([^"<>|&;`$]+auto-approve\\.js)') !== -1, 'metachar exclusion on the path changed');
+        hookSrc.indexOf('([^"<>|&;`$%]+auto-approve\\.js)') !== -1, 'metachar exclusion on the path changed');
   check('the regex still excludes shell metacharacters in the .json argument',
-        hookSrc.indexOf('--ticket-hash\\s+"([^"<>|&;`$]+\\.json)"') !== -1, 'the --ticket-hash .json arg shape changed');
+        hookSrc.indexOf('--ticket-hash\\s+"([^"<>|&;`$%]+\\.json)"') !== -1, 'the --ticket-hash .json arg shape changed');
   check('the regex ends on the fixed --tool enum (closed set, anchored as the last token)',
         hookSrc.indexOf('--tool\\s+"?(?:create|update|duplicate|move)"?$') !== -1, 'the --tool arg pin changed');
   check('isSafeTicketHash still gates the shell allow-list approve (call site intact)',
@@ -247,6 +249,27 @@ console.log('\n== 11. break-glass is scoped to mechanical blocks in the ticket g
         'the scoped break-glass helper is missing or its mechanical reason set changed');
   check('every break-glass skip is logged as its own event (not silent)',
         hookSrc.indexOf("event: 'break-glass-skip'") !== -1, 'break-glass skips are not logged');
+}
+
+console.log('\n== 12. GEN-663 #3: the GEN-58 exempt root keys are DERIVED from the housekeeping root keys ==');
+{
+  // The exempt set used to restate the housekeeping set's nine members by hand. Pin the derivation, and
+  // pin the resulting membership so the refactor provably changed nothing.
+  check('TICKET_EXEMPT_ROOT_KEYS spreads TICKET_HK_ROOT_KEYS instead of restating it',
+        /const TICKET_EXEMPT_ROOT_KEYS = new Set\(\[\s*\.\.\.TICKET_HK_ROOT_KEYS,/.test(hookSrc),
+        'the exempt root-key set no longer derives from the housekeeping set');
+  const setLit = name => {
+    const m = hookSrc.match(new RegExp('const ' + name + ' = new Set\\(\\[([\\s\\S]*?)\\]\\);'));
+    return m ? m[1] : '';
+  };
+  const lits = s => (s.match(/'([^']+)'/g) || []).map(x => x.slice(1, -1));
+  const hk = lits(setLit('TICKET_HK_ROOT_KEYS'));
+  const exempt = new Set(hk.concat(lits(setLit('TICKET_EXEMPT_ROOT_KEYS'))));
+  const expected = ['page_id', 'pageId', 'id', 'command', 'properties', 'icon', 'cover', 'is_skill', 'allow_async',
+                    'content', 'old_str', 'new_str', 'selection_with_ellipsis', 'position', 'content_updates'];
+  check('the derived exempt set has exactly the 15 members the hand-written list had',
+        exempt.size === expected.length && expected.every(k => exempt.has(k)),
+        'got ' + [...exempt].join(','));
 }
 
 H.cleanup();

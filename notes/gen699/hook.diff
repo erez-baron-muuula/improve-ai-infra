@@ -1,0 +1,221 @@
+--- C:/Users/Erez/.claude/hooks/auto-approve.js	2026-10-08 13:35:45.903049800 +0300
++++ "C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen508-piece1/auto-approve.working.js"	2026-10-12 14:45:02.786730100 +0300
+@@ -1930,8 +1930,12 @@
+ // Root `old_str` and `selection_with_ellipsis` are NOT in today's schema either, and are kept here
+ // only because removing them narrows the exemption on a surface this change did not review. Narrowing
+ // is the safe direction, so it is a separate change, not a silent one.
++//
++// GEN-663 #3: DERIVED from the stage-2 set rather than restating its nine members, which is the drift an
++// earlier design suffered when it stated a list twice. Consequence, stated so it is a choice and not a
++// surprise: adding a key to TICKET_HK_ROOT_KEYS also widens the root keys a GEN-58 content write may carry.
+ const TICKET_EXEMPT_ROOT_KEYS = new Set([
+-  'page_id', 'pageId', 'id', 'command', 'properties', 'icon', 'cover', 'is_skill', 'allow_async',
++  ...TICKET_HK_ROOT_KEYS,
+   'content', 'old_str', 'new_str', 'selection_with_ellipsis', 'position', 'content_updates'
+ ]);
+ // `content_updates` is admitted as a CLOSED shape, for the same reason the root key set is closed: an
+@@ -2471,9 +2475,15 @@
+ // which is the point: it is a malformed target, not an absent one, and the caller blocks on it.
+ //
+ // A canonically dashed uuid is matched FIRST, on the raw value, because the dashes pin the id's
+-// boundaries exactly and no surrounding text can bleed into it. Only when there is no dashed form
+-// does the value get dash-stripped and scanned for hex runs -- which is what a bare id, an odd
+-// dashing, and a `/p/<id32>` URL all need.
++// boundaries exactly and no surrounding text can bleed into it. Each dashed match is then replaced by a
++// space -- so it cannot fuse with neighbouring hex -- and the REST of the value is dash-stripped and
++// scanned for hex runs, which is what a bare id, an odd dashing, and a `/p/<id32>` URL all need.
++//
++// GEN-663 #1: this used to RETURN after the dashed matches, so a value holding a dashed id AND a bare
++// one yielded only the dashed id. That is a fail-open on the GEN-58 exemption, whose clause 1 needs
++// EVERY id to be exempt: `"<GEN-58 dashed>, <ticket bare>"` passed on the GEN-58 id alone. Now both
++// forms are collected. The change only ever ADDS ids, and having more ids can only remove an exemption
++// (clause 1) or keep a write 'in' (stage 5) -- no verdict depends on having fewer.
+ //
+ // Measured over the 1,387 id-ish values in the corpus: 976 canonically dashed, 394 bare 32-hex, 9
+ // oddly dashed but still 32-hex once stripped, 6 `/p/<id32>` URLs, 2 malformed. NOT ONE dash-strips
+@@ -2489,12 +2499,10 @@
+   const seen = new Set();
+   const add = id => { if (!seen.has(id)) { seen.add(id); out.push(id); } };
+ 
+-  const dashed = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g);
+-  if (dashed) {
+-    for (const d of dashed) add(d.replace(/-/g, ''));
+-    return out;
+-  }
+-  const bare = raw.replace(/-/g, '');
++  const DASHED = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
++  const dashed = raw.match(DASHED);
++  if (dashed) for (const d of dashed) add(d.replace(/-/g, ''));
++  const bare = raw.replace(DASHED, ' ').replace(/-/g, '');
+   const re = /[0-9a-f]+/g;
+   let m;
+   while ((m = re.exec(bare)) !== null) {
+@@ -2690,14 +2698,30 @@
+   // Stage 3 -- the GEN-58 carve-out. The exemption file is read HERE, and its cap is checked here,
+   // with its own two reasons: an unreadable or over-cap list must not fall into the generic
+   // internal-error bucket, which is reserved for a genuine bug in this arm.
+-  const exempt = readExemptPages();
+-  if (!exempt.ok) {
+-    const reason = exempt.why === 'over-cap' ? 'exempt-list-overflow' : 'exempt-list-unreadable';
+-    return { scope: 'block', surface: 'notion-mcp', reason: reason, target: label, hash: hash, ids: split.pageIds };
+-  }
+-  if (tool === NOTION_UPDATE_TOOL && ticketIsContentOnly(norm) &&
+-      ticketIsGen58Exempt(norm, split.pageIds, exempt)) {
+-    return { scope: 'out' };
++  //
++  // GEN-699 #3: the file is consulted ONLY where it can change the verdict. It used to be read for every
++  // write reaching this stage, so a broken file blocked creates, moves, duplicates, substance property
++  // edits and even the hardcoded GEN-58 row -- none of which the file decides. Now:
++  //  - not a content-only update-page write -> the carve-out cannot apply, so stage 3 is skipped;
++  //  - every page id is the hardcoded GEN-58 row -> decided with an EMPTY file set, no read. (Vacuously
++  //    true for NO ids -- harmless only because ticketIsGen58Exempt returns false on an empty id list,
++  //    its clause-1 guard; keep that guard if this changes);
++  //  - otherwise the file is read, and unreadable / over-cap blocks exactly as before.
++  // With a healthy file every verdict is identical to reading it up front: the skipped writes fail the
++  // `tool === NOTION_UPDATE_TOOL && ticketIsContentOnly(norm)` test whatever the file says, and the
++  // GEN-58-row-only writes pass clause 1 on the hardcoded id alone.
++  if (tool === NOTION_UPDATE_TOOL && ticketIsContentOnly(norm)) {
++    let exempt;
++    if (split.pageIds.every(id => id === GEN58_PAGE_ID)) {
++      exempt = { ok: true, why: '', ids: new Set() };
++    } else {
++      exempt = readExemptPages();
++      if (!exempt.ok) {
++        const reason = exempt.why === 'over-cap' ? 'exempt-list-overflow' : 'exempt-list-unreadable';
++        return { scope: 'block', surface: 'notion-mcp', reason: reason, target: label, hash: hash, ids: split.pageIds };
++      }
++    }
++    if (ticketIsGen58Exempt(norm, split.pageIds, exempt)) return { scope: 'out' };
+   }
+ 
+   // Stage 4 -- the marker.
+@@ -3028,9 +3052,11 @@
+ //  2  the URL path is exactly /v1/blocks/<id>/children -- the append-children endpoint, i.e. the REST
+ //     form of a log append;
+ //  3  <id>, lower-cased with dashes stripped, is the hardcoded GEN-58 page id or a valid line in the
+-//     exemption file. (The file's own lines are "exactly 32 hex characters" with no case
+-//     normalisation, so an upper-case line would not match -- the safe direction, stated so it is
+-//     not discovered later.)
++//     exemption file. (readExemptPages lower-cases each line BEFORE its "exactly 32 hex characters"
++//     test, so an upper-case line DOES match. A DASHED line does not: it fails the 32-hex test and is
++//     skipped silently. The /vet-ticket GEN-58 rollover lane strips dashes before appending and then
++//     re-reads the file to confirm the id registered, which is where a bad line gets noticed --
++//     GEN-663 #2 corrected this note, which used to claim the opposite about upper case.)
+ //  4  the body file PARSES AS JSON and none of the destructive KEYS appears anywhere in it. A body
+ //     that does not parse as JSON is NOT exempt -- also the safe direction.
+ //
+@@ -3266,7 +3292,8 @@
+ // -> 'ok' | 'no-token' | 'bad-record' | 'transcript-too-large'
+ // The verdict is read from the reviewer's FINAL DELIVERED MESSAGE -- the last assistant record that
+ // delivered any text, or its confirmed SubagentHandback report (GEN-740, below) -- and the LAST token
+-// occurrence within it must read exactly `PASS <contentHash>`.
++// occurrence within it must read exactly `PASS <contentHash>`, with NO occurrence anywhere in it reading
++// `REVISE <contentHash>` (GEN-699 #1; see ticketLastToken).
+ //
+ // "Final message", not "last occurrence in the file", which is what this did before. It let a reviewer
+ // emit PASS early and then wander -- or, with the block filter above, put its real verdict in an earlier
+@@ -3442,23 +3469,38 @@
+   return 'ok';
+ }
+ 
+-// -> 'none' | 'pass' | 'other'. LAST occurrence within the message: a reviewer may quote the form while
+-// explaining itself, but what it signs off with is the verdict. 'pass' only for exactly PASS <this hash>.
++// -> 'none' | 'pass' | 'other'. The LAST occurrence within the message decides PASS: a reviewer may quote
++// the form while explaining itself, but what it signs off with is the verdict. 'pass' only for exactly
++// PASS <this hash>.
++//
++// GEN-699 #1: ...EXCEPT that a `REVISE <this hash>` ANYWHERE in the message refuses. Last-occurrence alone
++// let a message that said REVISE and later quoted `PASS <hash>` (restating the format, say) read as an
++// approval -- a verdict inversion in the core evidence check. Fail-toward-block: the cost is that a
++// reviewer which writes the literal REVISE line for THIS hash in prose is refused and must be re-run. A
++// REVISE for a DIFFERENT hash (an earlier round's payload) is not this content's verdict and is ignored.
++// The GEN-812 guard (reviewer-verdict-guard.js) reads only the last token, so it does not catch this
++// case before delivery; the refusal lands here, as no-token.
++const TICKET_TOKEN_BODY_RE = /^\s*(PASS|REVISE)\s+([0-9a-f]{64})/i;
+ function ticketLastToken(msg, hash) {
+   if (typeof msg !== 'string') return 'none';
+-  let last = null;
++  const want = String(hash).toLowerCase();
++  let seen = false;
++  let m = null;                                     // the LAST occurrence's parse (null = malformed)
++  let revised = false;
+   let from = 0;
+   for (;;) {
+     const at = msg.indexOf(TICKET_TOKEN_PREFIX, from);
+     if (at === -1) break;
+-    last = msg.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128);
++    seen = true;
++    m = msg.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128).match(TICKET_TOKEN_BODY_RE);
++    if (m && m[1].toUpperCase() === 'REVISE' && m[2].toLowerCase() === want) revised = true;
+     from = at + TICKET_TOKEN_PREFIX.length;
+   }
+-  if (last === null) return 'none';
+-  const m = last.match(/^\s*(PASS|REVISE)\s+([0-9a-f]{64})/i);
++  if (!seen) return 'none';
++  if (revised) return 'other';
+   if (!m) return 'other';
+   if (m[1].toUpperCase() !== 'PASS') return 'other';
+-  if (m[2].toLowerCase() !== String(hash).toLowerCase()) return 'other';
++  if (m[2].toLowerCase() !== want) return 'other';
+   return 'pass';
+ }
+ 
+@@ -3535,7 +3577,8 @@
+           ' not check-reviewer. The reviewer must be the independent read-only agent type.';
+   } else if (reason === 'no-token') {
+     why = ' The named reviewer\'s FINAL DELIVERED REPLY does not end on' +
+-          ' "TICKET-REVIEW-VERDICT: PASS <hash>" for THIS content. A record is not evidence; the' +
++          ' "TICKET-REVIEW-VERDICT: PASS <hash>" for THIS content, or it also contains a' +
++          ' "TICKET-REVIEW-VERDICT: REVISE <hash>" for this content somewhere. A record is not evidence; the' +
+           ' reviewer\'s own sign-off is. Only delivered output counts -- its last text reply, or its' +
+           ' SubagentHandback report once the harness confirmed delivery. A token that appears solely in' +
+           ' the reviewer\'s internal reasoning, in any other tool call, or in an earlier message is NOT a' +
+@@ -3565,19 +3608,22 @@
+           ' hand-edit the record.';
+   } else if (reason === 'exempt-list-overflow') {
+     // The old wording ended "find that bug rather than trimming the list", which named no fix at all:
+-    // nothing prunes the list automatically, so while it is over-cap EVERY in-scope write is refused,
+-    // and the one route the text left open was break-glass. Trimming is ordinary, in-band and safe --
+-    // the file is a plain id list in the staging dir, not a data store -- so the message now says to do
+-    // both: find the appender, then trim. Diagnose first, but never leave the gate wedged.
++    // nothing prunes the list automatically, so while it is over-cap these writes are refused, and the
++    // one route the text left open was break-glass. Trimming is ordinary, in-band and safe -- the file
++    // is a plain id list in the staging dir, not a data store -- so the message now says to do both:
++    // find the appender, then trim. Diagnose first, but never leave the gate wedged. (Since GEN-699 #3
++    // only content writes to pages other than the GEN-58 row read the list, so only they are refused.)
+     why = ' The GEN-58 exemption list is over its ' + TICKET_EXEMPT_CAP + '-id cap, so this gate is' +
+-          ' refusing every in-scope write until the list reads clean again. The cap is a tripwire, not' +
++          ' refusing content writes to pages other than the GEN-58 row until the list reads clean again.' +
++          ' The cap is a tripwire, not' +
+           ' a quota: nothing prunes the list automatically, so reaching it means something is appending' +
+           ' ids that are not log volumes -- find that first, because trimming without it just refills.' +
+           ' Then TRIM the list back to the real log volumes: that is the in-band fix, and it is an' +
+           ' ordinary edit of ' + TICKET_EXEMPT_FILE + '. Do not reach for break-glass for this.';
+   } else if (reason === 'exempt-list-unreadable') {
+     why = ' The GEN-58 exemption list could not be read (' + TICKET_EXEMPT_FILE + '), so this gate is' +
+-          ' refusing every in-scope write until it reads clean. A gate that cannot read its own exemption' +
++          ' refusing content writes to pages other than the GEN-58 row until it reads clean. A gate that' +
++          ' cannot read its own exemption' +
+           ' list must stop rather than guess. If the file is CORRUPT, the safe recovery is to DELETE it' +
+           ' (a MISSING file reverts to ordinary review-gated operation, not a bypass) and re-seed the' +
+           ' current GEN-58 volume id via /vet-ticket. Do not reach for break-glass for this.';
+@@ -3855,7 +3901,18 @@
+     return process.exit(3);
+   }
+ 
+-  const h = ticketContentHash(norm, ti, tag);
++  // GEN-699 #4: on an unreadable payload the hash is taken over the RAW input, and a pathologically deep
++  // one overflows stableStringify's recursion. Unguarded, that crashed this CLI with a stack trace. In
++  // the hook the same throw inside ticketScope is caught as internal-error, so no record could ever clear
++  // such a payload: say so and print no hash. (Not claimed: that the hook REFUSES it -- a payload this
++  // deep can crash an earlier guard in this file first, a separate known gap tracked on its own ticket.)
++  let h;
++  try { h = ticketContentHash(norm, ti, tag); } catch (e) {
++    process.stderr.write('ticket-hash: this payload is too deeply nested to hash (' +
++      String((e && e.message) || e).slice(0, 80) + '). No review record can match it, so there is' +
++      ' nothing worth minting. Re-issue the call in the ordinary shape.\n');
++    return process.exit(3);
++  }
+   if (!norm.ok) {
+     // Reachable only for a genuine budget bust now, which is the case this text is true of.
+     process.stderr.write('ticket-hash: NOTE this payload could not be read end to end (' +

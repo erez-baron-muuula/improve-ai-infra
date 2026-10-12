@@ -358,23 +358,64 @@ the artifacts it refers to.
 | `auto-approve.working.js` | Full working copy of the hook with the `enforceTicketVetting` arm, **rebuilt against design v8 on 2026-08-05, then narrowed to the MCP surface the same day** (§4.5 present but unwired). Purely additive against the live hook: 7 hunks, 1,603 lines added, **0 removed** — the narrowing removed only lines this change had itself added, so it deletes nothing live. **The 7th hunk (live `auto-approve.js:637`) is the only one that touches pre-existing code**, and it is an insertion, not a rewrite: a one-line guard in the shared `findPassInDir` before the original line, which is untouched. The second code review found that reader fail-OPEN on a pass file containing the literal `null` — see "Second code review" below. Passes `node --check`. **Re-based on the live hook of 2026-08-05 09:14** — it had changed mid-session (GEN-641's `blockUnreadableGatedCommand`), so an earlier copy would have silently dropped that guard; re-check for drift before any install. |
 | `notion-rest-write.ps1` | The script that will be the only permitted route for a raw Notion REST write (design §4.5). **Deferred to piece 2 with the arm — it is NOT installed and its path is no longer in `PROTECTED_FILES`**, so piece 2 can create it. Its sha256 was pinned in the hook; **the staged copy's pin is intentionally invalidated since 2026-09-29 (GEN-639) — see the note at the top.** **LF line endings, no BOM** — a CRLF normalisation breaks the pin and blocks every gated REST write (fail-closed, reason `rest-script-mismatch`). Pin: `38897e5b4aa874ed…`, computed from the code block in `design-converged.md` §4.5, not from this file. Install it BEFORE re-adding its path to `PROTECTED_FILES`, not after. |
 | `gen508-hook.diff` | The same change as a unified diff against the live hook, for review. Regenerated 2026-08-05. |
-| `test-gen508-v8-arm.js` | **The suite that gates the install, and it must be GREEN: 63 assertions, 0 failing.** Runs the hook as a real PreToolUse process (JSON on stdin, exit code as the verdict). Covers the MCP surface, the `--ticket-hash` CLI, the full record path, latency, and three assertions that the REST arm really is unwired. **Not** the deliverable-8 rebuild: it has no fail-open corpus sweep. |
+| `test-gen508-v8-arm.js` | **The suite that gates the install, and it must be GREEN** (237 assertions on 2026-10-12). Runs the hook as a real PreToolUse process (JSON on stdin, exit code as the verdict). Covers the MCP surface, the `--ticket-hash` CLI, the full record path, latency, the REST arm being unwired, and — section K — **the fail-open corpus sweep over real payloads** ([GEN-661](https://app.notion.com/p/3b36e495d07c8147a0bbd8e689e164d6)). Every section except K runs the working copy; K runs the **installed** hook unless `GEN508_SWEEP_HOOK` names another. |
 | `test-gen508-rest-parked.js` | The REST assertions, **parked for piece 2**: 25 assertions, of which **19 fail by design** while §4.5 is unwired. It exits 0 at exactly that baseline and non-zero if the number moves either way — fewer means someone rewired the arm and this file must move back into the suite above; more means something else broke. Failures here are NOT a regression. |
 | `test-gen508-harness.js` | Shared harness for both suites (hook spawn, helpers, fixtures, cleanup). Extracted at the split so the two files cannot drift the way the housekeeping list once did. It also fixes the bug that made the old suite unrunnable: it spawned `working-v8.js`, a filename not in this folder, so every assertion failed at spawn. |
-| `test-gen508.js` | The OLD behavioural suite, written against the pre-collapse layer. **Stale** — it exercises the resolver and cache the collapse deleted. Superseded pending the deliverable-8 rebuild. |
-| `build-corpus.js` | Regenerates the payload corpus `test-gen508.js` part B needs. |
+| `test-gen508.js` | **Retired** (untracked). The OLD behavioural suite, written against the pre-collapse layer; it fails to start against v8. Its part B (the corpus sweep) lives on as section K of `test-gen508-v8-arm.js`. Do not run it. |
+| `build-corpus.js` | Regenerates the payload corpus section K sweeps, into the temp dir (`gen508-notion-payload-corpus.jsonl`). Section K runs it automatically when the corpus is missing. |
+| `test-gen508-contract.js` | Source-level pins between the hook, the harness and the skill (reason set, hash definition, allow-list regex, skill wording). |
 | `vet-ticket-SKILL.md` | Working copy of the new `/vet-ticket` skill (not yet installed at `~/.claude/skills/vet-ticket/`). **Realigned to the v8 hook contract on 2026-08-05**: it had still documented the v7 pass shape — a nested `targets[]` array, plural `reviewerAgentIds`, no `verdict`/`waived` on the pass, and no reviewer verdict token — any one of which would have hard-blocked every ticket write, leaving break-glass as the only route. The regression guard for the nested shape is now an assertion in the main suite. Still describes REST as out of scope, which is correct again under piece 1a. |
 | `design-converged.md` | **Read this second, after the ticket — it is the single normative document for piece 1.** Currently **v8** (2026-08-04): §4.5's raw-REST mechanism was replaced after five rounds found the same class of hole five times, and the replacement went through three more `/check` rounds. Its own top box carries the review state. `v8-measurement-scripts.txt` beside it is the provenance for §4.5's numbers. |
 
 ## Running the tests
 
+**Run all three before installing ANY change to the ticket gate**, and again after the install:
+
 ```bash
 node test-gen508-v8-arm.js
 ```
 
-**63 assertions, all passing, exit 0** — verified 2026-08-05 against the unwired hook, after the
-third round of fixes. This is the suite that gates the install. It spawns the hook as a real
-PreToolUse process, so what it tests is what will run, and it needs no corpus and no network.
+```bash
+node test-gen508-contract.js
+```
+
+```bash
+node test-gen508-rest-parked.js
+```
+
+**`test-gen508-v8-arm.js` — must be green.** Last run 2026-10-12: **237 passed, 0 failed**. It spawns
+the hook as a real PreToolUse process, so what it tests is what will run.
+
+**Section K is the fail-open corpus sweep** ([GEN-661](https://app.notion.com/p/3b36e495d07c8147a0bbd8e689e164d6)).
+It replays every real Notion write found in the session transcripts through the hook's own scope check
+(`--ticket-scope-batch`), then judges each "out of scope" verdict independently. Out of scope is
+legitimate only for: a housekeeping property edit; a content write to the GEN-58 row or to a log volume
+on the exempt list; an edit whose target is the practice page (GEN-453); or a create carrying neither
+Team-Tasks id. Anything else is reported as `BYPASS` and fails the suite.
+- It checks the **installed** hook (`~/.claude/hooks/auto-approve.js`) by default. To check a candidate
+  before installing it, set `GEN508_SWEEP_HOOK` to the candidate's path.
+- The corpus holds real ticket bodies, so it lives in the temp dir, never in the repo. If it is missing,
+  section K builds it (`node build-corpus.js`, a couple of minutes); if it is still missing or empty the
+  suite **fails** — it no longer skips silently, which is how the sweep went unrun from August to October.
+- Last run 2026-10-12: **1,189 payloads, 0 bypasses, 0 threw** (earlier: 1,231 on 2026-08-12, 1,130 on
+  2026-08-16; the count moves as old transcripts are pruned). The first 2026-10-12 run flagged one
+  `BYPASS` — a title rename of the practice page — which was the classifier missing GEN-453's case, not
+  a hook hole; fixing the classifier cleared it, and it showed the sweep is not vacuous.
+
+**`test-gen508-contract.js`** — on 2026-10-12, **32 passed, 2 failed**: the two section-5 pins on the
+`--ticket-hash` allow-list regex no longer match the working copy (pre-existing; not caused by GEN-661).
+
+**Open before the next ticket-gate hook change** (both found 2026-10-12 while closing GEN-661):
+- **The working copy `auto-approve.working.js` is NOT the installed hook any more.** The live hook gained
+  GEN-453 (practice page) and other changes the working copy lacks, and the working copy holds two
+  things the live hook lacks: the GEN-639 invalidated `REST_SCRIPT_SHA256` sentinel (deliberate, for the
+  parked REST arm) and an older staging-sandbox exemption (`commandReferencesSandbox`) the live hook has
+  since dropped. **Installing the working copy as-is would revert live code.** Re-base it on the installed
+  hook first, then decide deliberately whether the GEN-639 sentinel goes back in.
+- The 2 failing contract pins above — update them to the current regex, or fix the regex, as part of
+  that change.
+
+The paragraphs below are the 2026-08-05 history of the v8-arm suite (then 63 assertions).
 
 Eleven of those are the second review's regression guards, in three groups:
 - A pass file containing `null`, `[]`, `0`, `false` or `"str"` must REFUSE rather than crash. Only
@@ -413,31 +454,9 @@ An earlier version of this section claimed 48 assertions all passing. The count 
 that run was not reproducible from the committed files, because the suite spawned a hook filename that
 is not in this folder.
 
-The rest of this section describes the **stale** suite (`test-gen508.js`), kept until the
-deliverable-8 rebuild lands. It was written against the pre-collapse layer and exercises the resolver
-and cache that no longer exist:
-
-```bash
-node test-gen508.js
-```
-
-That covered parts A (edge cases), C (pass round-trip) and D (the shared hash CLI) — 95 assertions.
-
-**Part B is the fail-open detector and it needs the corpus, which is deliberately not committed**
-(it contains ticket bodies). Regenerate it first — it reads `~/.claude/projects/**/*.jsonl`, takes a
-couple of minutes, and writes `notion-payload-corpus.jsonl` beside itself:
-
-```bash
-node build-corpus.js
-```
-
-Then re-run `node test-gen508.js` and part B sweeps all 1,313 real payloads twice. What it asserts:
-with the resolver stubbed to say *everything is a ticket*, no payload may come back out-of-scope
-unless it is a housekeeping edit, a GEN-58-subtree content write, or a create with no page target.
-Anything else in that bucket is a silent bypass — which is exactly how the two previous versions of
-this layer failed, both times found only after the fact.
-
-Last run: **97 passed, 0 failed**; 0 unexplained out-of-scope verdicts across 1,313 payloads.
+The old suite `test-gen508.js` is **retired**: it was written against the pre-collapse layer and fails
+to start against v8. Its part B (the fail-open sweep, last run 97 passed / 0 failed over 1,313
+payloads) is now section K above.
 
 ## What changed when the REST arm was parked (2026-08-05, later the same day)
 

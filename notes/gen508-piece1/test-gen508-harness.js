@@ -90,11 +90,14 @@ const TICKET_BLOCK_SIGNATURES = {
   'consume-failed': 'could not be consumed',
   'stale-content': 'minted for a DIFFERENT payload',
   'exempt-list-overflow': 'exemption list is over its',
-  'exempt-list-unreadable': 'exemption list could not be read'
+  'exempt-list-unreadable': 'exemption list could not be read',
+  // GEN-453: this one has its OWN prefix (no record can clear it), so it is matched before the shared one.
+  'practice-page-plain-only': 'this call names the Notion practice page'
 };
 // Map a refusal to its reason KEY (or null if it is not a ticket-arm block). Use `ticketBlockReason(r)
 // === '<reason>'` for reason-level assertions instead of `blocked(r, sharedPrefix)` or `r.code === 2`.
 function ticketBlockReason(r) {
+  if (r.code === 2 && r.err.indexOf(TICKET_BLOCK_SIGNATURES['practice-page-plain-only']) !== -1) return 'practice-page-plain-only';
   if (r.code !== 2 || r.err.indexOf(TICKET_REFUSAL_PREFIX) === -1) return null;
   for (const key of Object.keys(TICKET_BLOCK_SIGNATURES)) {
     if (r.err.indexOf(TICKET_BLOCK_SIGNATURES[key]) !== -1) return key;

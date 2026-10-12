@@ -302,6 +302,69 @@ function blockIfProtected(tool, ti, cwd) {
   process.exit(2);
 })();
 
+// ---- GEN-638: key-sheet guard ----------------------------------------------
+// The "API tokens and keys - AI" Google Sheet holds every API key in plain text, so any read
+// of it writes all of them into the session log (the likely cause of the 2026-09-27 multi-key
+// leak). Keys now come from Credential Manager (~/.claude/scripts/set-claude-key.ps1), and
+// Erez handles the sheet himself (his decision, 2026-09-30), so no Claude route to it is
+// legitimate. Two hard blocks, both exit 2 and deliberately WITHOUT break-glass:
+//  A. Any tool call whose input contains the sheet's Drive file id (or, for a shell/Monitor
+//     command, the file name of its Drive-for-desktop shortcut "... - AI.gsheet") -- MCP tools (the Drive
+//     connector, both browsers, ...), WebFetch, shell, Monitor, scheduled/remote prompts, etc.
+//     Only local file tools (LOCAL_FILE_TOOLS) are exempt: they cannot fetch a Google Sheet,
+//     and covering them would block editing this very file.
+//  B. A Drive search or recent-files listing without excludeContentSnippets:true. Both return
+//     up to ~5,000 characters of each matching file by default, so a result that happens to
+//     be the sheet copies its contents into the log without anyone opening it.
+// Called right after blockIfProtected, before every allow path (the Drive read tools are
+// bare-listed in settings.json and in SAFE_TOOLS), so no allow entry can bypass it.
+// NOT caught (accepted, stated to Erez): a COPY of the sheet (new id); reaching it by clicking
+// through a browser UI and then reading the page (get_page_text carries no id); a script file
+// that contains the id, run by a command that does not. Part B also depends on today's Drive
+// tool and parameter names, and its name match would also catch a search_files /
+// list_recent_files tool on some OTHER MCP server (none installed today) -- if one is added
+// and lacks excludeContentSnippets, scope DRIVE_PREVIEW_TOOL_RE to the Drive connector.
+// The GEN-638 step-3 /wrap tripwire is the after-the-fact backstop.
+// If the sheet is ever replaced, re-derive the id with a Drive search_files by exact title
+// WITH excludeContentSnippets:true (metadata only) -- never a content read.
+const KEY_SHEET_DRIVE_ID = '139jAZeYXzh14gkTY4goGuCybc-Vo5idOPyGJbk2kpX8';
+const DRIVE_PREVIEW_TOOL_RE = /^mcp__.+__(search_files|list_recent_files)$/;
+const LOCAL_FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Grep', 'Glob']);
+
+function enforceKeySheetGuard(tool, ti) {
+  if (typeof tool !== 'string') return;
+  if (!LOCAL_FILE_TOOLS.has(tool)) {
+    // tool_input arrives JSON-parsed, so stringify cannot throw on it; undefined/null -> ''.
+    const s = (ti === undefined || ti === null) ? '' : JSON.stringify(ti);
+    // The id -- or, in a shell/Monitor command only, the sheet's Drive-for-desktop shortcut file
+    // (Invoke-Item / Start-Process on "...\API tokens and keys - AI.gsheet" launches the sheet with
+    // no id in sight). The file NAME is not matched in other tools: briefs and ticket text quote
+    // the old rule, which names that file (a real false fire in the GEN-638 replay).
+    const opensShortcut = (SHELL_TOOLS.has(tool) || tool === 'Monitor') && /tokens and keys - AI\.gsheet/i.test(s);
+    if (typeof s === 'string' && (s.indexOf(KEY_SHEET_DRIVE_ID) !== -1 || opensShortcut)) {
+      process.stderr.write(
+        'Refused (key-sheet guard, GEN-638): this call would reach the "API tokens and keys - AI" ' +
+        'sheet, which holds every API key -- reading it writes all of them into the session log. ' +
+        'Claude must not open it. Read a key from this PC\'s own store instead: Windows Credential ' +
+        'Manager (the key list and the command that stores one are in ' +
+        '~/.claude/scripts/set-claude-key.ps1), or Git\'s stored login for GitHub (git credential ' +
+        'fill, per hooks/refs/shell.md). If a key is missing, tell Erez what to run; never fall back ' +
+        'to the sheet or the chat. Anything to do with the sheet itself, Erez does himself. If you ' +
+        'were only quoting the id or the shortcut file name (in a brief, note or search), remove it ' +
+        'and retry.\n');
+      process.exit(2);
+    }
+  }
+  if (DRIVE_PREVIEW_TOOL_RE.test(tool) && !(ti && ti.excludeContentSnippets === true)) {
+    process.stderr.write(
+      'Refused (key-sheet guard, GEN-638): Drive searches and listings must not return content ' +
+      'previews -- by default each result carries up to ~5,000 characters of the file, so a result ' +
+      'that happens to be the key sheet would copy every key into the log. Re-run the same call ' +
+      'with "excludeContentSnippets": true, then open only the file you need with read_file_content.\n');
+    process.exit(2);
+  }
+}
+
 // git subcommands that never write.
 const SAFE_GIT_SUBS = new Set(['status', 'diff', 'log', 'show', 'rev-parse', 'describe', 'blame', 'shortlog']);
 const SAFE_GIT_BRANCH_FLAGS = new Set(['-v', '-vv', '-a', '--all', '-l', '--list', '--show-current', '-r', '--remotes']);
@@ -605,11 +668,11 @@ function blockMixedChain(input, tool, cmd) {
 // usual fail-safe stance stays, and an unrecognized write shape still yields no target and falls
 // through. What it blocks is a call the gate already owns whose surrounding command cannot be proven
 // to contain nothing else.
-//   Narrow caveat for staging, stated because the contract above does not cover it: its sandbox
-//   EXEMPTION (commandReferencesSandbox) is evaluated AFTER this point, so an unreadable command that
-//   only touches the sandbox is refused too. That ordering is deliberate -- a multi-line command can
-//   name a sandbox key on one line and write a production page on another -- and its call site
-//   honours break-glass for THIS block only, so the false positive is always clearable.
+//   Staging's raw-curl arm has had no sandbox exemption since GEN-638 (2026-10-04): a raw
+//   Atlassian write always needs a pass, so an unreadable one is simply refused. Sandbox drafting
+//   over REST goes through atlassian-put.ps1's anchored single-line template instead. The raw-curl
+//   call site honours break-glass for THIS block only, so a false positive is always clearable
+//   (the atlassian-put shape refusal and the Monitor write refusal deliberately do not).
 //
 // Why the stance is inverted here. The three sites used to `return` on the comment "AMBIGUOUS ->
 // prompt". A prompt only happens in a permission mode that gives one, and the permission mode is
@@ -755,14 +818,38 @@ function isAtlassianMutatingHttp(command) {
     || /(^|\s)(-d|--data|--data-raw|--data-binary|--data-urlencode|--json|-T|--upload-file|-Body|-InFile)\b/i.test(command);
 }
 
-function commandReferencesSandbox(command, reg) {
-  const lc = String(command).toLowerCase();
-  const hit = k => {
-    if (!k) return false;
-    const esc = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp('(?<![a-z0-9])' + esc + '(?![a-z0-9])').test(lc);
-  };
-  return reg.jira.some(hit) || reg.confluence.some(hit);
+// GEN-638 (redesign 2026-10-04): the ONE command shape that may run atlassian-put.ps1. The script
+// takes no URL -- only a Jira key or a Confluence page id, from which it builds the address itself --
+// so the hook never has to read a URL. The target is an unquoted bareword of [A-Za-z0-9-], which
+// PowerShell cannot expand, splice or split, so the target this regex captures IS the string the
+// script receives. (A text match on a free-form -Url failed review three times: quote splices and
+// %2e%2e made the text differ from what PowerShell and curl used.) The body path is an allowlisted
+// ASCII charset inside one pair of ASCII quotes: no $ or backtick (no expansion), no quote of any
+// kind (PowerShell also treats curly quotes as string delimiters), no ; | & < >. Parameter names are
+// exact, case-sensitive and in this order; anything else -- -J, -Jira:X, an en-dash, a lowercase
+// $home, another path -- does not match and is refused. The target patterns below MUST stay
+// identical to the script's own validators ($JiraKeyPattern / $ConfluencePagePattern); a test
+// fixture compares them. The name trigger also catches a Windows 8.3 short name (ATLASS~1.PS1), which
+// would run the real script without the long name appearing in the command. Accepted cost: it also
+// refuses any other short name beginning ATLASS (e.g. an installed Atlassian app) -- use the long path.
+// It does NOT close the deliberate-evasion class (run-time-assembled names etc. stay out of reach).
+const ATLASSIAN_PUT_NAME_RE = /atlassian-put|atlass~[0-9]/i;
+const ATLASSIAN_PUT_TEMPLATE_RE = /^[ \t]*&[ \t]+"\$HOME\\\.claude\\scripts\\atlassian-put\.ps1"[ \t]+-(Jira|ConfluencePage)[ \t]+([A-Za-z0-9-]+)[ \t]+-BodyFile[ \t]+(?:'([A-Za-z0-9_.:\\\/ -]+)'|"([A-Za-z0-9_.:\\\/ -]+)")[ \t]*$/;
+const ATLASSIAN_PUT_JIRA_KEY_RE = /^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,6}$/;
+const ATLASSIAN_PUT_CONF_PAGE_RE = /^[1-9][0-9]{0,15}$/;
+
+// Returns {kind: 'jira'|'confluence', target} only when the WHOLE command is the template above and
+// the target passes its kind's pattern; otherwise null.
+function matchAtlassianPutTemplate(command) {
+  if (typeof command !== 'string' || /[\r\n]/.test(command)) return null;
+  const m = ATLASSIAN_PUT_TEMPLATE_RE.exec(command);
+  if (!m) return null;
+  // Belt-and-braces: no word inside the body path may start with '-', so even a lost quote could not
+  // turn part of the path into a second -Jira / -ConfluencePage parameter.
+  if (/(^|[ \t])-/.test(m[3] !== undefined ? m[3] : m[4])) return null;
+  const kind = m[1] === 'Jira' ? 'jira' : 'confluence';
+  const re = kind === 'jira' ? ATLASSIAN_PUT_JIRA_KEY_RE : ATLASSIAN_PUT_CONF_PAGE_RE;
+  return re.test(m[2]) ? { kind, target: m[2] } : null;
 }
 
 // Staging guard. Hard-blocks (exit 2) a non-sandbox content write lacking a matching pass;
@@ -797,7 +884,54 @@ function enforceStaging(tool, ti, command) {
     return approve('Auto-approved: staging pass consumed (Confluence ' + (ti.pageId || '?') + ').');
   }
 
-  if (SHELL_TOOLS.has(tool) && isAtlassianMutatingHttp(command)) {
+  // GEN-638: atlassian-put.ps1 is a Jira/Confluence write whatever else the command says -- curl runs
+  // inside it, so the raw-curl test below cannot see it. Any shell or Monitor command that names it
+  // must be EXACTLY the anchored template (PowerShell tool only); everything else is refused, pass
+  // untouched -- including a mere mention (cat, git add <file>): inspect the file with Read/Grep.
+  // Checked before the raw-curl arm, which a script call need not trip.
+  const namesPut = (SHELL_TOOLS.has(tool) || tool === 'Monitor') && typeof command === 'string' && ATLASSIAN_PUT_NAME_RE.test(command);
+  const putCall = namesPut && tool === 'PowerShell' ? matchAtlassianPutTemplate(command) : null;
+  // NO break-glass here (unlike GEN-641's unreadable-command refusal): for a call outside the template
+  // this refusal is the ONLY check -- no pass lookup follows -- so clearing it would let a reshaped call
+  // (e.g. -Jira "MD-1" quoted) write with no pass. Nothing legitimate needs it: writes use the template,
+  // inspection uses Read/Grep, bookkeeping uses `git add -A <folder>` / `git commit -F <file>`.
+  if (namesPut && !putCall) {
+    process.stderr.write(
+      'Refused (staging lock): this command names atlassian-put but is not the one allowed form, so ' +
+      'what it would write cannot be proven. Run it ALONE, in the PowerShell tool, exactly as: ' +
+      '& "$HOME\\.claude\\scripts\\atlassian-put.ps1" -Jira <KEY> -BodyFile "<path>"  (or ' +
+      '-ConfluencePage <pageId> in place of -Jira <KEY>) -- the key or page id unquoted, the body ' +
+      'path in quotes using only letters, digits, space and _ . : \\ / -. To inspect or ' +
+      'search the script, use the Read or Grep tool; for git, use `git add -A <folder>` and ' +
+      '`git commit -F <message file>` so the command itself does not name the script. No override.\n'
+    );
+    process.exit(2);
+  }
+  if (putCall) {
+    const call = putCall;
+    const t = call.target.toLowerCase();
+    if ((call.kind === 'jira' ? reg.jira : reg.confluence).includes(t)) return; // sandbox -> exempt
+    // typeof guard: a non-string target in a malformed pass must be a non-match, never a throw (an
+    // uncaught throw exits 1, which does not block).
+    const restFile = findPassFile(p => p.surface === 'rest' && typeof p.target === 'string' && p.target.toLowerCase() === t);
+    if (!restFile) blockStaging('No staging pass for the REST write to ' + call.target + ' (it needs a "rest" pass whose target is ' + call.target + ').');
+    // Single use is the point of a pass: if it cannot be consumed (file locked), refuse rather than
+    // approve and leave it replayable.
+    if (!consumePassFile(restFile)) blockStaging('The staging pass for ' + call.target + ' could not be consumed (file locked?); re-mint it and retry.');
+    return approve('Auto-approved: staging pass consumed (REST write to ' + call.target + ').');
+  }
+
+  if ((SHELL_TOOLS.has(tool) || tool === 'Monitor') && isAtlassianMutatingHttp(command)) {
+    // GEN-638: Monitor is never a sanctioned Atlassian write path, so a write detected there is
+    // refused outright (no need to decide which shell's chain rules apply). No break-glass: no pass
+    // lookup follows, so clearing it would be an unpassed write.
+    if (tool === 'Monitor') {
+      process.stderr.write(
+        'Refused (staging lock): a Monitor command looks like a Jira/Confluence write. Writes go ' +
+        'through the staging skill, never through Monitor.\n'
+      );
+      process.exit(2);
+    }
     // GEN-337(e): a chained command must never ride through on a staged write's
     // approval -- isAtlassianMutatingHttp() substring-matches, so without this
     // pre-check `curl ...atlassian... -d ... && <anything>` would consume a pass
@@ -836,9 +970,12 @@ function enforceStaging(tool, ti, command) {
         'elsewhere, do not reissue it as a shell command at all -- write the file with the Edit or ' +
         'Write tool, which this gate does not touch.');
     }
-    if (commandReferencesSandbox(command, reg)) return; // editing a sandbox via REST -> exempt
+    // GEN-638: no sandbox exemption here any more -- every single-line raw Atlassian write needs a
+    // pass (the break-glass return above still clears the multi-line/unreadable refusal). A text
+    // match on a free-form URL cannot be made sound (Pass B beat it three times); sandbox drafting
+    // over REST goes through atlassian-put.ps1 above, whose target the hook can read exactly.
     const file = findPassFile(p => p.surface === 'shell');
-    if (!file) blockStaging('No staging pass for a direct Atlassian write command.');
+    if (!file) blockStaging('No staging pass for a direct Atlassian write command (a raw REST write needs a "shell" pass even to a sandbox; to draft on a sandbox, use atlassian-put.ps1, which is exempt there).');
     consumePassFile(file);
     return approve('Auto-approved: staging pass consumed (direct Atlassian write).');
   }
@@ -1684,7 +1821,11 @@ function findCheckPassFile(matchFn, exclude) {
 // definition is reachable from outside via the `--ticket-hash` CLI at the bottom of this section,
 // which is what `/vet-ticket` calls -- so the skill CANNOT drift from the hook.
 //
-// MAINTENANCE: the Notion MCP server UUID, the Team-Tasks ids, the GEN-58 page id, the housekeeping
+// (GEN-453 adds Stage 2b, ahead of HOUSEKEEP: any call naming the Notion practice page is decided
+// there -- a plain edit is out of scope, anything else is refused outright with no hash.)
+//
+// MAINTENANCE: the Notion MCP server UUID, the Team-Tasks ids, the GEN-58 page id, the practice-page
+// id (NOTION_PRACTICE_PAGE_ID), the housekeeping
 // property names and the pinned script hash are hardcoded -- the same latent-rotation risk the
 // sibling Notion hooks document. If ticket writes ever stop being gated, re-check these first. The
 // housekeeping list rotates SAFELY (an unknown property name becomes substance, i.e. more gating);
@@ -1737,6 +1878,11 @@ const TEAM_TASKS_IDS = new Set(['fe198002661848d7ae0456f8cee479f3', 'bd2cd17bf58
 // GEN-58 (QA Layer 5). The ticket page itself is hardcoded; its log-volume children roll over every
 // ~25 write-ups and live in TICKET_EXEMPT_FILE, maintained by /vet-ticket's GEN-58 lane.
 const GEN58_PAGE_ID = '36d6e495d07c816e9e0cce265d694ab3';
+// GEN-453: the Notion PRACTICE PAGE -- a plain scratch page for testing Notion edits unattended (see
+// practicePlainWhy). Pinned here, in this locked file, on purpose: an id held in an
+// unprotected data file could be appended silently and would switch the review off for that page.
+// Changing it is a /vet-code change.
+const NOTION_PRACTICE_PAGE_ID = '3f36e495d07c81f0b7c1d2ce5db8d12d';
 //
 // HOUSEKEEPING = pure workflow metadata. FIVE fields, and the count is the point: an earlier draft
 // listed TEN, while Erez's settled decision names three categories ("status / labels / assignee"), so
@@ -1784,8 +1930,12 @@ const TICKET_HK_ROOT_KEYS = new Set([
 // Root `old_str` and `selection_with_ellipsis` are NOT in today's schema either, and are kept here
 // only because removing them narrows the exemption on a surface this change did not review. Narrowing
 // is the safe direction, so it is a separate change, not a silent one.
+//
+// GEN-663 #3: DERIVED from the stage-2 set rather than restating its nine members, which is the drift an
+// earlier design suffered when it stated a list twice. Consequence, stated so it is a choice and not a
+// surprise: adding a key to TICKET_HK_ROOT_KEYS also widens the root keys a GEN-58 content write may carry.
 const TICKET_EXEMPT_ROOT_KEYS = new Set([
-  'page_id', 'pageId', 'id', 'command', 'properties', 'icon', 'cover', 'is_skill', 'allow_async',
+  ...TICKET_HK_ROOT_KEYS,
   'content', 'old_str', 'new_str', 'selection_with_ellipsis', 'position', 'content_updates'
 ]);
 // `content_updates` is admitted as a CLOSED shape, for the same reason the root key set is closed: an
@@ -2193,6 +2343,113 @@ function ticketIsGen58Exempt(norm, pageIds, exempt) {
   return true;
 }
 
+// ---- GEN-453: the Notion practice page ---------------------------------------
+// Erez's decision (2026-10-08): run Notion edit tests UNATTENDED on one practice page, every other
+// gate left on. Scope he was told first: plain text and title edits to that one page only; anything
+// that also touches another page stays gated; pages created inside it are not covered. The root
+// rebuild he asked for is STRICTER: anything non-plain aimed at the page is refused outright, review
+// or not (creates inside it, moves, duplicates, tags) -- reported to him at hand-off.
+//
+// Built at the ROOT, after five rounds of blocklist patches each found the next way an "exempt" edit
+// could reach another page:
+//  1. A Notion text edit is not inert. Notion's markdown spec (notion://docs/enhanced-markdown-spec,
+//     read 2026-10-08): `<page url=...>` with an existing page "will MOVE that page into this page", a
+//     bare `<page>` creates a child page, `<database url=...>` moves a database, editing a synced-block
+//     reference changes the original elsewhere, and a URL may be a `{{N}}` placeholder. So the payload
+//     is ALLOWLISTED: plain text only -- no `<`, `{{`, `}}`, HTML entity, or 32-hex id anywhere in it.
+//  2. update_content edits text ALREADY on the page, so its effect depends on page content this arm
+//     cannot see (no network, by design). So the page is kept plain BY CONSTRUCTION: every write aimed
+//     at the practice page that is not plain is REFUSED outright, reviewed or not (Stage 2b), so no MCP
+//     write can ever put a tag on it. Residual: a hand edit in the Notion UI, or a raw REST write.
+//  3. The id is pinned in this file (NOTION_PRACTICE_PAGE_ID), not an unprotected data file.
+// Against this gate's threat model (stop a SKIPPED review, not a deliberately evasive Claude), the
+// checks run on the RAW tool_input -- the object Notion receives -- with no envelope hoisting or
+// JSON-in-string parsing, so no reshaping can hide a value. All checks are linear-time.
+const PRACTICE_CMD_KEYS = {
+  update_content: ['content_updates'],
+  insert_content: ['content', 'position'],
+  replace_content: ['new_str'],
+  update_properties: ['properties']
+};
+const PRACTICE_REQUIRED = {
+  update_content: 'content_updates', insert_content: 'content',
+  replace_content: 'new_str', update_properties: 'properties'
+};
+function practiceIsPlainObject(v) {
+  return v !== null && typeof v === 'object' && !Array.isArray(v) &&
+         Object.getPrototypeOf(v) === Object.prototype;
+}
+function practiceIdNorm(s) {
+  return typeof s === 'string' ? s.trim().toLowerCase().replace(/-/g, '') : '';
+}
+// Plain text: nothing Notion could read as a tag, a placeholder, an entity, or a page reference.
+function practiceTextIsPlain(s) {
+  if (typeof s !== 'string') return false;
+  for (const t of [s, s.normalize('NFKC')]) {
+    if (t.indexOf('<') !== -1 || t.indexOf('{{') !== -1 || t.indexOf('}}') !== -1) return false;
+  }
+  if (/&(?:lt|gt|#)/i.test(s)) return false;
+  if (/[0-9a-f]{32}/.test(s.toLowerCase().replace(/-/g, ''))) return false;
+  return true;
+}
+// '' when the RAW tool_input is a plain edit of the practice page; otherwise WHICH check failed, so the
+// refusal can say exactly what to change.
+const PRACTICE_TEXT_RULE = 'contains "<", "{{", "}}", an HTML entity, or a 32-hex id';
+function practicePlainWhy(ti) {
+  if (!practiceIsPlainObject(ti)) return 'the call is not a plain JSON object (an envelope such as {data:"..."} counts)';
+  if (practiceIdNorm(ti.page_id) !== NOTION_PRACTICE_PAGE_ID) return 'page_id is not the bare or dashed practice-page id';
+  const cmd = ti.command;
+  if (typeof cmd !== 'string' || !Object.prototype.hasOwnProperty.call(PRACTICE_CMD_KEYS, cmd)) {
+    return 'command "' + String(cmd) + '" is not update_content / insert_content / replace_content / update_properties';
+  }
+  const allowed = new Set(['page_id', 'command', 'allow_async'].concat(PRACTICE_CMD_KEYS[cmd]));
+  for (const k of Object.keys(ti)) if (!allowed.has(k)) return 'key "' + k + '" is not allowed with ' + cmd;
+  if (!Object.prototype.hasOwnProperty.call(ti, PRACTICE_REQUIRED[cmd])) return cmd + ' needs "' + PRACTICE_REQUIRED[cmd] + '"';
+  if ('allow_async' in ti && typeof ti.allow_async !== 'boolean') return 'allow_async is not a boolean';
+  if (cmd === 'update_content') {
+    const cu = ti.content_updates;
+    if (!Array.isArray(cu) || cu.length === 0) return 'content_updates is not a non-empty array';
+    for (const el of cu) {
+      if (!practiceIsPlainObject(el)) return 'a content_updates entry is not a plain object';
+      for (const k of Object.keys(el)) {
+        if (k !== 'old_str' && k !== 'new_str' && k !== 'replace_all_matches') return 'content_updates key "' + k + '" is not allowed';
+      }
+      if ('replace_all_matches' in el && typeof el.replace_all_matches !== 'boolean') return 'replace_all_matches is not a boolean';
+      if (!practiceTextIsPlain(el.old_str)) return 'an old_str is not a string or ' + PRACTICE_TEXT_RULE;
+      if (!practiceTextIsPlain(el.new_str)) return 'a new_str is not a string or ' + PRACTICE_TEXT_RULE;
+    }
+  } else if (cmd === 'insert_content') {
+    if (!practiceTextIsPlain(ti.content)) return 'content is not a string or ' + PRACTICE_TEXT_RULE;
+    if ('position' in ti) {
+      const p = ti.position;
+      if (!practiceIsPlainObject(p) || Object.keys(p).length !== 1 ||
+          (p.type !== 'start' && p.type !== 'end')) return 'position is not exactly {type:"start"} or {type:"end"}';
+    }
+  } else if (cmd === 'replace_content') {
+    if (!practiceTextIsPlain(ti.new_str)) return 'new_str is not a string or ' + PRACTICE_TEXT_RULE;
+  } else {
+    const P = ti.properties;
+    if (!practiceIsPlainObject(P) || Object.keys(P).length !== 1 || !('title' in P)) return 'properties must be exactly {title: "..."}';
+    if (!practiceTextIsPlain(P.title)) return 'the title is not a string or ' + PRACTICE_TEXT_RULE;
+  }
+  return '';
+}
+// Does the practice id appear ANYWHERE in the raw payload's text (any key, any nesting, any envelope)?
+// Used only when the normaliser could not read the payload in full. Linear; never throws.
+function practiceNamedInRaw(ti) {
+  let s = '';
+  try { s = typeof ti === 'string' ? ti : JSON.stringify(ti); } catch (e) { s = ''; }
+  if (typeof s !== 'string') return false;
+  return s.toLowerCase().replace(/-/g, '').indexOf(NOTION_PRACTICE_PAGE_ID) !== -1;
+}
+// Stage 2b's verdict for a call that names the practice page: '' = exempt; otherwise the refusal detail.
+function practicePageWhy(tool, ti) {
+  if (tool !== NOTION_UPDATE_TOOL) {
+    return 'only notion-update-page edits may target it; this call is ' + ticketLabel(tool, []).replace(/:in-payload$/, '');
+  }
+  return practicePlainWhy(ti);
+}
+
 // ---- the marker scan (free, no network) -------------------------------------
 // true (a Team-Tasks id appears somewhere in the payload) / false / null (CPU deadline -> the caller
 // treats it as unreadable and blocks). Dash- and case-insensitive, anywhere in any string, which is
@@ -2218,9 +2475,15 @@ function ticketMarkerScan(norm) {
 // which is the point: it is a malformed target, not an absent one, and the caller blocks on it.
 //
 // A canonically dashed uuid is matched FIRST, on the raw value, because the dashes pin the id's
-// boundaries exactly and no surrounding text can bleed into it. Only when there is no dashed form
-// does the value get dash-stripped and scanned for hex runs -- which is what a bare id, an odd
-// dashing, and a `/p/<id32>` URL all need.
+// boundaries exactly and no surrounding text can bleed into it. Each dashed match is then replaced by a
+// space -- so it cannot fuse with neighbouring hex -- and the REST of the value is dash-stripped and
+// scanned for hex runs, which is what a bare id, an odd dashing, and a `/p/<id32>` URL all need.
+//
+// GEN-663 #1: this used to RETURN after the dashed matches, so a value holding a dashed id AND a bare
+// one yielded only the dashed id. That is a fail-open on the GEN-58 exemption, whose clause 1 needs
+// EVERY id to be exempt: `"<GEN-58 dashed>, <ticket bare>"` passed on the GEN-58 id alone. Now both
+// forms are collected. The change only ever ADDS ids, and having more ids can only remove an exemption
+// (clause 1) or keep a write 'in' (stage 5) -- no verdict depends on having fewer.
 //
 // Measured over the 1,387 id-ish values in the corpus: 976 canonically dashed, 394 bare 32-hex, 9
 // oddly dashed but still 32-hex once stripped, 6 `/p/<id32>` URLs, 2 malformed. NOT ONE dash-strips
@@ -2236,12 +2499,10 @@ function ticketIdsIn(value) {
   const seen = new Set();
   const add = id => { if (!seen.has(id)) { seen.add(id); out.push(id); } };
 
-  const dashed = raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g);
-  if (dashed) {
-    for (const d of dashed) add(d.replace(/-/g, ''));
-    return out;
-  }
-  const bare = raw.replace(/-/g, '');
+  const DASHED = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  const dashed = raw.match(DASHED);
+  if (dashed) for (const d of dashed) add(d.replace(/-/g, ''));
+  const bare = raw.replace(DASHED, ' ').replace(/-/g, '');
   const re = /[0-9a-f]+/g;
   let m;
   while ((m = re.exec(bare)) !== null) {
@@ -2342,11 +2603,14 @@ function ticketLabel(tool, ids) {
 
 // ---- the MCP scope verdict --------------------------------------------------
 // -> {scope:'out'}
+//  | {scope:'out',   sandbox:true, target}                    (GEN-453: a plain practice-page edit)
 //  | {scope:'in',    surface:'notion-mcp', target, hash, ids}
 //  | {scope:'block', surface:'notion-mcp', target, hash, ids, reason, why}
+//  | {scope:'block', surface:'notion-mcp', target, ids, reason:'practice-page-plain-only', why}  (NO hash)
 //
 // A 'block' verdict still carries a HASH wherever one can be computed, because a record must be able
-// to clear it (see step 4 of the flow). An earlier version short-circuited every block before the
+// to clear it (see step 4 of the flow) -- with ONE deliberate exception, practice-page-plain-only, which
+// carries no hash precisely so that no record can clear it (see Stage 2b). An earlier version short-circuited every block before the
 // record directory was read, so an unreadable-payload block could not be cleared by a record even
 // though the refusal text and the skill both promised it could -- leaving break-glass as the only
 // route.
@@ -2382,8 +2646,39 @@ function ticketScope(tool, ti) {
   const norm = ticketNormalise(ti);
   const hash = ticketContentHash(norm, ti, ticketToolTag(tool));
   if (!norm.ok) {
+    // GEN-453: a call the normaliser cannot read in full that names the practice page ANYWHERE (target,
+    // parent, move, envelope, prose) gets the practice-page refusal (no hash), not the record- and
+    // break-glass-clearable unreadable-payload block -- otherwise an oversized write could put a tag on
+    // the page, and the page must stay plain. Shape-independent on purpose: the raw payload's text is
+    // searched. Cost: an unreadable write that merely mentions the practice id becomes unclearable (rare).
+    if (practiceNamedInRaw(ti)) {
+      return { scope: 'block', surface: 'notion-mcp', reason: 'practice-page-plain-only',
+               why: 'the gate could not read the payload in full (' + norm.why + '); if this is not meant' +
+                    ' for the practice page, remove the practice-page id from it and resend',
+               target: ticketLabel(tool, [NOTION_PRACTICE_PAGE_ID]), ids: [NOTION_PRACTICE_PAGE_ID] };
+    }
     return { scope: 'block', surface: 'notion-mcp', reason: 'unreadable-payload', why: norm.why,
              target: ticketLabel(tool, []), hash: hash, ids: [] };
+  }
+
+  const split = ticketSplitIds(norm.idish);
+  const label = ticketLabel(tool, split.pageIds);
+
+  // Stage 2b -- GEN-453: the Notion practice page (see practicePlainWhy). Runs BEFORE the housekeeping
+  // lane, so EVERY call of the four gated tools that names it -- as the target, a parent, a move
+  // source/destination, a duplicate -- is decided HERE: a plain update-page edit is out of scope;
+  // ANYTHING else is refused outright, with no hash, so no review record can clear it. That refusal is
+  // what keeps the page plain by construction, which the exemption's safety rests on. Every id-ish
+  // value counts, container keys (database_id / data_source_id) included, so the practice page is
+  // recognised however a call names it. Pure: no file read, no network.
+  const practice = norm.idish.some(e => String(e.value).toLowerCase().replace(/-/g, '').indexOf(NOTION_PRACTICE_PAGE_ID) !== -1) ||
+    (ti && typeof ti === 'object' && practiceIdNorm(ti.page_id) === NOTION_PRACTICE_PAGE_ID) ||
+    (norm.root && typeof norm.root === 'object' && practiceIdNorm(norm.root.page_id) === NOTION_PRACTICE_PAGE_ID);
+  if (practice) {
+    const why = practicePageWhy(tool, ti);
+    if (!why) return { scope: 'out', sandbox: true, target: label };   // logged by the caller (this fn writes nothing)
+    return { scope: 'block', surface: 'notion-mcp', reason: 'practice-page-plain-only', why: why,
+             target: label, ids: split.pageIds };              // no hash: refused before any record lookup
   }
 
   // Stage 2 -- free, and BEFORE the exemption file is opened at all, so a housekeeping-only property
@@ -2400,20 +2695,33 @@ function ticketScope(tool, ti) {
   // below was already tool-scoped the same way, which is what flagged this one as the oversight.
   if (tool === NOTION_UPDATE_TOOL && ticketIsHousekeepingOnly(norm.root)) return { scope: 'out' };
 
-  const split = ticketSplitIds(norm.idish);
-  const label = ticketLabel(tool, split.pageIds);
-
   // Stage 3 -- the GEN-58 carve-out. The exemption file is read HERE, and its cap is checked here,
   // with its own two reasons: an unreadable or over-cap list must not fall into the generic
   // internal-error bucket, which is reserved for a genuine bug in this arm.
-  const exempt = readExemptPages();
-  if (!exempt.ok) {
-    const reason = exempt.why === 'over-cap' ? 'exempt-list-overflow' : 'exempt-list-unreadable';
-    return { scope: 'block', surface: 'notion-mcp', reason: reason, target: label, hash: hash, ids: split.pageIds };
-  }
-  if (tool === NOTION_UPDATE_TOOL && ticketIsContentOnly(norm) &&
-      ticketIsGen58Exempt(norm, split.pageIds, exempt)) {
-    return { scope: 'out' };
+  //
+  // GEN-699 #3: the file is consulted ONLY where it can change the verdict. It used to be read for every
+  // write reaching this stage, so a broken file blocked creates, moves, duplicates, substance property
+  // edits and even the hardcoded GEN-58 row -- none of which the file decides. Now:
+  //  - not a content-only update-page write -> the carve-out cannot apply, so stage 3 is skipped;
+  //  - every page id is the hardcoded GEN-58 row -> decided with an EMPTY file set, no read. (Vacuously
+  //    true for NO ids -- harmless only because ticketIsGen58Exempt returns false on an empty id list,
+  //    its clause-1 guard; keep that guard if this changes);
+  //  - otherwise the file is read, and unreadable / over-cap blocks exactly as before.
+  // With a healthy file every verdict is identical to reading it up front: the skipped writes fail the
+  // `tool === NOTION_UPDATE_TOOL && ticketIsContentOnly(norm)` test whatever the file says, and the
+  // GEN-58-row-only writes pass clause 1 on the hardcoded id alone.
+  if (tool === NOTION_UPDATE_TOOL && ticketIsContentOnly(norm)) {
+    let exempt;
+    if (split.pageIds.every(id => id === GEN58_PAGE_ID)) {
+      exempt = { ok: true, why: '', ids: new Set() };
+    } else {
+      exempt = readExemptPages();
+      if (!exempt.ok) {
+        const reason = exempt.why === 'over-cap' ? 'exempt-list-overflow' : 'exempt-list-unreadable';
+        return { scope: 'block', surface: 'notion-mcp', reason: reason, target: label, hash: hash, ids: split.pageIds };
+      }
+    }
+    if (ticketIsGen58Exempt(norm, split.pageIds, exempt)) return { scope: 'out' };
   }
 
   // Stage 4 -- the marker.
@@ -2551,12 +2859,7 @@ const REST_SCRIPT_KEY = normPath(REST_SCRIPT_PATH);
 // script text in the design plus the install assertion; (b) the check-to-execution window -- this
 // hook reads and hashes the script at decision time and the script runs afterwards, exactly as open
 // as the body-file window. Both are recorded as residuals, not covered by a broader sentence.
-// [2026-09-29, GEN-639] PIN INTENTIONALLY INVALIDATED -- do not "fix" this as drift. The design-converged.md
-// §4.5 script text was changed so the token goes in a temp curl config file, never on curl's command line
-// (the GEN-638 leak). This sentinel is not a sha256 hex, so restScriptPinOk() can never pass for ANY script
-// text, old or new, until piece 2 reviews the script and repins it through /vet-code. The "47 lines,
-// 3,077 bytes" above describe the OLD text.
-const REST_SCRIPT_SHA256 = 'INVALIDATED-GEN-639-repin-after-review';
+const REST_SCRIPT_SHA256 = '38897e5b4aa874edb6c07e869f9f0c0eccabaee3bc0b65ec794a72d8a741f84c';
 // The URL grammar. Deliberately narrow, and every exclusion buys something: no query string and no
 // `$`/backtick/brace/bracket, which also means curl's URL globbing can never expand one URL slot
 // into several requests (no need for `-g`), and a reviewer can always see WHICH page is written.
@@ -2749,9 +3052,11 @@ function restJsonKeys(v, out, depth) {
 //  2  the URL path is exactly /v1/blocks/<id>/children -- the append-children endpoint, i.e. the REST
 //     form of a log append;
 //  3  <id>, lower-cased with dashes stripped, is the hardcoded GEN-58 page id or a valid line in the
-//     exemption file. (The file's own lines are "exactly 32 hex characters" with no case
-//     normalisation, so an upper-case line would not match -- the safe direction, stated so it is
-//     not discovered later.)
+//     exemption file. (readExemptPages lower-cases each line BEFORE its "exactly 32 hex characters"
+//     test, so an upper-case line DOES match. A DASHED line does not: it fails the 32-hex test and is
+//     skipped silently. The /vet-ticket GEN-58 rollover lane strips dashes before appending and then
+//     re-reads the file to confirm the id registered, which is where a bad line gets noticed --
+//     GEN-663 #2 corrected this note, which used to claim the opposite about upper case.)
 //  4  the body file PARSES AS JSON and none of the destructive KEYS appears anywhere in it. A body
 //     that does not parse as JSON is NOT exempt -- also the safe direction.
 //
@@ -2987,7 +3292,8 @@ function ticketDeliveredText(rec) {
 // -> 'ok' | 'no-token' | 'bad-record' | 'transcript-too-large'
 // The verdict is read from the reviewer's FINAL DELIVERED MESSAGE -- the last assistant record that
 // delivered any text, or its confirmed SubagentHandback report (GEN-740, below) -- and the LAST token
-// occurrence within it must read exactly `PASS <contentHash>`.
+// occurrence within it must read exactly `PASS <contentHash>`, with NO occurrence anywhere in it reading
+// `REVISE <contentHash>` (GEN-699 #1; see ticketLastToken).
 //
 // "Final message", not "last occurrence in the file", which is what this did before. It let a reviewer
 // emit PASS early and then wander -- or, with the block filter above, put its real verdict in an earlier
@@ -3163,23 +3469,38 @@ function ticketTokenVerdict(sessionDir, agentId, hash) {
   return 'ok';
 }
 
-// -> 'none' | 'pass' | 'other'. LAST occurrence within the message: a reviewer may quote the form while
-// explaining itself, but what it signs off with is the verdict. 'pass' only for exactly PASS <this hash>.
+// -> 'none' | 'pass' | 'other'. The LAST occurrence within the message decides PASS: a reviewer may quote
+// the form while explaining itself, but what it signs off with is the verdict. 'pass' only for exactly
+// PASS <this hash>.
+//
+// GEN-699 #1: ...EXCEPT that a `REVISE <this hash>` ANYWHERE in the message refuses. Last-occurrence alone
+// let a message that said REVISE and later quoted `PASS <hash>` (restating the format, say) read as an
+// approval -- a verdict inversion in the core evidence check. Fail-toward-block: the cost is that a
+// reviewer which writes the literal REVISE line for THIS hash in prose is refused and must be re-run. A
+// REVISE for a DIFFERENT hash (an earlier round's payload) is not this content's verdict and is ignored.
+// The GEN-812 guard (reviewer-verdict-guard.js) reads only the last token, so it does not catch this
+// case before delivery; the refusal lands here, as no-token.
+const TICKET_TOKEN_BODY_RE = /^\s*(PASS|REVISE)\s+([0-9a-f]{64})/i;
 function ticketLastToken(msg, hash) {
   if (typeof msg !== 'string') return 'none';
-  let last = null;
+  const want = String(hash).toLowerCase();
+  let seen = false;
+  let m = null;                                     // the LAST occurrence's parse (null = malformed)
+  let revised = false;
   let from = 0;
   for (;;) {
     const at = msg.indexOf(TICKET_TOKEN_PREFIX, from);
     if (at === -1) break;
-    last = msg.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128);
+    seen = true;
+    m = msg.slice(at + TICKET_TOKEN_PREFIX.length, at + TICKET_TOKEN_PREFIX.length + 128).match(TICKET_TOKEN_BODY_RE);
+    if (m && m[1].toUpperCase() === 'REVISE' && m[2].toLowerCase() === want) revised = true;
     from = at + TICKET_TOKEN_PREFIX.length;
   }
-  if (last === null) return 'none';
-  const m = last.match(/^\s*(PASS|REVISE)\s+([0-9a-f]{64})/i);
+  if (!seen) return 'none';
+  if (revised) return 'other';
   if (!m) return 'other';
   if (m[1].toUpperCase() !== 'PASS') return 'other';
-  if (m[2].toLowerCase() !== String(hash).toLowerCase()) return 'other';
+  if (m[2].toLowerCase() !== want) return 'other';
   return 'pass';
 }
 
@@ -3216,8 +3537,24 @@ function ticketRecordExistsForIds(ids) {
   });
 }
 
+// GEN-453: the practice-page refusal has its OWN message. The generic one below says "no usable review
+// record" and points at /vet-ticket, but no record can clear this refusal, so following it would spend a
+// reviewer run and an approval card on a write that is refused again.
+const PRACTICE_REFUSAL_PREFIX = 'Refused (ticket-quality gate): this call names the Notion practice page';
+function blockPracticePage(sc) {
+  process.stderr.write(PRACTICE_REFUSAL_PREFIX + ' (' + (sc.target || '?') + '), which accepts ONLY' +
+    ' plain-text edits: a single notion-update-page call -- update_content, insert_content at start or' +
+    ' end, replace_content, or a title-only update_properties -- naming that page alone, as a plain JSON' +
+    ' object with the bare or dashed page id, and with no "<", "{{", "}}", HTML entity or 32-hex id' +
+    ' anywhere in its text. Failed check: ' + String(sc.why || 'unknown').slice(0, 200) + '.\nNO REVIEW RECORD CAN CLEAR THIS' +
+    ' -- do not run /vet-ticket for it. Keeping the page plain is what makes its plain edits safe to let' +
+    ' through unreviewed, so nothing else may be aimed at it: no tags, child pages, moves or duplicates.' +
+    ' Re-send the edit as plain text; for anything else, use the Notion app or a different page.\n');
+  process.exit(2);
+}
 function blockTicketVetting(sc) {
   const reason = sc.reason || 'no-pass';
+  if (reason === 'practice-page-plain-only') return blockPracticePage(sc);
   let why = '';
   if (reason === 'internal-error') {
     why = ' The gate hit an internal error while working out whether this call touches a Team-Tasks' +
@@ -3240,7 +3577,8 @@ function blockTicketVetting(sc) {
           ' not check-reviewer. The reviewer must be the independent read-only agent type.';
   } else if (reason === 'no-token') {
     why = ' The named reviewer\'s FINAL DELIVERED REPLY does not end on' +
-          ' "TICKET-REVIEW-VERDICT: PASS <hash>" for THIS content. A record is not evidence; the' +
+          ' "TICKET-REVIEW-VERDICT: PASS <hash>" for THIS content, or it also contains a' +
+          ' "TICKET-REVIEW-VERDICT: REVISE <hash>" for this content somewhere. A record is not evidence; the' +
           ' reviewer\'s own sign-off is. Only delivered output counts -- its last text reply, or its' +
           ' SubagentHandback report once the harness confirmed delivery. A token that appears solely in' +
           ' the reviewer\'s internal reasoning, in any other tool call, or in an earlier message is NOT a' +
@@ -3270,19 +3608,22 @@ function blockTicketVetting(sc) {
           ' hand-edit the record.';
   } else if (reason === 'exempt-list-overflow') {
     // The old wording ended "find that bug rather than trimming the list", which named no fix at all:
-    // nothing prunes the list automatically, so while it is over-cap EVERY in-scope write is refused,
-    // and the one route the text left open was break-glass. Trimming is ordinary, in-band and safe --
-    // the file is a plain id list in the staging dir, not a data store -- so the message now says to do
-    // both: find the appender, then trim. Diagnose first, but never leave the gate wedged.
+    // nothing prunes the list automatically, so while it is over-cap these writes are refused, and the
+    // one route the text left open was break-glass. Trimming is ordinary, in-band and safe -- the file
+    // is a plain id list in the staging dir, not a data store -- so the message now says to do both:
+    // find the appender, then trim. Diagnose first, but never leave the gate wedged. (Since GEN-699 #3
+    // only content writes to pages other than the GEN-58 row read the list, so only they are refused.)
     why = ' The GEN-58 exemption list is over its ' + TICKET_EXEMPT_CAP + '-id cap, so this gate is' +
-          ' refusing every in-scope write until the list reads clean again. The cap is a tripwire, not' +
+          ' refusing content writes to pages other than the GEN-58 row until the list reads clean again.' +
+          ' The cap is a tripwire, not' +
           ' a quota: nothing prunes the list automatically, so reaching it means something is appending' +
           ' ids that are not log volumes -- find that first, because trimming without it just refills.' +
           ' Then TRIM the list back to the real log volumes: that is the in-band fix, and it is an' +
           ' ordinary edit of ' + TICKET_EXEMPT_FILE + '. Do not reach for break-glass for this.';
   } else if (reason === 'exempt-list-unreadable') {
     why = ' The GEN-58 exemption list could not be read (' + TICKET_EXEMPT_FILE + '), so this gate is' +
-          ' refusing every in-scope write until it reads clean. A gate that cannot read its own exemption' +
+          ' refusing content writes to pages other than the GEN-58 row until it reads clean. A gate that' +
+          ' cannot read its own exemption' +
           ' list must stop rather than guess. If the file is CORRUPT, the safe recovery is to DELETE it' +
           ' (a MISSING file reverts to ordinary review-gated operation, not a bypass) and re-seed the' +
           ' current GEN-58 volume id via /vet-ticket. Do not reach for break-glass for this.';
@@ -3325,7 +3666,8 @@ function blockTicketVetting(sc) {
     ' Notion REST write -- must go through /vet-ticket: an independent check-reviewer passes the draft' +
     ' against the ticket bar and ends on TICKET-REVIEW-VERDICT: PASS <hash>, Erez approves the summary' +
     ' card, and that writes a single-use record. NOT gated: housekeeping-only property edits (status,' +
-    ' assignee, type, project, reason) and content writes inside the GEN-58 log subtree.\n'
+    ' assignee, type, project, reason), content writes inside the GEN-58 log subtree, and plain-text' +
+    ' edits to the Notion practice page.\n'
   );
   process.exit(2);
 }
@@ -3369,9 +3711,14 @@ function enforceTicketVetting(tool, input) {
     logTicketGateEvent({ event: 'block', tool: tool, target: '<internal-error>', reason: 'internal-error' });
     return blockTicketVetting({ target: '<internal-error>', reason: 'internal-error', ids: [] });
   }
+  if (sc && sc.scope === 'out' && sc.sandbox) {
+    logTicketGateEvent({ event: 'sandbox-exempt', tool: tool, target: sc.target });
+    return;
+  }
   if (!sc || sc.scope === 'out') return;
 
-  // A shell block fires BEFORE any hash exists, so no record can clear it: refuse now.
+  // A shell block fires BEFORE any hash exists, so no record can clear it: refuse now. The same path
+  // carries the GEN-453 practice-page refusal, which is built with no hash on purpose.
   if (sc.scope === 'block' && !sc.hash) {
     logTicketGateEvent({ event: 'block', tool: tool, surface: sc.surface, target: sc.target,
                          reason: sc.reason, why: sc.why });
@@ -3534,7 +3881,38 @@ function ticketHashCli(argv) {
     return process.exit(3);
   }
 
-  const h = ticketContentHash(norm, ti, tag);
+  // GEN-453: a call naming the Notion practice page never needs a record -- the hook either lets it
+  // through unreviewed (a plain edit) or refuses it outright (anything else, which no record clears).
+  // Printing a hash for either would invite a reviewer run and an approval card that buy nothing.
+  let fullTool = null;
+  for (const k of Object.keys(TICKET_TOOL_TAG)) if (TICKET_TOOL_TAG[k] === tag) fullTool = k;
+  let psc = null;
+  try { psc = fullTool ? ticketScope(fullTool, ti) : null; } catch (e) { psc = null; }
+  if (psc && psc.reason === 'practice-page-plain-only') {
+    process.stderr.write('ticket-hash: this payload names the Notion practice page and the hook REFUSES it' +
+      ' outright (' + (psc.why || 'not a plain edit') + '). No review record can clear that refusal, so' +
+      ' there is no hash worth minting. Re-send it as a plain-text edit of the practice page alone, or' +
+      ' make the change in the Notion app.\n');
+    return process.exit(3);
+  }
+  if (psc && psc.scope === 'out' && psc.sandbox) {
+    process.stderr.write('ticket-hash: this payload is a plain edit of the Notion practice page, which the' +
+      ' hook lets through with no review. Send it directly; there is nothing to mint.\n');
+    return process.exit(3);
+  }
+
+  // GEN-699 #4: on an unreadable payload the hash is taken over the RAW input, and a pathologically deep
+  // one overflows stableStringify's recursion. Unguarded, that crashed this CLI with a stack trace. In
+  // the hook the same throw inside ticketScope is caught as internal-error, so no record could ever clear
+  // such a payload: say so and print no hash. (Not claimed: that the hook REFUSES it -- a payload this
+  // deep can crash an earlier guard in this file first, a separate known gap tracked on its own ticket.)
+  let h;
+  try { h = ticketContentHash(norm, ti, tag); } catch (e) {
+    process.stderr.write('ticket-hash: this payload is too deeply nested to hash (' +
+      String((e && e.message) || e).slice(0, 80) + '). No review record can match it, so there is' +
+      ' nothing worth minting. Re-issue the call in the ordinary shape.\n');
+    return process.exit(3);
+  }
   if (!norm.ok) {
     // Reachable only for a genuine budget bust now, which is the case this text is true of.
     process.stderr.write('ticket-hash: NOTE this payload could not be read end to end (' +
@@ -3938,6 +4316,10 @@ process.stdin.on('end', () => {
   // GEN-103: enforce the locked-edit path for protected config files.
   // Runs first; exits 2 to override any matching allow-list entry.
   blockIfProtected(tool, input.tool_input, input.cwd);
+
+  // GEN-638: key-sheet guard. Hard-blocks (exit 2) any route to the key sheet and any Drive
+  // search/listing that would return content previews. Before every allow path; no break-glass.
+  enforceKeySheetGuard(tool, input.tool_input);
 
   // GEN-281: staging lock for non-sandbox Jira/Confluence content edits (front + side door).
   // Runs before the allow-list so an allow entry cannot bypass it; consumes a one-time
