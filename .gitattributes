@@ -1,0 +1,2 @@
+# GEN-657: the hook pins this script's sha256 over its LF bytes; keep checkout from rewriting it to CRLF.
+notes/gen508-piece1/notion-rest-write.ps1 text eol=lf
