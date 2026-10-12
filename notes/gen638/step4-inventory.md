@@ -28,6 +28,7 @@ Script Property `GEMINI_API_KEY`; he then deleted the old key in AI Studio (same
 exists in `Code.js`): scheduled task `gen638-gemini-key-check` reads the run logs 2026-10-05 10:00.
 2026-10-05 check: NOT YET PROVEN. Only run since the switch (2026-10-05 05:32 UTC) completed but found 0 new invoice emails, so no Gemini call was made; no key errors logged. Needs a later run or a manual "Process this invoice now" on a real invoice.
 2026-10-06 check: PASS. The 2026-10-06 05:32 UTC daily run processed a real invoice (Israel Electric Corporation) with Gemini answers (vendor match, filing decision); further Gemini calls ran 07:23-12:30 UTC. Logs 2026-10-03..06 show no HTTP 400/403, "API key not valid", API_KEY_INVALID, PERMISSION_DENIED or "API key expired".
+2026-10-12 final check: PASS. Logs 2026-10-04 19:00 UTC..2026-10-12 (442 entries): Gemini answered on 10-06 and 10-11 (vendor-match replies); zero key errors (400/403, API key not valid, API_KEY_INVALID, PERMISSION_DENIED, expired). Separate, not a key problem: 10-08 08:11-08:16 UTC Gemini returned 402 "prepayment credits are depleted" (billing); calls succeeded again 10-11.
 
 Slack progress: 2026-10-05 Product Bot has no revoke option in its settings, so Erez removed the app from the workspace
 (Manage apps → Configuration → Remove App), which cancels its keys, then reinstalled it and stored the new bot key with the
@@ -61,6 +62,12 @@ PC (TLS interception). Eden is being offboarded (Erez, 2026-10-05), so no heads-
 
 Step 4 result: every key-sheet row is replaced or cancelled. Still open for step 5: Gemini first-real-run proof; and
 after 2026-10-11 21:16 GMT+3, confirm the old Notion token no longer works.
+
+Step 5 result (2026-10-12): Erez confirmed the "Muuula 1" integration page shows no pending old token (old Notion token gone).
+Gemini PASS (above). `key-leak-tripwire.ps1 -All` (5,864 files): notion, atlassian, slack, github all clean. Live key users:
+Notion (`notion-ticket-lookup.ps1 -Id 638` resolved), Atlassian (`atlassian-get.ps1` `/rest/api/2/myself` answered),
+GitHub (`git ls-remote` on private Muuula/MemoryPirates answered). Slack not re-called live (no read-only script; `auth.test`
+passed 2026-10-05 and the stored key was read cleanly by the tripwire today).
 
 Other PCs: none — Erez confirmed 2026-10-04 that this is the only PC he uses Claude or Git on.
 
