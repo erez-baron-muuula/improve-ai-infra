@@ -438,12 +438,33 @@ console.log('\n== F. the verdict token is read from DELIVERED text only ==');
   check('within one final message the LAST occurrence wins (PASS then REVISE blocks)',
         blocked(r, 'does not end on'), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
+  // GEN-699 #1 INVERTED this assertion (it read "...and REVISE then PASS approves"). A REVISE for THIS
+  // hash anywhere in the final message now refuses, however the message ends: last-occurrence alone let a
+  // REVISE verdict that later quoted the PASS form read as an approval.
   fx.write([[{ type: 'text', text: 'Quoting the form ' + tok('REVISE') + '\n\nActual: ' + tok('PASS') }]]);
   fx.record(hash);
   r = callWith();
-  check('...and REVISE then PASS approves (not first-occurrence)',
-        approved(r),
-        'code=' + r.code + ' err=' + r.err.slice(0, 180));
+  check('GEN-699 #1: REVISE <this hash> then PASS <this hash> in ONE message BLOCKS (no-token)',
+        ticketBlockReason(r) === 'no-token', 'reason=' + ticketBlockReason(r) + ' code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  fx.write([[{ type: 'text', text: 'Verdict: ' + 'TICKET-REVIEW-VERDICT: REVISE ' + hash.toUpperCase() + '\n\nActual: ' + tok('PASS') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('GEN-699 #1: a REVISE whose hash differs only in letter case still BLOCKS',
+        ticketBlockReason(r) === 'no-token', 'reason=' + ticketBlockReason(r) + ' code=' + r.code);
+
+  const otherHash = 'f'.repeat(64);
+  fx.write([[{ type: 'text', text: 'Last round: TICKET-REVIEW-VERDICT: REVISE ' + otherHash + '\n\nThis round: ' + tok('PASS') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('GEN-699 #1: a REVISE for a DIFFERENT hash (an earlier round) does not block a PASS for this one',
+        approved(r), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
+
+  fx.write([[{ type: 'text', text: 'The required last line looks like ' + tok('PASS') + '.\n\nAll checks hold.\n' + tok('PASS') }]]);
+  fx.record(hash);
+  r = callWith();
+  check('GEN-699 #1: quoting the PASS form in prose before the real PASS still approves',
+        approved(r), 'code=' + r.code + ' err=' + r.err.slice(0, 180));
 
   // An empty or whitespace-only trailing record must NOT become "the final message" and shadow a real
   // verdict behind it. Real transcripts write roughly one content block per record, so a near-empty
@@ -730,6 +751,80 @@ console.log('\n== L. BLOCKING-1: GEN-58 volume seed + exempt-file id normalizati
 //     match -- so the POSITIVE path is unreachable against the working copy by construction. The contract
 //     test pins the regex SHAPE and the call site instead.
 
+console.log('\n== N. GEN-663 / GEN-699 hardening (2026-10-12) ==');
+{
+  const GEN58_DASHED = '36d6e495-d07c-816e-9e0c-ce265d694ab3';
+  const cu = [{ old_str: 'a', new_str: 'b' }];
+
+  // GEN-663 #1: a value holding the GEN-58 id DASHED and a ticket id BARE used to yield only the dashed
+  // id, so the GEN-58 exemption ("every id is exempt") passed on it alone.
+  const rMixed = mcp('notion-update-page', { page_id: GEN58_DASHED + ', ' + PAGE, command: 'update_content', content_updates: cu });
+  check('GEN-663 #1: a GEN-58 content write whose id value also names a bare ticket id is GATED',
+        ticketBlockReason(rMixed) === 'no-pass', 'reason=' + ticketBlockReason(rMixed) + ' code=' + rMixed.code);
+  const rG58 = mcp('notion-update-page', { page_id: GEN58_DASHED, command: 'update_content', content_updates: cu });
+  check('GEN-663 #1: ...while the GEN-58 row alone (dashed) is still exempt',
+        fellThrough(rG58), 'reason=' + ticketBlockReason(rG58) + ' code=' + rG58.code);
+
+  // GEN-699 #2 was DECLINED (Erez, 2026-10-12: measured 0 in 1,189 real writes; the prescribed fix was
+  // unsafe). This pins today's behaviour as intended: gated for review, not exempt and not a crash.
+  const rJson = mcp('notion-update-page', { page_id: GEN58, command: 'update_content',
+                                            content_updates: [{ old_str: 'a', new_str: '{"note": 1}' }] });
+  check('GEN-699 #2 (declined, pinned): a GEN-58 log write whose new_str is a JSON literal is gated no-pass',
+        ticketBlockReason(rJson) === 'no-pass', 'reason=' + ticketBlockReason(rJson) + ' code=' + rJson.code);
+
+  // GEN-699 #3: a broken exempt list blocks ONLY the writes it decides -- content writes to pages other
+  // than the GEN-58 row. A DIRECTORY at the file's path makes the read fail (unreadable).
+  const exemptFile = path.join(DIR, '..', '..', '.claude-staging', 'ticket-gate-exempt-pages.txt');
+  function withExempt(setup, label, expectReason) {
+    fs.rmSync(exemptFile, { recursive: true, force: true });
+    fs.mkdirSync(path.dirname(exemptFile), { recursive: true });
+    setup();
+    const cases = [
+      ['GEN-58 row content write falls through', { page_id: GEN58, command: 'update_content', content_updates: cu },
+       'notion-update-page', r => fellThrough(r)],
+      ['GEN-58 row content write carrying a destructive key is still gated',
+       { page_id: GEN58, command: 'update_content', content_updates: cu, allow_deleting_content: true },
+       'notion-update-page', r => ticketBlockReason(r) === 'no-pass'],
+      ['a create into another database falls through',
+       { parent: { database_id: 'aa11bb22cc33dd44ee55ff6677889900' }, pages: [{ properties: { title: 'x' } }] },
+       'notion-create-pages', r => fellThrough(r)],
+      ['a substance property edit on a ticket is no-pass, not ' + expectReason,
+       { page_id: PAGE, command: 'update_properties', properties: { Urgency: 'Urgent' } },
+       'notion-update-page', r => ticketBlockReason(r) === 'no-pass'],
+      ['a content write to a non-GEN-58 page is ' + expectReason,
+       { page_id: PAGE, command: 'update_content', content_updates: cu },
+       'notion-update-page', r => ticketBlockReason(r) === expectReason],
+      ['a content write with NO page id is not out of scope',
+       { command: 'update_content', content_updates: cu },
+       'notion-update-page', r => r.code === 2]
+    ];
+    for (const [name, ti, tool, ok] of cases) {
+      const r = mcp(tool, ti);
+      check('GEN-699 #3 (' + label + '): ' + name, ok(r),
+            'reason=' + ticketBlockReason(r) + ' code=' + r.code + ' err=' + r.err.slice(0, 140));
+    }
+  }
+  withExempt(() => fs.mkdirSync(exemptFile), 'unreadable list', 'exempt-list-unreadable');
+  withExempt(() => {
+    const lines = [];
+    for (let i = 0; i < 4097; i++) lines.push(require('crypto').createHash('md5').update('v' + i).digest('hex'));
+    fs.writeFileSync(exemptFile, lines.join('\n') + '\n', 'utf8');
+  }, 'over-cap list', 'exempt-list-overflow');
+  fs.rmSync(exemptFile, { recursive: true, force: true });
+
+  // GEN-699 #4: --ticket-hash on a payload nested past the stack limit exits 3 with its OWN message (so a
+  // JSON-parse failure, also exit 3, cannot pass this) and prints no hash.
+  const deepFile = path.join(DIR, 'test-payload.json');
+  const depth = 20000;
+  fs.writeFileSync(deepFile, '{"page_id":"' + PAGE + '","command":"update_content","x":' +
+                   '{"y":'.repeat(depth) + '1' + '}'.repeat(depth) + '}', 'utf8');
+  const rDeep = cli(['--ticket-hash', deepFile, '--tool', 'update']);
+  check('GEN-699 #4: --ticket-hash on a too-deep payload exits 3 with its own message and no hash',
+        rDeep.code === 3 && rDeep.err.indexOf('too deeply nested to hash') !== -1 && rDeep.out.trim() === '',
+        'code=' + rDeep.code + ' out=' + rDeep.out.slice(0, 80) + ' err=' + rDeep.err.slice(0, 200));
+  fs.rmSync(deepFile, { force: true });
+}
+
 console.log('\n== K. corpus fail-open sweep (real payloads) ==');
 {
   // Re-expressed from the stale test-gen508.js Part B, which CANNOT run against v8: its in-process
@@ -737,18 +832,42 @@ console.log('\n== K. corpus fail-open sweep (real payloads) ==');
   // resolver stub is inert now that "every page is a ticket" is the default. Here the sweep runs each REAL
   // payload through the wired hook's own ticketScope via the read-only --ticket-scope-batch CLI (ONE spawn,
   // not ~1,300), then INDEPENDENTLY judges every 'out' verdict from the raw payload: an out-of-scope verdict
-  // is legitimate ONLY for a housekeeping property edit, a GEN-58-subtree content write, or a create with no
-  // Team-Tasks marker. Anything else 'out' is a silent bypass. FIELD-level exemption correctness (which
+  // is legitimate ONLY for a housekeeping property edit, a GEN-58-subtree content write (the GEN-58 row or
+  // an exempt log volume), an edit targeting the GEN-453 practice page, or a create with no Team-Tasks
+  // marker. Anything else 'out' is a silent bypass. FIELD-level exemption correctness (which
   // properties are substance) is covered directly by sections A and A2; this sweep catches the SHAPE/TARGET
   // escapes across real traffic that the synthetic cases cannot enumerate.
   //
-  // The corpus holds real ticket bodies, so it is NOT committed. Absent -> this section SKIPS with a notice
-  // (not a failure), exactly as the stale Part B did. Build it first with:  node build-corpus.js
+  // GEN-661: the sweep checks the INSTALLED hook by default, not the working copy the rest of this suite
+  // runs. The working copy drifted (GEN-453 landed live only), so a sweep of it was a sweep of code that
+  // no longer runs. Pre-install runs point it at a candidate instead:  GEN508_SWEEP_HOOK=<path>.
+  // Only THIS section uses K_HOOK -- the shared HOOK stays on the working copy, because some sections
+  // depend on its filename (see the self-approve note above section K).
+  const K_HOOK = process.env.GEN508_SWEEP_HOOK || path.join(require('os').homedir(), '.claude', 'hooks', 'auto-approve.js');
+  // The exempt list THAT hook reads (<hookdir>/../../.claude-staging), so the GEN-58 volume case below
+  // judges against the same list the hook honoured.
+  const K_EXEMPT = path.join(path.dirname(K_HOOK), '..', '..', '.claude-staging', 'ticket-gate-exempt-pages.txt');
+  console.log('  sweep hook: ' + K_HOOK);
+  // The corpus holds real ticket bodies, so it is NOT committed; it lives in the temp dir and vanishes on
+  // a temp clean. GEN-661: a missing corpus is REBUILT here, and a corpus that is still missing or empty
+  // FAILS the suite. The old silent SKIP is how this sweep went dark for two months unnoticed.
   const CORPUS = H.CORPUS;
   if (!fs.existsSync(CORPUS)) {
-    console.log('  SKIP corpus sweep -- ' + CORPUS + ' not found. Build it first:  node build-corpus.js');
-  } else {
+    console.log('  corpus not found -- building it (node build-corpus.js) ...');
+    require('child_process').spawnSync(process.execPath, [path.join(DIR, 'build-corpus.js')], { encoding: 'utf8' });
+  }
+  const corpusOk = fs.existsSync(CORPUS) && fs.readFileSync(CORPUS, 'utf8').trim() !== '';
+  check('the payload corpus exists and is non-empty (the sweep cannot silently skip)', corpusOk, CORPUS);
+  if (corpusOk) {
     const CONTENT_CMDS = new Set(['update_content', 'insert_content', 'replace_content']);
+    const TT_DB = 'fe198002661848d7ae0456f8cee479f3';                // the other Team-Tasks marker id
+    const PRACTICE = '3f36e495d07c81f0b7c1d2ce5db8d12d';             // the hook's NOTION_PRACTICE_PAGE_ID
+    const idNorm = s => typeof s === 'string' ? s.trim().toLowerCase().replace(/-/g, '') : '';
+    let exemptIds = new Set();
+    try {
+      exemptIds = new Set(fs.readFileSync(K_EXEMPT, 'utf8').split(/\r?\n/)
+        .map(l => l.trim().toLowerCase()).filter(l => /^[0-9a-f]{32}$/.test(l)));
+    } catch (e) { /* no list -> no volume is exempt, so any volume 'out' reads as a bypass (fail-closed) */ }
     // The hook's exempt property set and name-normaliser, reproduced so the sweep judges housekeeping
     // INDEPENDENTLY rather than rubber-stamping every update_properties -- a substance key on an 'out'
     // verdict is a real fail-open. The contract test pins this set + normaliser against the hook's
@@ -768,6 +887,11 @@ console.log('\n== K. corpus fail-open sweep (real payloads) ==');
                                     .indexOf(String(id).replace(/-/g, '').toLowerCase()) !== -1;
     function legitimateOut(row) {
       const t = row.tool || '', u = unwrap(row.input), cmd = u && u.command;
+      // GEN-661 (GEN-453): an update-page whose TARGET is exactly the practice page -- ANY command, since the
+      // hook's Stage 2b runs before the housekeeping lane (a plain title rename there is 'out'). Judged on
+      // page_id, not on the id appearing anywhere, so a ticket edit that merely mentions the practice id
+      // still reads as a bypass.
+      if (t.endsWith('notion-update-page') && u && idNorm(u.page_id) === PRACTICE) return true;
       if (t.endsWith('notion-update-page') && cmd === 'update_properties') {
         // NOT a rubber stamp: every property key must normalise to one of the five exempt names.
         const props = (u && u.properties && typeof u.properties === 'object' && !Array.isArray(u.properties))
@@ -775,7 +899,10 @@ console.log('\n== K. corpus fail-open sweep (real payloads) ==');
         return props.every(k => HK_PROPS.has(propName(k)));
       }
       if (t.endsWith('notion-update-page') && CONTENT_CMDS.has(cmd) && carriesId(row.input, GEN58)) return true; // GEN-58 content
-      if (t.endsWith('notion-create-pages') && !carriesId(row.input, TT_DS)) return true; // create w/o the Team-Tasks marker
+      // GEN-661: a content write whose TARGET is a GEN-58 log volume on the hook's exempt list.
+      if (t.endsWith('notion-update-page') && CONTENT_CMDS.has(cmd) && u && exemptIds.has(idNorm(u.page_id))) return true;
+      // A create carrying NEITHER Team-Tasks marker (data source or database id).
+      if (t.endsWith('notion-create-pages') && !carriesId(row.input, TT_DS) && !carriesId(row.input, TT_DB)) return true;
       return false;
     }
 
@@ -787,9 +914,23 @@ console.log('\n== K. corpus fail-open sweep (real payloads) ==');
           !legitimateOut({ tool: MCP + 'notion-duplicate-page', input: { page_id: PAGE, properties: { Status: 'Done' } } }) &&
           !legitimateOut({ tool: MCP + 'notion-update-page', input: { page_id: PAGE, command: 'update_properties', properties: { Urgency: 'High' } } }),
           'legitimateOut is not discriminating -- it may have become a rubber stamp');
+    // One negative control per GEN-661 case, so none of them can widen into a stamp unnoticed.
+    check('the classifier rejects a ticket edit that only MENTIONS the practice page',
+          !legitimateOut({ tool: MCP + 'notion-update-page', input: { page_id: PAGE, command: 'update_content',
+                            content_updates: [{ old_str: 'a', new_str: 'see ' + PRACTICE }] } }),
+          'practice-page case matches on a mention, not the target');
+    check('the classifier rejects a content write to a page NOT on the exempt list',
+          !legitimateOut({ tool: MCP + 'notion-update-page', input: { page_id: PAGE, command: 'update_content',
+                            content_updates: [{ old_str: 'a', new_str: 'b' }] } }),
+          'exempt-volume case is not checking the list');
+    check('the classifier rejects a create carrying only the Team-Tasks DATABASE id',
+          !legitimateOut({ tool: MCP + 'notion-create-pages', input: { parent: { database_id: TT_DB }, pages: [{}] } }),
+          'create case still checks only the data-source id');
 
     const rows = fs.readFileSync(CORPUS, 'utf8').split(/\r?\n/).filter(l => l.trim());
-    const res = cli(['--ticket-scope-batch', CORPUS]);
+    const kr = require('child_process').spawnSync(process.execPath, [K_HOOK, '--ticket-scope-batch', CORPUS],
+                                                   { encoding: 'utf8', input: '', maxBuffer: 256 * 1024 * 1024 });
+    const res = { code: kr.status, out: kr.stdout || '', err: kr.stderr || '' };
     const verdicts = res.out.split(/\r?\n/).filter(l => l.trim())
                         .map(l => { try { return JSON.parse(l); } catch (e) { return null; } });
 
@@ -811,7 +952,8 @@ console.log('\n== K. corpus fail-open sweep (real payloads) ==');
       } else { counts.other++; findings.push('UNEXPECTED scope ' + v.scope + ' @line ' + (i + 1)); }
     }
     console.log('  swept ' + rows.length + ' real payloads: in=' + counts.in + ' block=' + counts.block +
-                ' out=' + counts.out + ' threw=' + counts.threw);
+                ' out=' + counts.out + ' threw=' + counts.threw +
+                '  (earlier runs: 1231 on 2026-08-12, 1130 on 2026-08-16 -- a big drop means old transcripts were pruned)');
     check('no ticketScope threw on the real corpus', counts.threw === 0, findings.slice(0, 5).join(' | '));
     check('every out-of-scope verdict is a legitimate exemption (0 silent bypasses)',
           counts.other === 0, counts.other + ' unexplained: ' + findings.slice(0, 10).join(' | '));
@@ -995,6 +1137,13 @@ console.log('\n== N. GEN-740: a verdict delivered through SubagentHandback ==');
     [brief()].concat(hb(tok('REVISE')), [enforce(), text(tok('PASS'))]));
   expectOk('after-text that restates the SAME PASS is fine',
     [brief()].concat(hb(tok('PASS')), [text('Delivered: ' + tok('PASS'))]));
+  // GEN-699 #1 on the after-text path too: a REVISE for this hash anywhere after the hand-back refuses,
+  // even when the after-text then restates PASS (before the fix this read as pass).
+  expectNoToken('GEN-699 #1: after-text "REVISE <h> ... PASS <h>" after a PASS hand-back fails closed',
+    [brief()].concat(hb(tok('PASS')), [text('Old line was ' + tok('REVISE') + '\nNow: ' + tok('PASS'))]));
+  // ...and the hand-back message itself: REVISE quoted before the final PASS inside the delivered report.
+  expectNoToken('GEN-699 #1: a hand-back message with REVISE <h> before its final PASS <h> fails closed',
+    [brief()].concat(hb('Quoting: ' + tok('REVISE') + '\nVerdict: ' + tok('PASS')), [ack()]));
   expectNoToken('an unconfirmed hand-back in a RESUMED turn does not fall back to the earlier turn\'s PASS',
     (() => { const u = toolUse('SubagentHandback', { message: tok('REVISE') });
              return [brief()].concat(hb(tok('PASS')), [ack(), resume('recheck'), u.line]); })());
