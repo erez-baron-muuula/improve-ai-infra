@@ -243,9 +243,12 @@ console.log('\n== 11. break-glass is scoped to mechanical blocks in the ticket g
   check('enforceTicketVetting no longer has an unconditional break-glass return',
         fnBody.length > 0 && fnBody.indexOf('if (configUnlocked()) return;') === -1,
         'a bare `if (configUnlocked()) return;` is back in enforceTicketVetting -- it would void the whole gate');
-  check('break-glass is scoped via ticketBreakGlassSkip on internal-error + unreadable-payload only',
+  // GEN-834 deliberately WIDENED this pin by exactly one MECHANICAL reason, connector-mismatch (a Notion
+  // write tool from a connector the gate does not recognise -- the gate cannot evaluate it, and the repair
+  // itself needs Notion writes). Any further change to the set is still a reviewed decision, not drift.
+  check('break-glass is scoped via ticketBreakGlassSkip on internal-error + unreadable-payload + connector-mismatch only',
         hookSrc.indexOf('function ticketBreakGlassSkip') !== -1 &&
-        hookSrc.indexOf("TICKET_BREAKGLASS_REASONS = new Set(['internal-error', 'unreadable-payload'])") !== -1,
+        hookSrc.indexOf("TICKET_BREAKGLASS_REASONS = new Set(['internal-error', 'unreadable-payload', 'connector-mismatch'])") !== -1,
         'the scoped break-glass helper is missing or its mechanical reason set changed');
   check('every break-glass skip is logged as its own event (not silent)',
         hookSrc.indexOf("event: 'break-glass-skip'") !== -1, 'break-glass skips are not logged');
