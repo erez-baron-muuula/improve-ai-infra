@@ -1001,6 +1001,88 @@ console.log('\n== M. #4: break-glass is scoped to MECHANICAL blocks only (mirror
         'stdout=' + rMechBG.out.slice(0, 200));
 }
 
+console.log('\n== M2. GEN-834: a Notion write tool from a connector the gate does not watch is REFUSED ==');
+{
+  // Before GEN-834 such a tool failed the isMcp test and fell through, so a removed-and-re-added
+  // connector silently switched the whole gate off. These run against the WORKING COPY in this harness
+  // tree, whose STAGING_DIR is <repo>/../.claude-staging -- never the live hook, which would append real
+  // connector-mismatch rows that /wrap Step 3i would then report.
+  const UNLOCK = Object.assign({}, process.env, { CLAUDE_CONFIG_UNLOCK: '1' });
+  const EVENTS = path.join(PASS_DIR, '..', 'ticket-gate-events.jsonl');
+  const readEvents = () => { try { return fs.readFileSync(EVENTS, 'utf8').split('\n').filter(Boolean); } catch (e) { return []; } };
+  const OTHER = '11111111-2222-3333-4444-555555555555';
+  const WATCHED = MCP.replace(/^mcp__/, '').replace(/__$/, '');
+  const ti = { page_id: PAGE, command: 'update_content', content_updates: [{ old_str: 'a', new_str: 'b' }] };
+  const callAs = (tool, env) => run({ tool_name: tool, tool_input: ti, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') }, env);
+
+  for (const op of ['notion-create-pages', 'notion-update-page', 'notion-duplicate-page', 'notion-move-pages']) {
+    const before = readEvents().length;
+    const r = callAs('mcp__' + OTHER + '__' + op);
+    const added = readEvents().slice(before).map(l => { try { return JSON.parse(l); } catch (e) { return null; } });
+    check('rotated connector on ' + op + ' is REFUSED (exit 2) naming both ids',
+          r.code === 2 && r.err.indexOf('connector id "' + OTHER + '"') !== -1 && r.err.indexOf('"' + WATCHED + '"') !== -1 &&
+          r.err.indexOf('NO REVIEW RECORD CAN CLEAR THIS') !== -1,
+          'code=' + r.code + ' err=' + r.err.slice(0, 240));
+    check('rotated connector on ' + op + ' logs exactly one connector-mismatch block',
+          added.length === 1 && added[0] && added[0].event === 'block' && added[0].reason === 'connector-mismatch' &&
+          added[0].target === '<connector:' + OTHER + '>',
+          'added=' + JSON.stringify(added).slice(0, 240));
+  }
+
+  // Break-glass CLEARS it (mechanical: the gate cannot evaluate an unknown connector, and the repair needs
+  // Notion writes) -- logged as break-glass-skip with the reason, advisory on stdout, no exit-2 refusal.
+  {
+    const before = readEvents().length;
+    const r = callAs('mcp__' + OTHER + '__notion-update-page', UNLOCK);
+    const added = readEvents().slice(before).map(l => { try { return JSON.parse(l); } catch (e) { return null; } });
+    check('break-glass CLEARS a connector-mismatch (no exit-2 refusal, advisory on stdout)',
+          r.code !== 2 && r.out.indexOf('break-glass') !== -1 && r.out.indexOf('UNREVIEWED') !== -1 &&
+          r.out.indexOf('connector-mismatch') !== -1,
+          'code=' + r.code + ' out=' + r.out.slice(0, 240));
+    check('the break-glass skip is LOGGED with reason connector-mismatch',
+          added.length === 1 && added[0] && added[0].event === 'break-glass-skip' && added[0].reason === 'connector-mismatch',
+          'added=' + JSON.stringify(added).slice(0, 240));
+  }
+
+  // A very long id is truncated to 80 chars in the message and the log target.
+  {
+    const longId = 'x'.repeat(200);
+    const before = readEvents().length;
+    const r = callAs('mcp__' + longId + '__notion-update-page');
+    const added = readEvents().slice(before).map(l => { try { return JSON.parse(l); } catch (e) { return null; } });
+    check('a 200-char connector id is truncated to 80 in the message and the log',
+          r.code === 2 && r.err.indexOf('x'.repeat(81)) === -1 && r.err.indexOf('x'.repeat(80)) !== -1 &&
+          added.length === 1 && added[0] && added[0].target === '<connector:' + 'x'.repeat(80) + '>',
+          'code=' + r.code + ' target=' + (added[0] && added[0].target));
+  }
+
+  // Only the four WRITE tools are covered; other Notion tools and non-Notion tools under any id fall through.
+  for (const tool of ['mcp__' + OTHER + '__notion-fetch', 'mcp__' + OTHER + '__notion-search',
+                      'mcp__' + OTHER + '__notion-update-data-source', 'mcp__' + OTHER + '__slack_send_message',
+                      'mcp__' + OTHER + '__notion-update-pages', 'xmcp__' + OTHER + '__notion-update-page']) {
+    const before = readEvents().length;
+    const r = callAs(tool);
+    check('not a gated write tool, falls through untouched: ' + tool.replace(OTHER, '<id>'),
+          fellThrough(r) && readEvents().length === before,
+          'code=' + r.code + ' err=' + r.err.slice(0, 160));
+  }
+
+  // The WATCHED connector behaves exactly as before: a no-record content write is the ordinary no-pass.
+  {
+    const r = callAs(MCP + 'notion-update-page');
+    check('the watched connector is unchanged (no-record content write -> no-pass, not connector-mismatch)',
+          ticketBlockReason(r) === 'no-pass' && r.err.indexOf('connector id') === -1,
+          'reason=' + ticketBlockReason(r) + ' code=' + r.code);
+  }
+
+  // A non-string tool_name cannot crash the new branch (exit 1 would be a silent approve).
+  {
+    const r = run({ tool_name: 12345, tool_input: ti, cwd: DIR, transcript_path: path.join(DIR, 'nope.jsonl') });
+    check('a non-string tool_name does not crash the hook (exit != 1) and is not a connector refusal',
+          r.code !== 1 && r.err.indexOf('connector id') === -1, 'code=' + r.code + ' err=' + r.err.slice(0, 160));
+  }
+}
+
 console.log('\n== N. GEN-740: a verdict delivered through SubagentHandback ==');
 {
   // Fixture shapes copied from the five real 2026-09-27 hand-back reviewer transcripts (harness 2.1.281):

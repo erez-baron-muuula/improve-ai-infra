@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-13 — GEN-636 + GEN-834: connector-change refusal and ticket-gate readout installed via full /vet-code; skill edits (Part C) handed off to a fresh session; GEN-460 appended <!-- toc-session:db195981-2664-4577-9224-aba92f284f29 -->
 - 2026-10-12 (5) — GEN-657 closed: .gitattributes keeps the hash-pinned REST-write script LF on checkout; ticket acceptance revised (re-pin moved to GEN-635) <!-- toc-session:c1744d9e-5e93-4747-8d90-123021674b1d -->
 - 2026-10-12 (4) — GEN-661 sweep restored; GEN-699 + GEN-663 ticket-gate hardening installed via /vet-code (item 2 declined by Erez); GEN-662 closed; GEN-834/835 filed <!-- toc-session:b93871c0-6a79-4771-967f-c370c2a4eddc -->
 - 2026-10-12 — GEN-812 verdict-line guard built, vetted, live and closed (10/10 acceptance); GEN-798 doc fixes Done; GEN-825 filed for over-cap refs notes. <!-- toc-session:7f833beb-bdba-49c7-ab07-4867417b4078 -->
@@ -241,6 +242,50 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-13 — GEN-636 + GEN-834: connector-change refusal and ticket-gate readout installed; skill edits handed off
+<!-- session:db195981-2664-4577-9224-aba92f284f29 -->
+
+**Shape.** Erez asked to work on GEN-636 and whether to bundle a GEN-86 ticket. The plan was made in plan mode and converged in a 2-round `/check`. Round 1 found the false premise "the hook reads the ticket-record". Fixed by joining approve events to the Step-4 ticket-records by hash, with no hook change for tagging.
+- **Bundle:** GEN-834 (connector-id rotation). Same hook, same "gate goes quiet" problem, same `/vet-code` cycle.
+- **Not bundled:** GEN-651, GEN-603, GEN-835, GEN-635/634, GEN-505.
+- **Sweep:** all 351 Backlog/To-Do tickets, filtered on Status only. A first sweep filtered on Project=AI and missed 31 tickets with an empty Project; the re-run caught them.
+- **Approval:** Erez approved the plan. GEN-636 was set to In Progress.
+
+**Design.** `notes/gen636/design.md` converged in a 3-round `/check`.
+- **Round 1:**
+  - the re-review "lenient" streak was calibrated on the wrong population (the unattended `/wrap` lane passes first time 20/20);
+  - the signal list was incomplete;
+  - row 11 false-fired on the shipped path.
+- **Round 2:** row 11 had no time bound.
+- **Outcome:** a 16+row readout covering every hook event and reason (CLASS table, plus a runtime row and a build-time fixture for unclassified signals), a tag cut-over, and a low-side "lenient reviewer" bar on the attended re-review rate (≤2 of 40; history 3-16).
+- **Calibration data:** `notes/gen636/baseline.js`, `lane-baseline.js`, `prefix-scan-tooluse.js`, `tool-name-replay.js`.
+
+**Build** (full `/vet-code`).
+- **Hook `auto-approve.js` (GEN-834).** A Notion write tool from a non-watched connector id is refused as `connector-mismatch`; break-glass can clear it, logged with its own "NO content review" note. Comment fixes. The contract test's break-glass pin and the harness mapper were widened.
+- **New file `hooks/ticket-gate-readout.js`.** A read-only CLI for the future `/wrap` Step 3i; not a registered hook.
+- **Code review:**
+  - Pass A `/code-review` high ran twice: 5+1 findings, 5 fixed, 1 no-change.
+  - Pass B (Opus 5.5, model verified from the transcripts) ran three times. Run 1 REVISE: row 5 skipped connector-mismatch break-glass, so nothing said "switch it off"; fixed. Runs 2 and 3 PASS with advisories, applied.
+- **Tests:**
+  - arm 279/279, contract 36/36, readout 86/86;
+  - REST parked suite unchanged (6/25 baseline);
+  - corpus sweep: 1,189 payloads, 0 bypasses;
+  - pass-consume: 3/3 under both the installed and the candidate gate;
+  - real tool-name replay: 126 names, 1 fire, on a garbled id the harness rejects before hooks run. Erez signed off on it.
+- **Installed (Erez: "yes, install it"):**
+  - `auto-approve.js` sha256 fe95a728…, byte-identical; pass consumed; marker-liveness MATCH.
+  - Readout sha256 ef28d917…, byte-identical; prints nothing on real data.
+  - Readout added to `sync.ps1 $FileMap`; sync pushed.
+
+**Not done (handed off).** Part C: the vet-ticket and wrap skill edits via `/vet-rule` (source/lane tags, consult files, wrap Step 3i), then ticket close-out. Erez chose a fresh session. Cold-pickup notes: `notes/gen636/HANDOFF.md`. GEN-636 stays In Progress. GEN-834's build is done; it still reads To Do on the board, and closing it is proposed next session.
+
+Unresolved items filed: none
+Merged into GEN-460: `~/.claude/state/` (one harness-written MCP-discovery cache file) is not covered by the backup set; sync warned on every run. Reviewer PASS, 1 round.
+Reversals judged non-learning: none (no Erez pushback reversals; the plan's false premise and the design defects were caught by `/check` before presenting).
+Dropped learnings: the first board sweep filtered on an optional property. The Notion ref injected that turn already states "filter on Status only", so the lesson is case-specific with no new rule needed.
+
+---
+
 ## 2026-10-12 (5) — GEN-657 closed: REST-write script pinned to LF via .gitattributes
 <!-- session:c1744d9e-5e93-4747-8d90-123021674b1d -->
 
