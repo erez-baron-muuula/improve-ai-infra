@@ -1827,7 +1827,10 @@ function findCheckPassFile(matchFn, exclude) {
 // MAINTENANCE: the Notion MCP server UUID, the Team-Tasks ids, the GEN-58 page id, the practice-page
 // id (NOTION_PRACTICE_PAGE_ID), the housekeeping
 // property names and the pinned script hash are hardcoded -- the same latent-rotation risk the
-// sibling Notion hooks document. If ticket writes ever stop being gated, re-check these first. The
+// sibling Notion hooks document. If ticket writes ever stop being gated, re-check these first.
+// (Since GEN-834 a rotated SERVER UUID is no longer silent: a Notion write tool carrying any other
+// connector id is REFUSED as connector-mismatch -- see enforceTicketVetting. The sibling Notion hooks
+// still match the old id and do go quiet; the refusal message names them.) The
 // housekeeping list rotates SAFELY (an unknown property name becomes substance, i.e. more gating);
 // the Team-Tasks marker pair does NOT -- if the data source is ever replaced, the marker scan stops
 // firing and creates into the new one read as out of scope.
@@ -2222,8 +2225,10 @@ function ticketIsHousekeepingOnly(R) {
 //     command, or anything on any other page.
 //   * the file is append-only and READ-ONLY TO THIS HOOK. The hook never writes it; /vet-ticket's
 //     GEN-58 lane is the single writer, and it verifies parentage over the network first.
-//   * its contents are SURFACED, not silent: /wrap reports the entry count and any ids added since
-//     the last report, with a re-evaluate bar at 90% of the cap.
+//   * its contents are SURFACED, not silent: /wrap Step 3i (hooks/ticket-gate-readout.js, GEN-636)
+//     reports the distinct-id count against a bar at 90% of the cap. The "ids added since the last
+//     report" half the design promised is NOT built -- the readout keeps no state; see
+//     notes/gen636/design.md §4.5 for the recorded departure.
 //
 // -> {ok, why, ids:Set}. ok === false is a HARD BLOCK with its own reason, never a silent
 // truncation: a gate that cannot read its own exemption list must stop, not guess. The cap is 4,096
@@ -2552,16 +2557,19 @@ function ticketSplitIds(idish) {
 //
 // Every hard-block here is SELF-SURFACING: it exits 2 and prints why, so the call stops and Claude
 // has to act on it in the same turn. What is NOT self-surfacing is the AGGREGATE -- rates over a
-// window -- and that is what this file exists for. Its reader is the `/wrap` line set (deliverable
-// 12): waive rate, re-review rate, raw-REST blocks BY REASON with their baseline proportions, the
-// `/wrap`-originated slice on its own, the "not a ticket" drift counter, the exemption-file count,
-// and repeated `internal-error`. Each has a bar and prints only above it.
+// window -- and that is what this file exists for. Its reader is `/wrap` Step 3i, which runs
+// hooks/ticket-gate-readout.js (GEN-636). That script's CLASS table is the ONE list of which event
+// kinds and block reasons are monitored, self-surfacing, audit-only or not-wired, and each monitored
+// row has a bar and prints only above it -- do not restate the row list here, where it would fork.
+// A NEW event or reason added below must be added to that table too: the readout flags any value it
+// does not know (its row 15), and its build-time fixture extracts this file's literals to check.
 //
 // `source` records which routine originated the write. HOOK-ORIGINATED events record
-// `source: "unknown"` BY CHOICE, not by impossibility -- a session-scoped marker file that a routine
-// touches and this same hook reads is an existing idiom in this codebase (isSafeLoggateTouch), so the
-// hook COULD be told. It is not worth a second marker mechanism with its own orphan-cleanup, because
-// the slice counters need only the skill's events, which do carry the tag. Stated so it is not
+// `source: "unknown"` BY CHOICE. The per-caller tag lives instead on the Step-4 ticket-record that
+// /vet-ticket already writes (`source`, `lane`) -- a file this hook never reads -- and the readout joins
+// it to the `approve` event below by content hash. (A session-scoped marker this hook reads, the
+// isSafeLoggateTouch idiom, was the alternative; it would need its own orphan-cleanup, and the skill
+// may not append to this log itself without a second permission dialog.) Stated so it is not
 // discovered when a counter reads zero.
 function logTicketGateEvent(entry) {
   try {
@@ -2579,7 +2587,11 @@ function logTicketGateEvent(entry) {
 // approval and must stay unbreakable. The prior `if (configUnlocked()) return` at the top of
 // enforceTicketVetting voided the WHOLE gate, unlogged -- a silent, session-wide hole. Now every skip
 // is LOGGED and SURFACED: a gate-void is at least as decision-worthy as a waive.
-const TICKET_BREAKGLASS_REASONS = new Set(['internal-error', 'unreadable-payload']);
+// GEN-834 adds connector-mismatch: the gate cannot evaluate a Notion write tool whose connector id it
+// does not recognise, so that block is mechanical too -- and the repair (updating NOTION_MCP_PREFIX,
+// then working tickets again) itself needs Notion writes, so it must not be able to lock itself out.
+// This set stays the ONE list of breakable reasons: the GEN-834 branch consults it too.
+const TICKET_BREAKGLASS_REASONS = new Set(['internal-error', 'unreadable-payload', 'connector-mismatch']);
 function ticketBreakGlassSkip(tool, target, reason) {
   logTicketGateEvent({ event: 'break-glass-skip', tool: tool, target: target, reason: reason });
   // defer() injects the advisory into the model's context AND exit(0)s -- terminal, so no other guard runs
@@ -3672,6 +3684,28 @@ function blockTicketVetting(sc) {
   process.exit(2);
 }
 
+// GEN-834: the refusal for a Notion write tool from a connector this gate does not watch. Its OWN message,
+// like blockPracticePage: the generic text says "no usable review record ... use /vet-ticket", and no
+// record can clear this -- following it would spend a reviewer run on a write that is refused again.
+// The id list is deliberately NOT enumerated: the old id is hardcoded in many places (settings
+// permissions and matchers, settings.local.json, the sibling Notion hooks), so the message points at a
+// grep rather than a list that would go stale.
+function blockConnectorMismatch(seenId) {
+  const watched = NOTION_MCP_PREFIX.replace(/^mcp__/, '').replace(/__$/, '');
+  process.stderr.write(
+    'Refused (ticket-quality gate): this Notion write comes from connector id "' + String(seenId).slice(0, 80) +
+    '", but the ticket gate watches "' + watched + '". Probable cause: the Notion connector was removed and' +
+    ' re-added (which gives it a new id), or this machine has a different Notion connector. Until the gate is' +
+    ' updated it cannot check ANY Notion write, so this one is refused rather than let through unchecked.\n' +
+    'Fix: (1) confirm the live id -- ToolSearch for notion-update-page and read its mcp__<id>__ prefix;' +
+    ' (2) update NOTION_MCP_PREFIX in ~/.claude/hooks/auto-approve.js through /vet-code; (3) grep ~/.claude for' +
+    ' the old id -- it is also hardcoded in settings.json permissions and hook matchers, settings.local.json,' +
+    ' and the other Notion hooks, which go quiet on the old id. NO REVIEW RECORD CAN CLEAR THIS -- do not run' +
+    ' /vet-ticket for it. Break-glass (' + UNLOCK_ENV_VAR + ' / the .config-unlock sentinel) lets Notion' +
+    ' writes through, logged, while you fix it. Surface this in your next "\u{1F4CC} For you" block.\n');
+  process.exit(2);
+}
+
 // ---- the enforcement flow --------------------------------------------------
 // Ticket-quality guard. Hard-blocks (exit 2) an in-scope Notion write with no usable record;
 // consumes the matching record and approves; returns (falls through) for everything else. Honors
@@ -3690,12 +3724,28 @@ function enforceTicketVetting(tool, input) {
   // other tool call in the session.
   const isMcp = (tool === NOTION_CREATE_TOOL || tool === NOTION_UPDATE_TOOL ||
                  tool === NOTION_DUPLICATE_TOOL || tool === NOTION_MOVE_TOOL);
+  // GEN-834: a Notion write tool from a connector whose id is NOT the one this gate watches. Before
+  // GEN-834 such a tool failed the isMcp test above and returned below, so a removed-and-re-added
+  // connector silently switched the WHOLE gate off -- no block, no log line. Refuse it instead. Still
+  // OUTSIDE the try, like the tool test it extends: a regex exec on a string cannot throw, so this can
+  // never turn an unrelated call into a block. (The harness itself rejects a NON-EXISTENT tool name before
+  // any PreToolUse hook runs, so a model-garbled id never reaches here; only a real connector does.)
+  const rotated = !isMcp && typeof tool === 'string' &&
+    /^mcp__(.+)__notion-(create-pages|update-page|duplicate-page|move-pages)$/.exec(tool);
+  if (rotated) {
+    const target = '<connector:' + rotated[1].slice(0, 80) + '>';
+    if (configUnlocked() && TICKET_BREAKGLASS_REASONS.has('connector-mismatch')) {
+      return ticketBreakGlassSkip(tool, target, 'connector-mismatch');
+    }
+    logTicketGateEvent({ event: 'block', tool: tool, target: target, reason: 'connector-mismatch' });
+    return blockConnectorMismatch(rotated[1]);
+  }
   // PIECE 1a SCOPE: the MCP surface ONLY. The raw REST/curl arm (§4.5) is built but DELIBERATELY NOT
   // WIRED -- shell tools are not in scope here, which makes ticketShellScope unreachable from this
   // hook. Read the NOT WIRED banner above §4.5 before reconnecting it; two of its findings are open.
   if (!isMcp) return;
-  // GEN-508 #4: NO global break-glass here. It is scoped BELOW to the two MECHANICAL blocks only
-  // (internal-error, unreadable-payload) via ticketBreakGlassSkip -- a content/auth decision (no-pass,
+  // GEN-508 #4: NO global break-glass here. It is scoped to the MECHANICAL blocks only
+  // (internal-error, unreadable-payload below; connector-mismatch above, GEN-834) via ticketBreakGlassSkip -- a content/auth decision (no-pass,
   // bad-verdict, reviewer-unverified, ...) is Erez's approval and stays unbreakable, mirroring
   // enforceStaging. The old unconditional `if (configUnlocked()) return` voided the whole gate, unlogged.
 
