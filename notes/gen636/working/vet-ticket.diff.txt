@@ -1,0 +1,157 @@
+diff --git a/vet-ticket.SKILL.orig.md b/vet-ticket.SKILL.md
+index 9f28353..7c0aa54 100644
+--- a/vet-ticket.SKILL.orig.md
++++ b/vet-ticket.SKILL.md
+@@ -1,6 +1,6 @@
+---
+name: vet-ticket
+description: "Vet and file a Notion Team-Tasks ticket write (create, duplicate, move-in, body edit, or substance-property edit) through: draft, independent reviewer pass against the ticket bar, resolve every note, show Erez a summary card, mint the single-use ticket pass the auto-approve hook requires, apply, verify. Trigger on /vet-ticket, or when the auto-approve hook blocks a Notion write with a 'ticket-quality gate' refusal (except one that names the Notion practice page {+or a mismatched Notion connector id+} — see Scope). Invoke it yourself whenever a pending write is in this skill's gate scope (or the gate blocks one) — never ask Erez whether to activate it; his approval is the Step 5 card (or a Step 6 waive), not a yes/no on running the skill. Start it the moment you are about to propose a gated write — before any chat draft of the ticket or any 'should I file this?' — so its board search (Step 0b) and review run before Erez sees the proposal. Out-of-scope writes proceed directly."
+---
+
+# /vet-ticket — gated, independently-reviewed Team-Tasks ticket writes
+@@ -40,9 +40,12 @@ card-approval and the "show me the body" escape are the backstops. For the one U
+`/wrap` Steps 1 and 3c, which file with no card (GEN-702) — that real-time backstop is absent; its
+substitute is weaker and after-the-fact: the independent reviewer PASS still gates every filing, and
+`/wrap`'s Step 7 report surfaces a per-run reviewer-outcome tally so a lenient-reviewer pattern is at
+least visible after the [-run (the durable-]{+run. The+} cross-session [-aggregate-]{+ticket-gate readout (`/wrap` Step 3i) catches only+}
+{+*systemic* leniency, from the re-review rate of attended filings; it leaves unattended filings out of+}
+{+that rate, so leniency confined to the unattended lane+} is [-GEN-636).-]{+not detected.+} The shared break-glass (`CLAUDE_CONFIG_UNLOCK=1` /
+`.config-unlock` sentinel) does NOT skip this gate's content decisions — GEN-508 #4 scoped it to the[-two-]
+mechanical blocks only (`internal-error`, `unreadable-payload`), {+and GEN-834 added the connector tripwire+}
+{+(`connector-mismatch`), each skip+} logged and surfaced; see Step 9.
+
+---
+
+@@ -97,6 +100,10 @@ NOT gated, and you do not need this skill for them:
+  plain-text edit of it passes with no review. Anything else aimed at it is refused outright
+  (`practice-page-plain-only`), and no review record can clear that refusal, so never run this skill
+  for it: send a plain edit directly, or make the change in the Notion app.
+{+- **A `connector-mismatch` refusal** — a Notion write tool from a connector id the gate does not watch+}
+{+  (see the connector-rotation bullet under "Marker-liveness probe"). No review record can clear it, so+}
+{+  never run this skill for it: follow the refusal's own fix steps. Break-glass is the escape meanwhile,+}
+{+  and the writes it lets through get no review at all (Step 9).+}
+
+**If the payload or its target cannot be read, the write is blocked, not waved through** — no token, a
+malformed or missing target id, or an unreadable / over-cap exempt file. The hook makes **no Notion
+@@ -136,8 +143,8 @@ When you roll over, run these steps **in this order** — the order is load-bear
+   for the next N; no volume with that number already exists; the payload carries no destructive key
+   (`archived`, `in_trash`, `allow_deleting_content`); and `parent.page_id` is the GEN-58 row.
+2. **Mint the create pass and create the volume.** Hash the create payload (Step 1, `--tool create`), have
+   the reviewer sign off against the lane bar above (in place of Step 2's checklist), {+write the+}
+{+   ticket-record (Step 4, with `"lane": "gen58-rollover"`),+} show Erez the card and mint (Step 5), and apply. The lane bar is a closed pass/fail check, so it carries no free-text notes for
+   Step 3 to resolve. Capture the **new page id** from the create result.
+3. **Re-verify parentage over the network.** Re-fetch the newly-created page and confirm its ACTUAL parent
+   is the GEN-58 row — do not trust the draft payload. A wrongly-registered id would un-gate content writes
+@@ -191,7 +198,8 @@ Notion tool), so it can never be the one to check. Run the lane in this order:
+   and no move that de-lists a row. It does **not** re-confirm the not-a-ticket fact — step 1 already
+   did, with the tool it needs — and it ends on `TICKET-REVIEW-VERDICT: PASS <hash>` exactly as Step 2
+   requires.
+4. **Then Steps 4–8 as normal** — write the [-record,-]{+record (with `"lane": "non-ticket"`),+} show Erez the card,
+   mint, apply. The lane's bar is
+   a closed pass/fail check, so it carries no free-text notes for Step 3 to resolve.
+
+This lane attests the write is harmless to a non-ticket page; it never applies to a real Team-Tasks row
+@@ -252,13 +260,11 @@ silent; a DIVERGENCE / LOOKUP-ERROR becomes one line under a "Ticket-gate marker
+  keys on id, so adopting a new board is a deliberate `TEAM_TASKS_IDS` edit, outside this probe.
+- **A connector-UUID rotation.** The hook's four gated-tool names are built from a hardcoded
+  `NOTION_MCP_PREFIX` (the Notion connector's UUID). If the connector is removed and re-added, it is
+  minted a NEW UUID,[-so the live tool names no longer equal the hook's constants-] and[-`enforceTicketVetting`-]
+[-  silently stops firing on every Notion write — yet-] this probe still reports **MATCH**, because the board ids it checks are
+  unchanged. [-So a green probe is not proof-]{+The hook catches+} the [-gate is live; it only proves the board-]
+[-  pair-]{+rotation itself instead (GEN-834): a Notion write tool carrying any+}
+{+  other connector id+} is [-intact. Catching-]{+refused as `connector-mismatch`, so+} a rotation [-needs-]{+shows up as+} a [-separate check that-]{+refusal on+} the [-hook's-]{+first+}
+{+  gated write rather than as a gate that silently stopped firing. The fix is a+} `NOTION_MCP_PREFIX` [-still-]
+[-  matches-]{+update+}
+{+  through `/vet-code` — ask Erez first, since+} the[-connector-] id [-the live tools carry — that check is **not built yet**-]{+may differ between Claude apps+} and [-is a deferred-]
+[-  ticket-gate hardening item **not yet added to GEN-699** (tracked in this folder's README follow-up-]
+[-  list until it is).-]{+machines.+}
+
+What it *does* catch, false-positive-free, is the known board's id pair rotating or gaining/losing a data
+source.
+@@ -452,6 +458,26 @@ stuck ticket blocks the task he asked for, otherwise batched at the next natural
+unattended `/wrap` lane there is no Erez to consult mid-run, so the item is surfaced-not-filed instead —
+see `wrap/SKILL.md` Step 1.)
+
+{+**Before you stop to consult him, write a consult file** with the Write tool, so a question that never+}
+{+gets answered is not lost when the session ends — `/wrap` Step 3i reports open ones:+}
+{+`~/.claude-staging/ticket-passes/consult-<slug>-<yyyymmddHHMM>.json`, where `<slug>` is a few words+}
+{+naming the ticket, hyphen-joined, `a-z0-9` only, and the timestamp is UTC.+}
+
+{+```json+}
+{+{ "kind": "ticket-consult",+}
+{+  "target": "<page id, or 'new'>",+}
+{+  "question": "<the one-line question for Erez>",+}
+{+  "session": "<$CLAUDE_SESSION_ID, read via the Bash tool; '' if unreadable>",+}
+{+  "openedUtc": "<ISO-8601 UTC now>",+}
+{+  "resolved": false }+}
+{+```+}
+
+{+Give it no `expires`, so the hook's pass scan skips it. As soon as Erez answers — in this session or any+}
+{+later one — Read the file, then overwrite it with `"resolved": true`, or `"resolved": "abandoned"` if he+}
+{+drops the item, and add `"resolvedUtc"`; do this before going on to file. Overwrite it; never delete it,+}
+{+so the trail stays. An unattended run (`/wrap` or a scheduled task) writes none — it cannot consult Erez,+}
+{+and its surfaced-not-filed path covers that case.+}
+
+## Step 3 — Resolve every note before filing
+
+A `PASS` with notes does not file as-is. For each note, either amend the ticket or dismiss it with a
+@@ -478,9 +504,18 @@ has to be on that file, flat at its top level.
+  "searchSummary": "<Step 0b's search and candidates; 'n/a' where Step 0b was skipped>",
+  "waived": false,
+  "waiveReason": null,
+  {+"source": "interactive",+}
+{+  "lane": "ticket",+}
+  "draftedUtc": "<ISO-8601 UTC now>" }
+```
+
+{+**`source` and `lane` feed `/wrap` Step 3i, the ticket-gate readout.** `source` is `interactive` by+}
+{+default; `/wrap` Steps 1 and 3c set `wrap-step1` / `wrap-step3c`, and any other unattended run — one+}
+{+with no Erez present to answer a card, such as a scheduled task — sets `scheduled`. `lane` is `ticket`, `non-ticket` (the non-ticket lane) or+}
+{+`gen58-rollover` (the rollover lane). Use these exact values: the readout counts only them and names any+}
+{+other value as drift. **Never copy either key into the Step-5 pass** — its keys are closed+}
+{+(`TICKET_PASS_KEYS`), and the hook refuses an extra one with `unknown-record-key`.+}
+
+**One reviewer id, singular.** The hook verifies exactly one reviewer — that agent's sidecar
+`agentType` and that agent's own PASS token — so `reviewerAgentId` names the reviewer whose token
+binds the hash you are about to mint, which after a REVISE round is the LAST reviewer, not the first.
+@@ -636,8 +671,9 @@ never proved. What it still cannot show is that the review was *competent* — a
+PASS on a hollow ticket, and a reviewer handed a truthful hash can emit the token having barely read
+the payload. For an interactive filing, Erez's card-showing mint-approval is the backstop. For the
+unattended `/wrap` lane (Steps 1/3c, no card — GEN-702) there is no such real-time backstop: the
+reviewer PASS is the only per-filing check, and only `/wrap`'s after-the-fact Step 7 tally[-(and later-]
+[-the GEN-636 aggregate)-] can surface
+a lenient-reviewer [-pattern.-]{+pattern on that lane (its cross-session readout, `/wrap` Step 3i, leaves unattended+}
+{+filings out of the re-review rate — see the header).+}
+
+## Step 8 — Apply, verify, and record the event
+
+@@ -657,7 +693,8 @@ the pass, and approves — no second prompt. Then:
+
+**Surfacing (do not skip — the signal is worthless unheard):** a **waive** or a **decline** is
+reported as a line in that same turn's "📌 For you" block — immediately, not saved for a later
+routine. [-Aggregate-]{+The cross-session+} counts and [-a re-evaluate bar at-]{+their bars are+} `/wrap` {+Step 3i, the ticket-gate readout (it+}
+{+counts waives from the events log; declines+} are [-piece 3.-]{+not counted).+}
+
+## Step 9 — Recovery
+
+@@ -674,14 +711,19 @@ routine. Aggregate counts and a re-evaluate bar at `/wrap` are piece 3.
+  `~/.claude-staging/ticket-passes/` by hand, then re-mint and retry. (Do not break-glass it —
+  `consume-failed` is unbreakable.)
+- Break-glass (`CLAUDE_CONFIG_UNLOCK=1`, or the `.config-unlock` sentinel + reaper token) does NOT clear
+  the ticket gate's content decisions. GEN-508 #4 scoped it to the[-two-] MECHANICAL blocks only
+  (`internal-error`, `unreadable-payload` — a write the gate could not read at [-all); every-]{+all), and GEN-834 added+}
+{+  `connector-mismatch` (a Notion write tool from a connector id the hook does not watch — see the+}
+{+  connector-rotation bullet under "Marker-liveness probe"). **Clearing `connector-mismatch` means NO+}
+{+  content review at all** — the hook never looks for a pass on that write. Use it only to keep working+}
+{+  through a rotated connector while `NOTION_MCP_PREFIX` is fixed, never to avoid a review you could run.+}
+{+  Every+} such skip is
+  LOGGED (a `break-glass-skip` row in the ticket-events log) and SURFACED (an advisory injected into the
+  turn, to be raised in the "📌 For you" block). **Every other block reason stays UNBREAKABLE** — not
+  only the ones named here (`no-pass`, `no-token`, `bad-verdict`, `bad-record`, `reviewer-unverified`,
+  `unknown-record-key`, `expiry-too-far`, `stale-content`, `bad-target`, `transcript-too-large`,
+  `consume-failed`, `exempt-list-*`) but any content/auth reason the hook can return except those [-two-]
+[-  mechanical ones;-]{+three;+}
+  the
+  per-case Step 6 waive is the only way past them. The OPEN/CLOSE commands are in `/vet-code` and
+  `/vet-rule`; the staging gate is scoped the same mechanical-only way, while the vetting and check gates
+  are still fully suspended by break-glass.
