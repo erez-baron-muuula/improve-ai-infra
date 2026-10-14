@@ -8,11 +8,12 @@ Ticket: GEN-860 "Make sure no Claude session of Erez's is lost again, and keep a
 - Contents:
   - `projects\` - copy of `C:\Users\Erez\.claude\projects` (all local session transcripts, both accounts).
   - `claude-code-sessions\` - copy of `C:\Users\Erez\AppData\Roaming\Claude\claude-code-sessions` (the desktop app's per-account session lists; they hold each session's title, remote session ID and model).
+  - `_previous-versions\<date-time>\` - older backup copies saved just before a smaller local version replaced them (same relative paths under `projects\` or `claude-code-sessions\`). When restoring a file, check here for an older, longer version.
 - Access: owner erez@muuula.com; shared view-only (Viewer) with info@muuula.com (Erez's decision, 2026-10-14; Erez shared it in the Drive website because the Drive connector has no sharing permission; permissions list checked 2026-10-14: exactly these two). The folder holds session transcripts, which can contain secrets, so share it with no one else.
 - Lifespan: add-only. Nothing in the backup is deleted automatically (Erez, 2026-10-14).
 
 ## First copy (2026-10-14)
-- Made by Erez in File Explorer (two folder copies), because the auto-approve guard refuses any shell copy whose command text mentions a `~/.claude` path, and the auto-mode classifier refused opening the break-glass override from the session.
+- Made by Erez in File Explorer (two folder copies). At the time this was believed necessary because "the auto-approve guard refuses any shell copy whose command text mentions a `~/.claude` path"; that diagnosis was wrong (corrected 2026-10-14, session 460fea18): the guard refused Claude's command because it contained a variable (an exit-code check on its second line). A copy command with no variables runs from a Claude session. The auto-mode classifier also refused opening the break-glass override from the session.
 - Checked by comparing every file name and size against the source:
   - `claude-code-sessions`: 516 of 516 files; one session-list file differed in size because the app was updating it during the copy.
   - `projects`: 6,544 of 6,558 files. Missing: 10 files whose full path at the backup location exceeds Windows' 260-character limit (File Explorer cannot copy them), and 4 files created after the copy by a session that was running. Five files differed in size because their sessions were still running (this one included).
@@ -25,8 +26,15 @@ Ticket: GEN-860 "Make sure no Claude session of Erez's is lost again, and keep a
 - Drive online search found the 266-character-path file and both scratch-workspace transcripts, so long paths upload to Drive as well.
 - A 300-character test path was written and read back on the Drive folder with PowerShell (`\\?\` prefix) before the copy; a Node recursive `mkdir` on a 343-character path hung instead (cause unknown; avoid Node for long paths on G:).
 
+## Gap closed again (2026-10-14, 16:56 local, session 460fea18, run by Claude)
+- Before the refresh, five backup files whose local version had become smaller were saved to `_previous-versions\20261014-165610\` (same relative paths): one session title (`custom-title.json`, renamed session, 46 -> 25 bytes) and four session-list entries of the main account (normal rewrites by the app). Rule used, and kept for the automatic copy: never overwrite a backup copy with a smaller file without first saving the older copy there.
+- Then the two commands below, run by Claude from its own shell (no variables in the command): `projects` 111 files copied (32.7 MB), `claude-code-sessions` 10 copied (4.2 MB), 0 failed. Logs in that session's scratchpad (`gap-projects.log`, `gap-sessions.log`).
+- File-by-file comparison (path + size) right after: `claude-code-sessions` 0 missing, 0 differ. `projects` 0 missing among files that existed when the copy ran (2 files of a running session were created at 16:57:10, after it ended at 16:56:56); 4 files differ in size, all transcripts of sessions running at that moment (modified 16:57:07-16:57:15). 13 files exist only in the backup: tool-result side files of sessions 9cd83202 and 82fce884 that were deleted on the PC after 15:16. The add-only backup kept them.
+- A full refresh pass takes about 4 seconds; listing both trees takes under 1 second.
+
 ## How to refresh (until the automatic copy exists)
-Preferred: press Win+R and run each command (they handle long paths and never delete anything in the backup):
+A Claude session can run these two commands itself, as long as the command line contains no variables (the copy guard refuses a copy command with a `$` variable in it). Before running them, check for backup files whose local version is smaller and save those backup copies to `_previous-versions\<date-time>\` first.
+Or press Win+R and run each command (they handle long paths and never delete anything in the backup):
 `robocopy "C:\Users\Erez\.claude\projects" "G:\My Drive\AI Projects\_Tooling\Claude Session Backup\projects" /E /XO /R:1 /W:1 /LOG:C:\Users\Erez\AppData\Local\Temp\robocopy-projects.log`
 `robocopy "C:\Users\Erez\AppData\Roaming\Claude\claude-code-sessions" "G:\My Drive\AI Projects\_Tooling\Claude Session Backup\claude-code-sessions" /E /XO /R:1 /W:1 /LOG:C:\Users\Erez\AppData\Local\Temp\robocopy-sessions.log`
 Fallback (File Explorer, cannot copy paths over 260 characters):
@@ -36,7 +44,7 @@ The automatic recurring copy is GEN-860's next step. It must handle paths over 2
 ## Leads for the automatic copy (found 2026-10-14, not yet designed or reviewed)
 - No Windows scheduled task on this PC was created by Claude (checked `Get-ScheduledTask`, non-Microsoft tasks only: all third-party updaters).
 - Existing pattern worth reusing: the GEN-382 project backup runs from a SessionStart hook (`~/.claude/hooks/sessionstart-backup-spawner.js`, inline, throttled to one attempt per 5 minutes, bounded by a deadline), writes failures to an append-only queue, and `~/.claude/hooks/sessionstart-backup-surfacer.js` shows unseen failures at the next session start. Session files only change while Claude sessions run, so a session-start trigger (plus `/wrap`) may cover every change without a Windows scheduled task; a session that runs for days without a new session starting is the gap to check.
-- Constraints: Claude's own shell commands cannot run a copy that mentions a `~/.claude` path (auto-approve guard), so the copy must run from a hook or another process, and any hook change goes through `/vet-code`. `robocopy` handles paths over 260 characters; File Explorer does not.
+- Constraints: any hook or `~/.claude/scripts` change goes through `/vet-code`. (Corrected 2026-10-14: the earlier claim here that Claude's shell cannot run a copy mentioning a `~/.claude` path was wrong; only a copy command containing a variable, or naming the hooks/scripts folders, is refused.) `robocopy` handles paths over 260 characters; File Explorer does not.
 - Open design points: guard against a damaged or shorter local file replacing a good backup copy (for example skip a replacement when the new file is smaller, and record it as a failure); keep the inline run short on startup (incremental copy, deadline); surface "last successful copy is older than N days" the same way failures are surfaced.
 
 ## How to restore a session
