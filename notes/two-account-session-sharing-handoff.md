@@ -35,3 +35,8 @@ Erez approved attempting to make both accounts show all local sessions, to be ru
 ## Other open items
 - Optional backup of `C:\Users\Erez\.claude\projects` (1.3 GB); location not chosen. Do not put it on Drive without asking.
 - No files other than this note were changed in this session.
+
+## Update at end of session (2026-10-14)
+- This work is ticket GEN-859. The related backup work is GEN-860 (Make sure no Claude session of Erez's is lost again, and keep a restorable backup): Erez will start that backup in a new session, and the two index folders listed above should be backed up there before any GEN-859 edit.
+- Correction to the backup status above: the claim "oldest transcript 2026-08-04" was wrong. 283 of 305 sessions with last activity on or before 2 Aug are gone (first account 262 of 400, second account 21 of 95); 150 of them carry a remote session ID and at least one still opens at claude.ai/code/<id>. Full numbers and the likely cause are in GEN-860 and in the HISTORY.md entry for 2026-10-14.
+- Decisions so far: backup in Drive (private, only the two accounts he works with; second account not yet named); no age limit on sessions for now.
