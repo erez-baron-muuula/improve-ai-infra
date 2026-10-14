@@ -1,0 +1,46 @@
+# Claude session backup (GEN-860)
+
+Ticket: GEN-860 "Make sure no Claude session of Erez's is lost again, and keep a restorable backup" (Notion Team-Tasks).
+
+## Where it is
+- Drive folder: `G:\My Drive\AI Projects\_Tooling\Claude Session Backup`
+  (online: https://drive.google.com/drive/folders/1VtGZohhygAJvWwadioxV89vOymIa_nGG, owner erez@muuula.com).
+- Contents:
+  - `projects\` - copy of `C:\Users\Erez\.claude\projects` (all local session transcripts, both accounts).
+  - `claude-code-sessions\` - copy of `C:\Users\Erez\AppData\Roaming\Claude\claude-code-sessions` (the desktop app's per-account session lists; they hold each session's title, remote session ID and model).
+- Access: owner erez@muuula.com; shared view-only (Viewer) with info@muuula.com (Erez's decision, 2026-10-14; Erez shared it in the Drive website because the Drive connector has no sharing permission; permissions list checked 2026-10-14: exactly these two). The folder holds session transcripts, which can contain secrets, so share it with no one else.
+- Lifespan: add-only. Nothing in the backup is deleted automatically (Erez, 2026-10-14).
+
+## First copy (2026-10-14)
+- Made by Erez in File Explorer (two folder copies), because the auto-approve guard refuses any shell copy whose command text mentions a `~/.claude` path, and the auto-mode classifier refused opening the break-glass override from the session.
+- Checked by comparing every file name and size against the source:
+  - `claude-code-sessions`: 516 of 516 files; one session-list file differed in size because the app was updating it during the copy.
+  - `projects`: 6,544 of 6,558 files. Missing: 10 files whose full path at the backup location exceeds Windows' 260-character limit (File Explorer cannot copy them), and 4 files created after the copy by a session that was running. Five files differed in size because their sessions were still running (this one included).
+  - The 10 long-path files: 2 transcripts from scratch-workspace sessions (`...scratch-2026-09-14-0bf325\05596c00-eaea-46eb-998f-4ea2d3bde4d6.jsonl`, `...scratch-2026-09-27-a3656f\6759f5dd-c3ab-4308-a2dc-7fb670015af5.jsonl`) and 8 side files (subagent and tool-result files) under those sessions. The longest relative path is 266 characters, which is over the limit even before a destination folder is added.
+- Restore test: `projects\C--Users-Erez-AI-Projects-Improve-AI-Infra\e0415caa-cb23-4396-8774-813f15588c29.jsonl` copied back out of the backup had the same SHA-256 as the original (7ADA212D...C30FFAD0).
+
+## Gap closed (2026-10-14, 15:16 local)
+- Erez ran two `robocopy ... /E /XO /R:1 /W:1 /LOG:...` commands from Windows' Run box (Win+R), one per folder (exact commands under "How to refresh" below). Logs: `C:\Users\Erez\AppData\Local\Temp\robocopy-projects.log` (81 files copied, 0 failed) and `robocopy-sessions.log` (6 copied, 0 failed).
+- Re-comparison afterwards: `projects` 0 missing (the 10 long-path files arrived), 3 files differ in size (sessions running at the time); `claude-code-sessions` 518 of 518, 1 differs (app updating it). The backup also holds one `desktop.ini` per folder (added by Windows/Drive; harmless; ignore it in comparisons).
+- Drive online search found the 266-character-path file and both scratch-workspace transcripts, so long paths upload to Drive as well.
+- A 300-character test path was written and read back on the Drive folder with PowerShell (`\\?\` prefix) before the copy; a Node recursive `mkdir` on a 343-character path hung instead (cause unknown; avoid Node for long paths on G:).
+
+## How to refresh (until the automatic copy exists)
+Preferred: press Win+R and run each command (they handle long paths and never delete anything in the backup):
+`robocopy "C:\Users\Erez\.claude\projects" "G:\My Drive\AI Projects\_Tooling\Claude Session Backup\projects" /E /XO /R:1 /W:1 /LOG:C:\Users\Erez\AppData\Local\Temp\robocopy-projects.log`
+`robocopy "C:\Users\Erez\AppData\Roaming\Claude\claude-code-sessions" "G:\My Drive\AI Projects\_Tooling\Claude Session Backup\claude-code-sessions" /E /XO /R:1 /W:1 /LOG:C:\Users\Erez\AppData\Local\Temp\robocopy-sessions.log`
+Fallback (File Explorer, cannot copy paths over 260 characters):
+Repeat the File Explorer copy: copy `%USERPROFILE%\.claude\projects` and `%APPDATA%\Claude\claude-code-sessions` into the backup folder. When Explorer asks about files that already exist, choose to replace them: session files normally only grow, so the newer copy contains the older one (the exception is a damaged local file, which would overwrite a good backup copy; the automatic copy must guard against that). Tick "Do this for all current items" and Skip on the path-too-long prompt.
+The automatic recurring copy is GEN-860's next step. It must handle paths over 260 characters (so the 10 skipped files arrive), must not let a damaged or truncated local file replace a good backup copy, must run without the Claude app (Windows' own scheduler), and must tell Erez when it stops succeeding.
+
+## Leads for the automatic copy (found 2026-10-14, not yet designed or reviewed)
+- No Windows scheduled task on this PC was created by Claude (checked `Get-ScheduledTask`, non-Microsoft tasks only: all third-party updaters).
+- Existing pattern worth reusing: the GEN-382 project backup runs from a SessionStart hook (`~/.claude/hooks/sessionstart-backup-spawner.js`, inline, throttled to one attempt per 5 minutes, bounded by a deadline), writes failures to an append-only queue, and `~/.claude/hooks/sessionstart-backup-surfacer.js` shows unseen failures at the next session start. Session files only change while Claude sessions run, so a session-start trigger (plus `/wrap`) may cover every change without a Windows scheduled task; a session that runs for days without a new session starting is the gap to check.
+- Constraints: Claude's own shell commands cannot run a copy that mentions a `~/.claude` path (auto-approve guard), so the copy must run from a hook or another process, and any hook change goes through `/vet-code`. `robocopy` handles paths over 260 characters; File Explorer does not.
+- Open design points: guard against a damaged or shorter local file replacing a good backup copy (for example skip a replacement when the new file is smaller, and record it as a failure); keep the inline run short on startup (incremental copy, deadline); surface "last successful copy is older than N days" the same way failures are surfaced.
+
+## How to restore a session
+1. Find the session file in the backup under `projects\<project folder>\<session id>.jsonl`. The session list in `claude-code-sessions\<account id>\...\local_*.json` maps a session's title to its id.
+2. Copy that file (and its `<session id>` folder, if one exists) back into the same place under `C:\Users\Erez\.claude\projects\`.
+3. Check the copy is identical (same size; or compare SHA-256 with `Get-FileHash`).
+Whether the desktop app lists a restored session again also depends on its session-list entry; that is not tested yet.
