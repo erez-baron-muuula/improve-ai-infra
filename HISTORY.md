@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-15 — GEN-859: installed the two-account session-list sync hook (with app-load check) after Phase 0 test; erez@→info@ verification pending; scheduled tasks → GEN-884. <!-- toc-session:198ebe68-453e-44e2-8ae9-65ce8ce810dc -->
+- 2026-10-15 — GEN-859: installed the two-account session-list sync hook (with app-load check); erez@→info@ verification pending; GEN-859 + GEN-884 set to Highest. <!-- toc-session:198ebe68-453e-44e2-8ae9-65ce8ce810dc -->
 - 2026-10-15 (4) — GEN-871 Phase 2 testing: weekly release review scheduled for Thursdays, test run and dry run passed, supervised run set for 22 Oct with a reminder <!-- toc-session:593abcdd-c48d-4f8a-8700-2dca0324a51e -->
 - 2026-10-15 (2) — GEN-871 Phase 2: weekly Claude Code release review built and installed; testing handed to a new session; GEN-873/875 filed <!-- toc-session:c03c2ac6-3155-4e04-b101-ec172c6f5301 -->
 - 2026-10-15 - GEN-860: lost-session notice re-derived, automatic Drive session backup installed and live, cleanupPeriodDays 90 set, step 3 findings; GEN-874 filed, GEN-623 appended <!-- toc-session:59968cd1-7f3a-4697-928d-41630015e234 -->
@@ -282,6 +282,8 @@ Erez signed out of erez@muuula.com and into info@muuula.com, then asked to see h
 1. At the next switch to erez@, confirm the erez@ → info@ direction and that the app-load check logs a gap of about 0.
 2. Clean the 17 info@ test copies' phone links with `cleanup-bridges.js`.
 3. Scheduled tasks across accounts → GEN-884.
+
+Erez: "this unfinished work should be in the highest priority". GEN-859 and GEN-884 were both set to Urgent, Gain 1, Highest (reviewed edits).
 
 GEN-58 logged: class J new element (mechanism state reported as user-visible outcome).
 
