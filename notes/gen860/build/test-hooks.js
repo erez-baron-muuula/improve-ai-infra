@@ -145,15 +145,15 @@ const H = 3600000;
   const realLines = allReal.filter(l => !/"kind":"secret"/.test(l)).concat(allReal.filter(l => /"kind":"secret"/.test(l)).slice(0, 3));
   const extra = [
     { ts: '2026-10-14T00:00:00Z', machine: 'X', session: 's', repo: '(session backup)', kind: 'session-shrunk', detail: 'older backup copy kept at G:\\x -- projects\\p\\a.jsonl ...', surfaced: false },
-    { ts: '2026-10-14T00:00:01Z', machine: 'X', session: 's', repo: '(session backup)', kind: 'session-files-dropped', detail: '12 session transcripts disappeared', surfaced: false },
+    { ts: '2026-10-14T00:00:01Z', machine: 'X', session: 's', repo: '(session backup)', kind: 'session-transcript-lost', detail: '1 session(s) still listed in the Claude app lost their transcript on this PC', surfaced: false },
   ];
   fs.writeFileSync(path.join(h, '.claude', 'backup-sweep-failures.jsonl'), realLines.concat(extra.map(e => JSON.stringify(e))).join('\n') + '\n');
   const r = run(SURF, h, payload); const c = ctx(r);
   const firstShown = c.split('\n').filter(l => l.startsWith('  •')).slice(0, 4).join(' / ');
   check(`surfacer corpus (${realLines.length} real records + 2 session): header counts all`, new RegExp(`BACKUP SWEEP — ${realLines.length + 2} unseen failures`).test(c), c.slice(0, 200));
-  check('surfacer corpus: session notices shown within the 25-record cap, before routine kinds', /many session transcripts disappeared/.test(c) && /got shorter or its earlier content changed/.test(c) && c.indexOf('many session transcripts') < c.indexOf('remote unreachable'), firstShown);
+  check('surfacer corpus: session notices shown within the 25-record cap, before routine kinds', /still listed in the Claude app lost its transcript/.test(c) && /got shorter or its earlier content changed/.test(c) && c.indexOf('lost its transcript') < c.indexOf('remote unreachable'), firstShown);
   const secrets = realLines.filter(l => /"kind":"secret"/.test(l)).length;
-  check(`surfacer corpus: secret records (${secrets}) still sort first`, secrets === 0 || c.indexOf('SUSPECTED SECRET') < c.indexOf('many session transcripts'));
+  check(`surfacer corpus: secret records (${secrets}) still sort first`, secrets === 0 || c.indexOf('SUSPECTED SECRET') < c.indexOf('lost its transcript'));
   const r2 = run(SURF, h, payload);
   check('surfacer corpus: cursor advanced, records not shown twice', r2.stdout === '', r2.stdout.slice(0, 200)); }
 { const h = surfHome('s-both'); transcript(h, 1 * H); fs.writeFileSync(path.join(stateDir(h), 'last-success'), String(Date.now() - 48 * H));
