@@ -31,9 +31,9 @@ function New-Case([string]$name) {
     [void][IO.Directory]::CreateDirectory($c.proj); [void][IO.Directory]::CreateDirectory($c.sess); [void][IO.Directory]::CreateDirectory($P + $c.root)
     return $c
 }
-function Invoke-Backup($c, [int]$budget = 20, [string]$rootOverride = $null, [int]$drop = 10, [switch]$report) {
+function Invoke-Backup($c, [int]$budget = 20, [string]$rootOverride = $null, [switch]$report) {
     $root = $c.root; if ($rootOverride) { $root = $rootOverride }
-    $a = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', $Script, '-SessionId', 'test-session', '-ProjectsSource', $c.proj, '-SessionsSource', $c.sess, '-BackupRoot', $root, '-StateDir', $c.state, '-FailureQueueFile', $c.queue, '-BudgetSeconds', $budget, '-DropAlertCount', $drop)
+    $a = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-File', $Script, '-SessionId', 'test-session', '-ProjectsSource', $c.proj, '-SessionsSource', $c.sess, '-BackupRoot', $root, '-StateDir', $c.state, '-FailureQueueFile', $c.queue, '-BudgetSeconds', $budget)
     if ($report) { $a += '-ReportOnly' }
     $script:LastOut = (& powershell.exe @a 2>&1 | Out-String)
     $rcode = $LASTEXITCODE
@@ -91,7 +91,8 @@ TWrite (Join-Path $a.sess 'acct\local_1.json') ''
 TWrite (Join-Path $a.sess 'acct\local_2.json') '{"session":"abc","n":2,"tit'
 $rc = Invoke-Backup $a
 Check 'A3 exit 0' ($rc -eq 0) "rc=$rc $LastOut"
-$prevFiles = @(Get-Tree (Join-Path $a.root '_previous-versions') | ForEach-Object { ($_ -split '\|')[0] })
+# (Google Drive for desktop adds its own desktop.ini to some folders on G:; not ours, so not counted)
+$prevFiles = @(Get-Tree (Join-Path $a.root '_previous-versions') | ForEach-Object { ($_ -split '\|')[0] } | Where-Object { (Split-Path $_ -Leaf) -ne 'desktop.ini' })
 Check 'A3 kept older copies: s1.jsonl, s2.jsonl, note.md, custom-title.json' ($prevFiles.Count -eq 4 -and ($prevFiles -match 's1\.jsonl$').Count -eq 1 -and ($prevFiles -match 's2\.jsonl$').Count -eq 1 -and ($prevFiles -match 'note\.md$').Count -eq 1 -and ($prevFiles -match 'custom-title\.json$').Count -eq 1) ("prev: " + (($prevFiles | ForEach-Object { Split-Path $_ -Leaf }) -join ','))
 Check 'A3 no temp files in previous-versions' (@($prevFiles -match '\.sb(tmp|old)$').Count -eq 0)
 $tb = Join-Path $a.root 'projects\proj1\s1\custom-title.json'; $tl = Join-Path $a.proj 'proj1\s1\custom-title.json'
@@ -108,6 +109,10 @@ $rc = Invoke-Backup $a
 Start-Sleep -Milliseconds 2200
 TWrite $tl2 '{"title":"a long title"}'
 $rc = Invoke-Backup $a
+# Let Drive's local read of the just-shortened backup copy settle before shrinking it again: until it does,
+# reading it returns stale bytes, the script (correctly) refuses to keep a copy that does not match, and
+# records an error -- the Drive quirk this suite would otherwise trip over (seen in 2 of 5 runs).
+[void](TReadEq $tb2 '{"title":"a long title"}')
 Start-Sleep -Milliseconds 2200
 TWrite $tl2 '{"title":"short"}'
 $rc = Invoke-Backup $a
@@ -137,7 +142,9 @@ $q = Get-Queue $a.queue
 $kinds = ($q | ForEach-Object { $_.kind }) -join ','
 Check 'A3 two shrunk alerts (transcripts only)' (@($q | Where-Object { $_.kind -eq 'session-shrunk' }).Count -eq 2) "kinds: $kinds"
 Check 'A3 two held alerts' (@($q | Where-Object { $_.kind -eq 'session-held' }).Count -eq 2) "kinds: $kinds"
-Check 'A3 no error records' (@($q | Where-Object { $_.kind -eq 'error' }).Count -eq 0) "kinds: $kinds"
+# (the empty and cut-off session-list files above are also unreadable for the lost-session check; after
+# 3 runs that is told once -- tested in F5, excluded here)
+Check 'A3 no error records' (@($q | Where-Object { $_.kind -eq 'error' -and $_.detail -notlike '*unreadable for 3 runs in a row*' }).Count -eq 0) "kinds: $kinds"
 Check 'A3 shrunk alert names kept path first' (@($q | Where-Object { $_.kind -eq 'session-shrunk' -and $_.detail -like 'older backup copy kept at *' }).Count -eq 2)
 Check 'A3 record shape' (($q | Where-Object { $_.repo -ne '(session backup)' -or $_.surfaced -ne $false -or -not $_.ts -or -not $_.machine -or $_.session -ne 'test-session' }).Count -eq 0)
 $rc = Invoke-Backup $a
@@ -160,6 +167,22 @@ Start-Sleep -Milliseconds 2200
 TWrite (Join-Path $a.sess 'acct\local_3.json') '{"a":"2222","b":"zzzz"}'
 $rc = Invoke-Backup $a
 Check 'A4 same-size json with new content replaced' ((TReadEq (Join-Path $a.root 'claude-code-sessions\acct\local_3.json') '{"a":"2222","b":"zzzz"}')) "rc=$rc"
+
+# ---- A5: a transcript longer than 4 KB whose START changed (same size, or grown) keeps the older copy first
+$j = New-Case 'J'
+$big = ('x' * 9999) + "`n"
+TWrite (Join-Path $j.proj 'p\same.jsonl') $big
+TWrite (Join-Path $j.proj 'p\grown.jsonl') $big
+TWrite (Join-Path $j.sess 'acct\l.json') '{}'
+$rc = Invoke-Backup $j
+Start-Sleep -Milliseconds 2200
+TWrite (Join-Path $j.proj 'p\same.jsonl') ('Z' + $big.Substring(1))
+TWrite (Join-Path $j.proj 'p\grown.jsonl') ('Z' + $big.Substring(1) + "more`n")
+$rc = Invoke-Backup $j
+$jprev = @(Get-Tree (Join-Path $j.root '_previous-versions') | ForEach-Object { Split-Path (($_ -split '\|')[0]) -Leaf })
+Check 'A5 damaged start, same size: older copy kept first' ($rc -eq 0 -and ($jprev -contains 'same.jsonl')) ("rc=$rc kept: " + ($jprev -join ','))
+Check 'A5 damaged start, grown: older copy kept first' ($jprev -contains 'grown.jsonl') ("kept: " + ($jprev -join ','))
+Check 'A5 both reported' (@(Get-Queue $j.queue | Where-Object { $_.kind -eq 'session-shrunk' }).Count -eq 2) "rc=$rc"
 
 # ---- B: missing backup root -> exit 14, nothing recorded, root not created, no stamp
 $b = New-Case 'B'
@@ -223,26 +246,87 @@ Check 'E sbtmp removed' (-not (TExists (Join-Path $e.root 'projects\p\junk.jsonl
 Check 'E no swap files left' (@(Get-Tree (Join-Path $e.root 'projects') | Where-Object { $_ -match '\.sb(tmp|old)\|' }).Count -eq 0)
 Check 'E file open for writing copied' ((TReadEq (Join-Path $e.root 'projects\p\busy.jsonl') "b1`n"))
 
-# ---- F: mass local deletion of transcripts -> one notice; backup keeps them
+# ---- F: lost-session notice. Session-list files mimic the app's: {"sessionId":...,"cliSessionId":...}
+function Write-ListEntry([string]$sessRoot, [string]$n, [string]$cli, [string]$title) {
+    TWrite (Join-Path $sessRoot "acct\org\local_$n.json") ('{"sessionId":"local_' + $n + '","cliSessionId":"' + $cli + '","cwd":"C:\\x","title":"' + $title + '","isArchived":false}')
+}
 $f = New-Case 'F'
-1..4 | ForEach-Object { TWrite (Join-Path $f.proj "p\s$_.jsonl") "s$_`n" }
-TWrite (Join-Path $f.sess 'acct\l.json') '{}'
-$rc = Invoke-Backup $f 20 $null 3
-1..3 | ForEach-Object { [IO.File]::Delete($P + (Join-Path $f.proj "p\s$_.jsonl")) }
-$rc = Invoke-Backup $f 20 $null 3
-$fq = Get-Queue $f.queue
-Check 'F drop notice recorded' (@($fq | Where-Object { $_.kind -eq 'session-files-dropped' -and $_.detail -like '3 session transcripts*' }).Count -eq 1) ("kinds: " + (($fq | ForEach-Object { $_.kind }) -join ','))
-Check 'F backup still holds deleted transcripts' ((TExists (Join-Path $f.root 'projects\p\s1.jsonl')) -and (TExists (Join-Path $f.root 'projects\p\s3.jsonl')))
+foreach ($i in 1, 2, 3, 4, 6, 10, 11) { TWrite (Join-Path $f.proj "p\s$i.jsonl") "s$i`n" }
+# typographic quotes (built from char codes so this file stays ASCII) must be stripped too
+Write-ListEntry $f.sess '11' 's11' ('Curly ' + [char]0x2018 + 'a' + [char]0x2019 + ' ' + [char]0x201C + 'b' + [char]0x201D)
+Write-ListEntry $f.sess '1' 's1' 'Alpha'          # listed; transcript will vanish -> reported
+Write-ListEntry $f.sess '10' 's10' "Bob's notes"  # reported with its quote characters removed
+                                                  # s2: not listed (a terminal session); vanishes -> not reported
+Write-ListEntry $f.sess '3' 's3' 'Moved'          # listed; transcript moves to another project folder -> not reported
+Write-ListEntry $f.sess '4' 's4' 'Deleted in app' # list entry and transcript both removed -> not reported
+Write-ListEntry $f.sess '5' 's5' 'Brand new'      # listed, transcript never existed -> not reported
+# cliSessionId not in the leading position: found by the full-parse fallback
+TWrite (Join-Path $f.sess 'acct\org\local_6.json') '{"title":"Fallback","cwd":"C:\\x","sessionId":"local_6","cliSessionId":"s6"}'
+TWrite (Join-Path $f.sess 'acct\org\local_7.json') '{"sessionId":"local_7","cwd":"C:\\x","title":"never started"}'
+$rc = Invoke-Backup $f
+Check 'F first run records nothing (no previous list)' ($rc -eq 0 -and (Get-Queue $f.queue).Count -eq 0) "rc=$rc $LastOut"
+foreach ($i in 1, 2, 4, 6, 10, 11) { [IO.File]::Delete($P + (Join-Path $f.proj "p\s$i.jsonl")) }
+TWrite (Join-Path $f.proj 'q\s3.jsonl') "s3`n"; [IO.File]::Delete($P + (Join-Path $f.proj 'p\s3.jsonl'))
+[IO.File]::Delete($P + (Join-Path $f.sess 'acct\org\local_4.json'))
+$rc = Invoke-Backup $f
+$fq = @(Get-Queue $f.queue | Where-Object { $_.kind -eq 'session-transcript-lost' })
+$fd = ''; if ($fq.Count -gt 0) { $fd = $fq[0].detail }
+Check 'F one lost-session record' ($fq.Count -eq 1) ("records: " + $fq.Count + " " + $fd)
+Check 'F record names exactly the listed sessions that lost their transcript' ($fd -like '4 session(s) still listed*' -and $fd -like "*'Alpha' (s1)*" -and $fd -like "*'Fallback' (s6)*" -and $fd -notlike '*Moved*' -and $fd -notlike '*Deleted in app*' -and $fd -notlike '*Brand new*' -and $fd -notlike '*(s2)*') $fd
+Check 'F titles have quote characters removed' ($fd -like "*'Bobs notes' (s10)*") $fd
+Check 'F typographic quotes removed from titles' ($fd -like "*'Curly a b' (s11)*") $fd
+Check 'F record says the backup holds them' ($fd -like '*the Drive backup holds 4 of them*') $fd
 Check 'F run still complete' ($rc -eq 0) "rc=$rc"
-# transcripts idle for longer than RecentDays (what retention cleanup removes) do not count
+$rc = Invoke-Backup $f
+Check 'F reported once, not again next run' (@(Get-Queue $f.queue | Where-Object { $_.kind -eq 'session-transcript-lost' }).Count -eq 1) "rc=$rc"
+
+# ---- F2: a session-list file that cannot be read this run -> no guess; the loss is found next run
 $f2 = New-Case 'F2'
-1..4 | ForEach-Object { TWrite (Join-Path $f2.proj "p\old$_.jsonl") "o$_`n"; [IO.File]::SetLastWriteTimeUtc($P + (Join-Path $f2.proj "p\old$_.jsonl"), [DateTime]::UtcNow.AddDays(-40)) }
-TWrite (Join-Path $f2.proj 'p\new.jsonl') "n`n"
-TWrite (Join-Path $f2.sess 'acct\l.json') '{}'
-$rc = Invoke-Backup $f2 20 $null 3
-1..4 | ForEach-Object { [IO.File]::Delete($P + (Join-Path $f2.proj "p\old$_.jsonl")) }
-$rc = Invoke-Backup $f2 20 $null 3
-Check 'F2 retention-age deletions do not raise the notice' (@((Get-Queue $f2.queue) | Where-Object { $_.kind -eq 'session-files-dropped' }).Count -eq 0 -and $rc -eq 0) "rc=$rc"
+TWrite (Join-Path $f2.proj 'p\other.jsonl') "o`n"    # keeps the projects folder non-empty (an empty one is its own problem)
+TWrite (Join-Path $f2.proj 'p\s8.jsonl') "s8`n"
+Write-ListEntry $f2.sess '8' 's8' 'Locked list'
+$rc = Invoke-Backup $f2
+[IO.File]::Delete($P + (Join-Path $f2.proj 'p\s8.jsonl'))
+$lk2 = [IO.File]::Open(($P + (Join-Path $f2.sess 'acct\org\local_8.json')), [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::None)
+$rc = Invoke-Backup $f2
+$lk2.Dispose()
+Check 'F2 unreadable list file: nothing reported' (@(Get-Queue $f2.queue | Where-Object { $_.kind -eq 'session-transcript-lost' }).Count -eq 0) "rc=$rc"
+$last2 = Get-Content -LiteralPath (Join-Path $f2.state 'runs.log') | Select-Object -Last 1 | ConvertFrom-Json
+Check 'F2 unreadable count in run log' ($last2.listUnreadable -eq 1) ("listUnreadable=" + $last2.listUnreadable)
+$rc = Invoke-Backup $f2
+Check 'F2 next readable run reports it' (@(Get-Queue $f2.queue | Where-Object { $_.kind -eq 'session-transcript-lost' -and $_.detail -like "*'Locked list' (s8)*" }).Count -eq 1) "rc=$rc"
+
+# ---- F3: the notice cannot be written (queue locked) -> exit 13; the loss is reported next run
+$f3 = New-Case 'F3'
+TWrite (Join-Path $f3.proj 'p\other.jsonl') "o`n"
+TWrite (Join-Path $f3.proj 'p\s9.jsonl') "s9`n"
+Write-ListEntry $f3.sess '9' 's9' 'Queue locked'
+$rc = Invoke-Backup $f3
+[IO.File]::Delete($P + (Join-Path $f3.proj 'p\s9.jsonl'))
+$lk3 = [IO.File]::Open($f3.queue, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+$rc = Invoke-Backup $f3
+$lk3.Dispose()
+$r3 = Get-Content -LiteralPath (Join-Path $f3.state 'runs.log') | Select-Object -Last 1 | ConvertFrom-Json
+Check 'F3 unrecordable notice exits 13 (and the run was otherwise complete)' ($rc -eq 13 -and $r3.outcome -eq 'complete') "rc=$rc outcome=$($r3.outcome)"
+$rc = Invoke-Backup $f3
+Check 'F3 next run records it' (@(Get-Queue $f3.queue | Where-Object { $_.kind -eq 'session-transcript-lost' -and $_.detail -like "*'Queue locked' (s9)*" }).Count -eq 1) "rc=$rc"
+
+# ---- F4: the app changes its list format (no session ids readable) -> one recorded problem; copy still done
+$f4 = New-Case 'F4'
+TWrite (Join-Path $f4.proj 'p\a.jsonl') "a`n"
+1..20 | ForEach-Object { TWrite (Join-Path $f4.sess "acct\org\local_$_.json") ('{"id":"local_' + $_ + '","cli":"x' + $_ + '"}') }
+$rc = Invoke-Backup $f4
+$f4q = @(Get-Queue $f4.queue | Where-Object { $_.kind -eq 'error' -and $_.detail -like '*cannot read the Claude app*session list*' })
+Check 'F4 unrecognised list format recorded; run still complete' ($rc -eq 0 -and $f4q.Count -eq 1) "rc=$rc $LastOut"
+Check 'F4 copy still done' (TExists (Join-Path $f4.root 'projects\p\a.jsonl'))
+$rc = Invoke-Backup $f4
+Check 'F4 told once, not every run' (@(Get-Queue $f4.queue | Where-Object { $_.kind -eq 'error' }).Count -eq 1) "rc=$rc"
+# a list file unreadable 3 runs in a row is told once
+$f5 = New-Case 'F5'
+TWrite (Join-Path $f5.proj 'p\a.jsonl') "a`n"
+TWrite (Join-Path $f5.sess 'acct\org\local_1.json') '{"sessionId":"local_1","cut'
+1..4 | ForEach-Object { $rc = Invoke-Backup $f5 }
+Check 'F5 unreadable list file 3 runs in a row told once' (@(Get-Queue $f5.queue | Where-Object { $_.kind -eq 'error' -and $_.detail -like '*unreadable for 3 runs in a row*' }).Count -eq 1 -and $rc -eq 0) "rc=$rc"
 
 # ---- G: report-only writes nothing anywhere
 $g = New-Case 'G'
@@ -250,7 +334,7 @@ TWrite (Join-Path $g.proj 'p\x.jsonl') "x`n"
 TWrite (Join-Path $g.sess 'acct\l.json') '{}'
 TWrite (Join-Path $g.root 'projects\p\old.sbtmp') 'leftover'
 $treeG = Get-Tree $g.root
-$rc = Invoke-Backup $g 20 $null 10 -report
+$rc = Invoke-Backup $g 20 $null -report
 Check 'G report exit 0' ($rc -eq 0) "rc=$rc"
 Check 'G report printed decisions' ($LastOut -match 'WOULD COPY \(new\)' -and $LastOut -match 'REPORT:') ($LastOut.Substring(0, [Math]::Min(300, $LastOut.Length)))
 Check 'G backup tree unchanged' ((Compare-Object $treeG (Get-Tree $g.root)) -eq $null)

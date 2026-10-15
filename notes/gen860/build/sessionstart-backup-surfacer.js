@@ -220,9 +220,12 @@ const SESSION_BACKUP_STALE_MS = 24 * 60 * 60 * 1000;
 const SESSION_BACKUP_IGNORE_RECENT_MS = 10 * 60 * 1000;
 function sessionBackupStaleLine(claudeDir, now) {
   let lastSuccess = 0;
+  let future = false;
   try {
     const n = Number(String(fs.readFileSync(path.join(claudeDir, 'session-backup-state', 'last-success'), 'utf8')).trim());
-    if (Number.isFinite(n) && n > 0) lastSuccess = n;
+    // A stamp in the future (clock jumped back after it was written) cannot be trusted: treat it as never.
+    if (Number.isFinite(n) && n > 0 && n <= now) lastSuccess = n;
+    else if (Number.isFinite(n) && n > now) future = true;
   } catch (e) {
     /* missing/unreadable -> never succeeded */
   }
@@ -251,7 +254,11 @@ function sessionBackupStaleLine(claudeDir, now) {
   newest = Math.min(newest, now);
   if (newest === 0 || newest - lastSuccess <= SESSION_BACKUP_STALE_MS) return null;
   const fmt = ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-  const since = lastSuccess ? `since ${fmt(lastSuccess)}` : 'at all (no successful copy is recorded)';
+  const since = lastSuccess
+    ? `since ${fmt(lastSuccess)}`
+    : future
+      ? 'reliably (its last-success time is in the future; the PC clock may have changed)'
+      : 'at all (no successful copy is recorded)';
   return (
     `SESSION BACKUP — the automatic copy of Claude sessions to the Drive backup has not succeeded ${since}, ` +
     `but sessions changed after that (newest change ${fmt(newest)}). Recent sessions may be missing from the backup. ` +
@@ -315,7 +322,7 @@ function buildMessage(recs) {
     // GEN-860 session backup (session-backup.ps1)
     'session-shrunk': 'a session transcript on this PC got shorter or its earlier content changed — the older Drive backup copy was kept under _previous-versions',
     'session-held': 'a session file on this PC is empty or looks cut off — its Drive backup copy was kept, not replaced',
-    'session-files-dropped': 'many session transcripts disappeared from this PC — the Drive backup still holds them',
+    'session-transcript-lost': 'a session still listed in the Claude app lost its transcript on this PC — the detail says whether the Drive backup holds it (reported once)',
   };
 
   // Severity order: secret first (highest), then the rest as listed. Null-safe
@@ -323,7 +330,7 @@ function buildMessage(recs) {
   const severe = recs.filter(r => r && r.kind === 'secret');
   // GEN-860: session-backup data notices next, so the 25-record cap below cannot bury them under a
   // run of routine 'unreachable' records.
-  const SESSION_KINDS = new Set(['session-files-dropped', 'session-shrunk', 'session-held']);
+  const SESSION_KINDS = new Set(['session-transcript-lost', 'session-shrunk', 'session-held']);
   const sessionNotices = recs.filter(r => r && SESSION_KINDS.has(r.kind));
   const rest = recs.filter(r => !(r && (r.kind === 'secret' || SESSION_KINDS.has(r.kind))));
   const ordered = severe.concat(sessionNotices, rest);
