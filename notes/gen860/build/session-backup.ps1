@@ -37,10 +37,15 @@
 #     mounted yet right after boot); a lasting outage is caught by the surfacer's 24 h staleness line.
 #   - Short: copying stops once BudgetSeconds have elapsed (checked between files, newest changes first);
 #     the rest is copied next run.
-#   - If DropAlertCount or more top-level session transcripts that were active within the last RecentDays
-#     days disappear from the PC between two runs, Erez is told (kind session-files-dropped): the backup
-#     still holds them, but an unexpected local deletion is exactly the loss GEN-860 exists to catch.
-#     Older transcripts are not counted, because Claude Code's own retention cleanup removes them.
+#   - Lost-session notice (kind session-transcript-lost): a session that the desktop app still lists
+#     (claude-code-sessions\...\local_*.json, field cliSessionId) whose transcript was on this PC at the
+#     previous run and is gone now. Whatever the cause, that is a real loss: a listed session that can no
+#     longer be opened from this PC. Routine events do not fire it: retention cleanup normally removes only
+#     terminal and -p sessions, which the app does not list (desktop-app transcripts are kept at any age
+#     since v2.1.248; if that exemption fails -- managed settings, an old CLI -- the notice is the tripwire);
+#     a session Erez deleted in the app is no longer listed; a new session's transcript was never present.
+#     No count or age threshold. The check runs after the copy and cannot stop it; its own failure is a
+#     recorded problem.
 #
 # Problems are appended to the shared backup failure queue (~/.claude/backup-sweep-failures.jsonl, same
 # record shape and append method as backup-sweep.ps1's Add-Failure) and shown at the next session start
@@ -68,8 +73,6 @@ param(
     [string]$StateDir = (Join-Path $env:USERPROFILE '.claude\session-backup-state'),
     [string]$FailureQueueFile = (Join-Path $env:USERPROFILE '.claude\backup-sweep-failures.jsonl'),
     [int]$BudgetSeconds = 20,
-    [int]$DropAlertCount = 10,
-    [int]$RecentDays = 25,
     [switch]$ReportOnly
 )
 
@@ -136,9 +139,15 @@ function Write-RunLog([hashtable]$Fields) {
     } catch { }   # informational only
 }
 
+# Writes a state file without ever leaving a cut-off file under the real name (temp file, then swap).
+# [NullString]::Value because PowerShell turns $null into "" for a string argument, which File.Replace
+# rejects.
 function Write-StateText([string]$name, [string]$text) {
     if ($ReportOnly) { return }
-    [System.IO.File]::WriteAllText((Join-Path $StateDir $name), $text, $script:Utf8NoBom)
+    $f = Join-Path $StateDir $name; $tmp = $f + '.tmp'
+    [System.IO.File]::WriteAllText($tmp, $text, $script:Utf8NoBom)
+    if ([System.IO.File]::Exists($f)) { [System.IO.File]::Replace($tmp, $f, [NullString]::Value) }
+    else { [System.IO.File]::Move($tmp, $f) }
 }
 
 # Lists every file under $root (relative path -> FileInfo). Reparse-point directories (junctions,
@@ -205,14 +214,17 @@ function Test-BytesEqual([byte[]]$a, [byte[]]$b) {
     return $true
 }
 
-# True when $newPath still starts with the backup copy's content, judged by the backup's last
-# TailBytes bytes at the same position (transcripts only grow; a mismatch means earlier content changed).
+# True when $newPath still starts with the backup copy's content, judged by the backup's first and last
+# TailBytes bytes at the same positions (transcripts only grow; a mismatch means earlier content changed,
+# e.g. a damaged start of file at an unchanged or larger size).
 function Test-TailMatches([string]$newPath, [long]$newLen, [System.IO.FileInfo]$dst) {
     if ($newLen -lt $dst.Length) { return $false }
     $n = [int][Math]::Min([long]$TailBytes, $dst.Length)
     if ($n -le 0) { return $true }
     $off = $dst.Length - $n
-    return (Test-BytesEqual (Read-Range $dst.FullName $off $n) (Read-Range $newPath $off $n))
+    if (-not (Test-BytesEqual (Read-Range $dst.FullName $off $n) (Read-Range $newPath $off $n))) { return $false }
+    if ($off -eq 0) { return $true }   # the tail compare already covered the whole backup copy
+    return (Test-BytesEqual (Read-Range $dst.FullName 0 $n) (Read-Range $newPath 0 $n))
 }
 
 # Same length, first and last TailBytes equal: treated as the same transcript content.
@@ -331,6 +343,47 @@ function Get-Lines([string]$name) {
     return $set
 }
 
+# Whole text of a file another process may be writing (full sharing).
+function Read-SharedText([string]$path) {
+    $fs = New-Object System.IO.FileStream($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+    try {
+        $sr = New-Object System.IO.StreamReader($fs, $script:Utf8NoBom)
+        try { return $sr.ReadToEnd() } finally { $sr.Dispose() }
+    } finally { $fs.Dispose() }
+}
+
+# The transcript id (cliSessionId) of one desktop-app session-list file, or $null when the session has
+# none (never started). The app writes "sessionId" then "cliSessionId" first, so the first 512 bytes
+# normally settle it (all 514 files on 2026-10-15 but the one without a cliSessionId: 0.18 s for all);
+# anything else gets a full parse. Throws when the file cannot be read or parsed.
+$script:ListHead = New-Object System.Text.RegularExpressions.Regex '^\{"sessionId":"[^"\\]*","cliSessionId":"([^"\\]+)"'
+function Get-ListedSessionId([string]$path) {
+    $fs = New-Object System.IO.FileStream($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+    try { $buf = New-Object byte[] 512; $n = $fs.Read($buf, 0, 512) } finally { $fs.Dispose() }
+    $m = $script:ListHead.Match([System.Text.Encoding]::UTF8.GetString($buf, 0, $n))
+    if ($m.Success) { return $m.Groups[1].Value }
+    $j = (Read-SharedText $path) | ConvertFrom-Json
+    if ($j.cliSessionId -is [string] -and $j.cliSessionId) { return $j.cliSessionId }
+    return $null
+}
+
+# True when <ProjectsSource>\<any project>\<id>.jsonl exists right now.
+function Test-TranscriptPresent([string]$id) {
+    foreach ($d in ([System.IO.DirectoryInfo](Get-LongPath $ProjectsSource)).EnumerateDirectories()) {
+        if ([System.IO.File]::Exists([System.IO.Path]::Combine($d.FullName, $id + '.jsonl'))) { return $true }
+    }
+    return $false
+}
+
+# The session's title for a notice; never throws.
+function Get-ListedSessionTitle([string]$path) {
+    try {
+        $t = ((Read-SharedText $path) | ConvertFrom-Json).title
+        if ($t -is [string] -and $t) { return $t }
+        return '(untitled)'
+    } catch { return '(title unreadable)' }
+}
+
 # Runs $action, retrying twice on an IOException (a sharing violation from a writer or from Drive). A
 # not-found is retried only while the source still exists (an app replacing the file by rename, or the
 # Drive side); a source that is really gone is passed straight up as vanished.
@@ -440,6 +493,10 @@ function Invoke-Main {
             [void][System.IO.Directory]::CreateDirectory($StateDir)
             $lock = [System.IO.File]::Open((Join-Path $StateDir 'run.lock'), [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
         } catch [System.IO.IOException] {
+            # Only a sharing or lock violation means "another run holds the lock" (benign); anything else
+            # (disk full, a file where the folder should be) is a real failure for the catch below.
+            $hr = $_.Exception.GetBaseException().HResult -band 0xFFFF
+            if ($hr -ne 32 -and $hr -ne 33) { throw }
             Write-RunLog @{ outcome = 'skipped: another run holds the lock' }
             $script:Code = 11
             return
@@ -484,7 +541,11 @@ function Invoke-Main {
         # Work list across the trees, newest local change first, so a run cut short by the budget has
         # covered the files most likely to be missing from the backup.
         $work = New-Object System.Collections.ArrayList
-        $transcripts = $null
+        $transcripts = $null    # transcript ids on this PC (top-level <project>\<id>.jsonl)
+        $backupIds = $null      # transcript ids the projects backup holds
+        $listMap = $null        # the desktop app's session-list files
+        $unreadable = 0         # session-list files that could not be read this run (runs.log only)
+        $listedCount = $null    # session ids read from the list files this run (runs.log only)
         $fileCount = 0
         foreach ($t in $trees) {
             try {
@@ -500,8 +561,13 @@ function Invoke-Main {
                     if (-not $ReportOnly) { $dstMap = Get-FileMap $t.dst }
                 }
                 if ($t.name -eq 'projects') {
-                    $transcripts = @{}
-                    foreach ($k in $srcMap.Keys) { if ($k -match '^[^\\]+\\[^\\]+\.jsonl$') { $transcripts[$k] = $srcMap[$k].LastWriteTimeUtc.Ticks } }
+                    $ids = @{}
+                    foreach ($k in $srcMap.Keys) { if ($k -match '^[^\\]+\\([^\\]+)\.jsonl$') { $ids[$Matches[1]] = $true } }
+                    $bids = @{}
+                    foreach ($k in $dstMap.Keys) { if ($k -match '^[^\\]+\\([^\\]+)\.jsonl$') { $bids[$Matches[1]] = $true } }
+                    $transcripts = $ids; $backupIds = $bids
+                } else {
+                    $listMap = $srcMap
                 }
                 $fileCount += $srcMap.Count
                 foreach ($rel in $srcMap.Keys) {
@@ -515,28 +581,6 @@ function Invoke-Main {
             } catch {
                 [void]$problems.Add("could not list $($t.name): $($_.Exception.Message)")
             }
-        }
-
-        # Unexpected local deletion check (top-level transcripts only). Claude Code's own retention cleanup
-        # removes transcripts idle for cleanupPeriodDays (30 by default; desktop-app sessions are exempt),
-        # so only transcripts active within the last RecentDays count: retention never removes those, and
-        # 10 or more of them vanishing between two runs is the kind of loss GEN-860 exists to catch.
-        if ($null -ne $transcripts) {
-            $listFile = Join-Path $StateDir 'transcripts.txt'
-            if ([System.IO.File]::Exists($listFile)) {
-                $recentCutoff = [DateTime]::UtcNow.AddDays(-$RecentDays).Ticks
-                $gone = 0
-                foreach ($line in [System.IO.File]::ReadAllLines($listFile)) {
-                    $parts = $line.Split('|')
-                    if ($parts.Count -ne 2) { continue }
-                    $ticks = 0L
-                    if ([long]::TryParse($parts[1], [ref]$ticks) -and $ticks -gt $recentCutoff -and -not $transcripts.ContainsKey($parts[0])) { $gone++ }
-                }
-                if ($gone -ge $DropAlertCount) {
-                    [void](Add-QueueRecord 'session-files-dropped' ("$gone session transcripts active within the last $RecentDays days disappeared from this PC since the last backup run; the Drive backup still holds them"))
-                }
-            }
-            Write-StateText 'transcripts.txt' ((($transcripts.GetEnumerator() | ForEach-Object { $_.Key + '|' + $_.Value }) -join "`n") + "`n")
         }
 
         $ordered = @($work | Sort-Object -Property @{ Expression = { $_.src.LastWriteTimeUtc }; Descending = $true })
@@ -560,7 +604,82 @@ function Invoke-Main {
             }
         }
 
-        $fields = @{ files = $fileCount; changed = $ordered.Count; touched = $counts.touched; copied = $counts.copied; preserved = $counts.preserved; held = $counts.held; vanished = $counts.vanished; errors = $counts.errors; repaired = $counts.repaired }
+        # Lost-session check (see the header): listed in the app, transcript present at the previous run,
+        # gone now. Runs only when both trees were listed this run; otherwise the saved list is left as it
+        # is, so a loss in the meantime is still found by the next run that can check.
+        # It runs after the copy (so its notices cannot use up the copy's time budget) on the listing taken
+        # before it; its own failure is recorded as a problem.
+        if ($null -ne $transcripts -and $null -ne $listMap) { try {
+            $prevIds = Get-Lines 'transcript-ids.txt'
+            $listed = @{}; $unreadable = 0; $listFiles = 0
+            foreach ($rel in $listMap.Keys) {
+                if ($rel -notmatch '(^|\\)local_[^\\]+\.json$') { continue }
+                $listFiles++
+                try {
+                    $id = Get-ListedSessionId $listMap[$rel].FullName
+                    if ($id) { $listed[$id] = $listMap[$rel].FullName }
+                } catch { $unreadable++ }   # includes a file removed or replaced since the listing: checked again next run
+            }
+            $listedCount = $listed.Count
+            # Tripwire for a notice that would otherwise go quiet without a trace: many list files but no
+            # session id read from any of them means the app changed its file format (a real list always
+            # has started sessions; 513 of 514 had a cliSessionId on 2026-10-15).
+            # Both notices below are told once (they do not block the run's success: the copy itself is fine).
+            $fmtFlag = Join-Path $StateDir 'list-format-alerted.txt'
+            if (($listFiles - $unreadable) -ge 20 -and $listed.Count -eq 0) {
+                if (-not [System.IO.File]::Exists($fmtFlag)) {
+                    if (Add-QueueRecord 'error' "lost-session check cannot read the Claude app's session list ($listFiles list files, no session ids found; the app may have changed its file format) -- lost sessions are not being detected") { Write-StateText 'list-format-alerted.txt' 'x' }
+                }
+            } elseif ($listed.Count -gt 0 -and [System.IO.File]::Exists($fmtFlag) -and -not $ReportOnly) { [System.IO.File]::Delete($fmtFlag) }
+            # A list file unreadable for 3 runs in a row hides its session from this check: say so (once
+            # per streak).
+            $streak = 0
+            if ($unreadable -gt 0) {
+                $sf = Join-Path $StateDir 'list-unreadable-runs.txt'
+                if ([System.IO.File]::Exists($sf)) { [void][int]::TryParse(([System.IO.File]::ReadAllText($sf)).Trim(), [ref]$streak) }
+                $streak++
+                if ($streak -eq 3) { [void](Add-QueueRecord 'error' "lost-session check: $unreadable Claude app session-list file(s) unreadable for 3 runs in a row; those sessions are not checked for a lost transcript") }
+            }
+            Write-StateText 'list-unreadable-runs.txt' ([string]$streak)
+            $lost = New-Object System.Collections.ArrayList
+            foreach ($id in $prevIds.Keys) {
+                if (-not $transcripts.ContainsKey($id) -and $listed.ContainsKey($id)) {
+                    # Re-check just before reporting: the listing is one snapshot, and a transcript that is
+                    # being moved or set aside by Claude Code can be missing from it for a moment.
+                    if (Test-TranscriptPresent $id) { $transcripts[$id] = $true } else { [void]$lost.Add($id) }
+                }
+            }
+            $recorded = $true
+            if ($lost.Count -gt 0) {
+                # Count, backup coverage and restore pointer first: the surfacer shows at most 500
+                # characters of a detail, so only the list of names may be cut short.
+                $named = @($lost | Select-Object -First 5 | ForEach-Object {
+                    # Titles are model-written text shown in Claude's context: no quote characters, so
+                    # one cannot break out of its quotes.
+                    $title = (Get-ListedSessionTitle $listed[$_]) -replace '["''`\u2018\u2019\u201C\u201D]', ''
+                    if ($title.Length -gt 60) { $title = $title.Substring(0, 57) + '...' }
+                    "'" + $title + "' ($_)" })
+                $more = ''
+                if ($lost.Count -gt 5) { $more = " and $($lost.Count - 5) more" }
+                $inBackup = @($lost | Where-Object { $backupIds.ContainsKey($_) }).Count
+                $recorded = Add-QueueRecord 'session-transcript-lost' ("$($lost.Count) session(s) still listed in the Claude app lost their transcript on this PC since the last backup run; the Drive backup holds $inBackup of them (restore steps: notes/gen860-session-backup.md in Improve AI Infra); session titles (data): " + ($named -join ', ') + $more)
+            }
+            # Next run's "present at the previous run" list: the transcripts on the PC now. A gone id is
+            # carried forward (so it is still checked next run) when this run could not tell whether it is
+            # listed (a session-list file unreadable) or its notice could not be recorded.
+            $next = New-Object System.Collections.ArrayList
+            foreach ($id in $transcripts.Keys) { [void]$next.Add($id) }
+            foreach ($id in $prevIds.Keys) {
+                if ($transcripts.ContainsKey($id)) { continue }
+                if ($lost.Contains($id)) { if (-not $recorded) { [void]$next.Add($id) } }
+                elseif ($unreadable -gt 0) { [void]$next.Add($id) }
+            }
+            Write-StateText 'transcript-ids.txt' (($next -join "`n") + "`n")
+        } catch {
+            [void]$problems.Add("lost-session check failed: $($_.Exception.Message)")
+        } }
+
+        $fields = @{ files = $fileCount; changed = $ordered.Count; touched = $counts.touched; copied = $counts.copied; preserved = $counts.preserved; held = $counts.held; vanished = $counts.vanished; errors = $counts.errors; repaired = $counts.repaired; listUnreadable = $unreadable; listed = $listedCount }
         if ($ReportOnly) {
             Write-Host ("REPORT: " + (($fields.GetEnumerator() | Sort-Object Name | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ' ') + " problems=" + ($problems -join '; ') + " incomplete=$incomplete ms=$($script:Clock.ElapsedMilliseconds)")
             $script:Code = 0
@@ -590,13 +709,8 @@ function Invoke-Main {
             return
         }
 
-        # Complete: stamp last-success (temp file, then swap; [NullString]::Value because PowerShell turns
-        # $null into "" for a string argument, which File.Replace rejects).
-        $stampFile = Join-Path $StateDir 'last-success'
-        $stampTmp = $stampFile + '.tmp'
-        [System.IO.File]::WriteAllText($stampTmp, [string][long]([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()), $script:Utf8NoBom)
-        if ([System.IO.File]::Exists($stampFile)) { [System.IO.File]::Replace($stampTmp, $stampFile, [NullString]::Value) }
-        else { [System.IO.File]::Move($stampTmp, $stampFile) }
+        # Complete: stamp last-success.
+        Write-StateText 'last-success' ([string][long]([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()))
         if ([System.IO.File]::Exists($lastFile)) { [System.IO.File]::Delete($lastFile) }   # a clean, complete run ends the dedupe
         $fields.outcome = 'complete'
         Write-RunLog $fields

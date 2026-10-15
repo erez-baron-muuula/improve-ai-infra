@@ -222,7 +222,8 @@ function sessionBackupStaleLine(claudeDir, now) {
   let lastSuccess = 0;
   try {
     const n = Number(String(fs.readFileSync(path.join(claudeDir, 'session-backup-state', 'last-success'), 'utf8')).trim());
-    if (Number.isFinite(n) && n > 0) lastSuccess = n;
+    // A stamp in the future (clock jumped back after it was written) cannot be trusted: treat it as never.
+    if (Number.isFinite(n) && n > 0 && n <= now) lastSuccess = n;
   } catch (e) {
     /* missing/unreadable -> never succeeded */
   }
@@ -315,7 +316,7 @@ function buildMessage(recs) {
     // GEN-860 session backup (session-backup.ps1)
     'session-shrunk': 'a session transcript on this PC got shorter or its earlier content changed — the older Drive backup copy was kept under _previous-versions',
     'session-held': 'a session file on this PC is empty or looks cut off — its Drive backup copy was kept, not replaced',
-    'session-files-dropped': 'many session transcripts disappeared from this PC — the Drive backup still holds them',
+    'session-transcript-lost': 'a session still listed in the Claude app lost its transcript on this PC — the detail says whether the Drive backup holds it (reported once)',
   };
 
   // Severity order: secret first (highest), then the rest as listed. Null-safe
@@ -323,7 +324,7 @@ function buildMessage(recs) {
   const severe = recs.filter(r => r && r.kind === 'secret');
   // GEN-860: session-backup data notices next, so the 25-record cap below cannot bury them under a
   // run of routine 'unreachable' records.
-  const SESSION_KINDS = new Set(['session-files-dropped', 'session-shrunk', 'session-held']);
+  const SESSION_KINDS = new Set(['session-transcript-lost', 'session-shrunk', 'session-held']);
   const sessionNotices = recs.filter(r => r && SESSION_KINDS.has(r.kind));
   const rest = recs.filter(r => !(r && (r.kind === 'secret' || SESSION_KINDS.has(r.kind))));
   const ordered = severe.concat(sessionNotices, rest);
