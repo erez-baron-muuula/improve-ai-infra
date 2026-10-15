@@ -1,0 +1,100 @@
+﻿diff --git a/C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/198ebe68-453e-44e2-8ae9-65ce8ce810dc/scratchpad/wc/sessionstart-backup-surfacer.js
+index ae11e67..37ffb26 100644
+--- a/C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js
++++ b/C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/198ebe68-453e-44e2-8ae9-65ce8ce810dc/scratchpad/wc/sessionstart-backup-surfacer.js
+@@ -145,7 +145,7 @@ process.stdin.on('end', () => {
+   // GEN-860: session-backup staleness check. Independent of the queue AND of the copier hook, so a
+   // copier that never runs (unregistered, script missing, killed every time) is still noticed. Runs
+   // after the queue read so its own failure can never stop queued records from being shown.
+-  for (const check of [sessionBackupStaleLine, sessionBackupSlowLine]) {
++  for (const check of [sessionBackupStaleLine, sessionBackupSlowLine, accountSyncStaleLine]) {
+     try {
+       const line = check(path.join(os.homedir(), '.claude'), Date.now());
+       if (line) additionalContext = additionalContext ? `${additionalContext}\n\n${line}` : line;
+@@ -307,6 +307,68 @@ function sessionBackupSlowLine(claudeDir) {
+   );
+ }
+ 
++// GEN-859: one line when the account session sync (hooks/account-session-sync.js) has not completed a run
++// for more than 24 h while the session lists kept changing, or when its off switch is set; else null.
++// Independent of the sync hook, so a sync that never runs (unregistered, crashing, budget-starved) is still
++// noticed. Silent on a PC without the desktop app or with fewer than two accounts' lists.
++const ACCOUNT_SYNC_STALE_MS = 24 * 60 * 60 * 1000;
++const ACCOUNT_SYNC_IGNORE_RECENT_MS = 10 * 60 * 1000;
++function accountSyncStaleLine(claudeDir, now) {
++  const root = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Claude', 'claude-code-sessions');
++  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
++  let accounts;
++  try {
++    accounts = fs.readdirSync(root, { withFileTypes: true }).filter(d => d.isDirectory() && UUID_RE.test(d.name)).map(d => d.name);
++  } catch (e) {
++    return null; // no desktop app session lists on this PC
++  }
++  if (accounts.length < 2) return null;
++  const stateDir = path.join(claudeDir, 'account-session-sync');
++  const fmt = ms => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
++  let off = null;
++  try { off = fs.statSync(path.join(stateDir, 'disabled')); } catch (e) { /* not switched off */ }
++  if (off) {
++    return (
++      `ACCOUNT SESSION SYNC — switched OFF since ${fmt(off.mtimeMs)} (~/.claude/account-session-sync/disabled exists), ` +
++      "so sessions from one Claude account are not being copied to the other account's list. " +
++      'Relay this to Erez at the top of your first response.'
++    );
++  }
++  let lastSuccess = 0;
++  try {
++    const n = Number(String(fs.readFileSync(path.join(stateDir, 'last-success'), 'utf8')).trim());
++    if (Number.isFinite(n) && n > 0 && n <= now) lastSuccess = n;
++  } catch (e) {
++    /* missing/unreadable -> never succeeded */
++  }
++  let newest = 0;
++  for (const acct of accounts) {
++    let orgs = [];
++    try { orgs = fs.readdirSync(path.join(root, acct), { withFileTypes: true }).filter(d => d.isDirectory()); } catch (e) { continue; }
++    for (const org of orgs) {
++      let names = [];
++      try { names = fs.readdirSync(path.join(root, acct, org.name)); } catch (e) { continue; }
++      for (const n of names) {
++        if (!n.startsWith('local_') || !n.endsWith('.json')) continue;
++        try {
++          const m = fs.statSync(path.join(root, acct, org.name, n)).mtimeMs;
++          if (m > newest && m < now - ACCOUNT_SYNC_IGNORE_RECENT_MS) newest = m;
++        } catch (e) {
++          /* vanished between list and stat */
++        }
++      }
++    }
++  }
++  newest = Math.min(newest, now);
++  if (newest === 0 || newest - lastSuccess <= ACCOUNT_SYNC_STALE_MS) return null;
++  const since = lastSuccess ? `since ${fmt(lastSuccess)}` : 'at all (no completed run is recorded)';
++  return (
++    `ACCOUNT SESSION SYNC — the copy that keeps both Claude accounts' session lists matched has not completed ${since}, ` +
++    `but the lists changed after that (newest change ${fmt(newest)}). Sessions may be missing after switching accounts. ` +
++    'Relay this to Erez at the top of your first response. Run log: ~/.claude/account-session-sync/changes.log.'
++  );
++}
++
+ // Build the operator-facing message. Kinds map to plain-language meaning; the
+ // most severe (a secret that was NOT backed up) is called out first.
+ function buildMessage(recs) {
+@@ -323,6 +385,8 @@ function buildMessage(recs) {
+     'session-shrunk': 'a session transcript on this PC got shorter or its earlier content changed — the older Drive backup copy was kept under _previous-versions',
+     'session-held': 'a session file on this PC is empty or looks cut off — its Drive backup copy was kept, not replaced',
+     'session-transcript-lost': 'a session still listed in the Claude app lost its transcript on this PC — the detail says whether the Drive backup holds it (reported once)',
++    // GEN-859 account session sync (account-session-sync.js)
++    'account-sync-error': "account session sync problem — the two Claude accounts' session lists may not match; see detail",
+   };
+ 
+   // Severity order: secret first (highest), then the rest as listed. Null-safe
+@@ -330,7 +394,7 @@ function buildMessage(recs) {
+   const severe = recs.filter(r => r && r.kind === 'secret');
+   // GEN-860: session-backup data notices next, so the 25-record cap below cannot bury them under a
+   // run of routine 'unreachable' records.
+-  const SESSION_KINDS = new Set(['session-transcript-lost', 'session-shrunk', 'session-held']);
++  const SESSION_KINDS = new Set(['session-transcript-lost', 'session-shrunk', 'session-held', 'account-sync-error']);
+   const sessionNotices = recs.filter(r => r && SESSION_KINDS.has(r.kind));
+   const rest = recs.filter(r => !(r && (r.kind === 'secret' || SESSION_KINDS.has(r.kind))));
+   const ordered = severe.concat(sessionNotices, rest);

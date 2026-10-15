@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-15 — GEN-859: installed the two-account session-list sync hook (with app-load check) after Phase 0 test; erez@→info@ verification pending; scheduled tasks → GEN-884. <!-- toc-session:198ebe68-453e-44e2-8ae9-65ce8ce810dc -->
 - 2026-10-15 (4) — GEN-871 Phase 2 testing: weekly release review scheduled for Thursdays, test run and dry run passed, supervised run set for 22 Oct with a reminder <!-- toc-session:593abcdd-c48d-4f8a-8700-2dca0324a51e -->
 - 2026-10-15 (2) — GEN-871 Phase 2: weekly Claude Code release review built and installed; testing handed to a new session; GEN-873/875 filed <!-- toc-session:c03c2ac6-3155-4e04-b101-ec172c6f5301 -->
 - 2026-10-15 - GEN-860: lost-session notice re-derived, automatic Drive session backup installed and live, cleanupPeriodDays 90 set, step 3 findings; GEN-874 filed, GEN-623 appended <!-- toc-session:59968cd1-7f3a-4697-928d-41630015e234 -->
@@ -251,6 +252,45 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-15 — GEN-859: two-account session sync installed (with app-load check)
+<!-- session:198ebe68-453e-44e2-8ae9-65ce8ce810dc -->
+Erez signed out of erez@muuula.com and into info@muuula.com, then asked to see his erez@ sessions, and later to make moving between the two accounts seamless. This work continues the 2026-10-14 session "Folder and session sharing across org" (GEN-859, handoff `notes/two-account-session-sharing-handoff.md`).
+
+**Findings (verified)**
+- Conversations (`~/.claude/projects`) are shared. Each account has its own sidebar list, as files `%APPDATA%\Claude\claude-code-sessions\<acct>\13fa9673…\local_<uuid>.json`: erez@ = `a47791bc…`, info@ = `c68119fc…`.
+- The signed-in account is `config.json` `lastKnownAccountUuid`. The app re-reads the list from disk at each sign-in, with no account filter (app.asar `loadSessionRecords`).
+- **Phase 0 test, passed both ways.**
+  - Copied entries appear and continue; archived entries stay archived.
+  - A delete in one account leaves a `deleted_<id>` marker (epoch ms) only in that account and keeps the conversation file.
+  - The app also asks the server to delete the session's phone link (`bridgeSessionIds`), including a foreign one.
+- The app logs "Loaded N persisted sessions from <folder>" at each sign-in. Baseline gap vs file count is about 0.
+- The desktop app shipped about 18 builds since 2026-08-22.
+
+**Built and installed via /vet-code**
+- `~/.claude/hooks/account-session-sync.js`, registered on Stop and SessionStart (timeout 30). What it does:
+  - copies the signed-in list into the signed-out list, never writing the signed-in one; newest file wins;
+  - carries deletions over (trash for 14 days, cap 10 per run);
+  - never copies phone links across accounts;
+  - fails safe, and reports through `backup-sweep-failures.jsonl`.
+- **App-load check** (Erez: "Build it into the helper now, before installing"): compares the app's Loaded line after each switch with the count recorded at the last sync before it.
+- `sessionstart-backup-surfacer.js`: new `account-sync-error` kind, plus a stale / switched-off line.
+- `sync.ps1` (Drive): the hook added to FileMap and `account-session-sync` to the per-machine ignore list. Pushed and committed.
+- **Reviews and tests:** design /check converged (2 rounds, plus 2 reviews of the app-load addition); 4 Pass B code reviews (Opus 5.5) and in-session /code-review; 73 fixture tests; gate pass-consumption fixture 8/8; dress rehearsals on a copy of the real lists.
+- First catch-up (info@ → erez@): 80 copied, 9 updated, 4 markers. Backup at `~/.claude-staging/gen859-backup/sessions-before-install`. The phone-link cleanup is done for erez@'s test copy.
+
+**Pending (Erez continues Sunday)**
+1. At the next switch to erez@, confirm the erez@ → info@ direction and that the app-load check logs a gap of about 0.
+2. Clean the 17 info@ test copies' phone links with `cleanup-bridges.js`.
+3. Scheduled tasks across accounts → GEN-884.
+
+GEN-58 logged: class J new element (mechanism state reported as user-visible outcome).
+
+Unresolved items filed: GEN-884
+Grounding flag: 1 count-nudge this session, 17 lifetime, newest 0 days ago
+Reversals judged non-learning: "8 skipped baseline" corrected by reviewer before delivery (caught by the panel, not Erez)
+
+---
+
 ## 2026-10-15 (4) — GEN-871 Phase 2 testing: weekly release review scheduled, test run and dry run passed
 <!-- session:593abcdd-c48d-4f8a-8700-2dca0324a51e -->
 Side session started from the GEN-871 build session (c03c2ac6) to test and turn on the weekly Claude Code release review. Handoff: `notes/release-review/HANDOFF.md`.
