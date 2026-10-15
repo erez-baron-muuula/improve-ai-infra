@@ -22,6 +22,13 @@ Each piece was installed byte-identical to its reviewed working copy (sha256 che
 4. **Supervised first live run:** `/release-review supervised max-writes=2`, with Erez present. Since lastReviewedVersion is 2.1.300 and no newer version may exist yet, the expected writes are creating the digest ticket and its first section. Check that the gate passes are `*.consumed.*`, that records carry `source`, and that state advances. Then set `supervisedPassedUtc` in state.json. Run `readout` and confirm the /wrap line. Run it again and confirm it files nothing (dedupe).
 5. **Update GEN-871** (through /vet-ticket): what was built, the results of steps 3–4, and the scheduled task id. Then Done or Review per the global rule. The first unattended scheduled run is a later verification; scheduling a check on it makes this Review.
 
+## Progress (testing session 593abcdd, 2026-10-15)
+- Step 1 done: `release-review-weekly` created, cron `0 9 * * 4` (Erez chose "Thursday at 9:00"), saved in Auto mode.
+- Step 2 done: Erez clicked Run now (the classifier refused `run_scheduled_task` from the session). The run succeeded in ~2 min with no stall or denial, ran as dry, recorded a no-op, committed and pushed. It never reached the listing or Notion steps, because there were no new versions.
+- Step 3 done: dry run `after=2.1.294`. See `dry-runs/2026-10-15.md`. A2/A3/A4/B2 all deduped. One new would-be ticket (PowerShell sees CLAUDE_ENV_FILE vars from 2.1.296, so `hooks/refs/shell.md` goes stale). The IDE filter wrongly dropped one mods line.
+- Step 4 waiting: no Claude Code version after 2.1.300 yet, so a supervised run would be a no-op. Erez's answer to "Wait for the next Claude Code version before the supervised run?" was: "Yes, wait for the next Claude Code version, then do the supervised run with me", and then: "let's run it next Thursday" (= 2026-10-22). The 09:00 scheduled run that day runs as dry and does not advance state, so the supervised run afterwards still sees the new versions. Start it after that run finishes (check `run.lock` is gone).
+- Step 5 (GEN-871 update) after step 4.
+
 ## Known open points
 - Commit the new files in this folder; the build session did not commit.
 - The sync during install printed BACKUP-COVERAGE warnings for `session-backup-state` and `hooks/sessionstart-session-backup.js`. These belong to GEN-860's session, not this ticket.
