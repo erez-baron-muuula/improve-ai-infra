@@ -61,7 +61,9 @@ for (const f of files) for (const m of read(path.join(dir, f)).matchAll(/`([a-z0
   check(f + ' -> `' + m[1] + '` resolves', files.includes(m[1]) || known.has(m[1]));
 // 5. Outside targets the reference files cite by name.
 const wrap = read(path.join(skills, 'wrap', 'SKILL.md'));
-check('wrap has the capture sub-step "Check for an existing home before creating"', wrap && wrap.includes('Check for an existing home before creating'));
+// Since GEN-845 step 4 the capture sub-step lives in wrap/step1-capture.md, which review.md names.
+const capture = read(path.join(skills, 'wrap', 'step1-capture.md'));
+check('wrap/step1-capture.md has the capture sub-step "Check for an existing home before creating"', capture && capture.includes('Check for an existing home before creating'));
 check('wrap has Step 3i and Step 3d', wrap && /Step 3i/.test(wrap) && /3d/.test(wrap));
 const lanes = read(path.join(dir, 'lanes.md')) || '';
 check('lanes.md has the "Seed (install-time, done once)" step marker-probe.md cites', lanes.includes('**Seed (install-time, done once):**'));
