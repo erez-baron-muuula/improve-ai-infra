@@ -1,0 +1,105 @@
+{
+  "_about": "Size limits for the files that steer Claude, from Anthropic's published docs plus our own house rules. Read by /suggest check 4b and /check's Holistic lens when a proposal grows a covered file, and later by the GEN-886 size sweep. Change it only in an attended session (Erez present), and re-verify each value against its source when you do.",
+  "counting": {
+    "lines": "wc -l",
+    "characters": "Unicode code points, as wc -m counts them",
+    "tokensPerCharacter": "tokens = characters / charsPerToken",
+    "charsPerToken": 2.8,
+    "charsPerTokenSource": "One sample: the Read tool counted wrap/SKILL.md at 25,221 tokens at about 70,000 characters (GEN-882). Conservative: prose usually runs higher. GEN-886 calibrates it.",
+    "nearLimit": "Within 10% of a limit is a near-limit note, not a breach."
+  },
+  "limits": [
+    {
+      "id": "hook-injected-text",
+      "appliesTo": "Each text a hook injects (additionalContext, systemMessage, plain stdout), so for ~/.claude/hooks/refs/*.md the injected payload, including any header the hook adds",
+      "measure": "characters",
+      "value": 10000,
+      "kind": "hard",
+      "overIt": "Claude sees only a file path and a preview of the first 2,000 characters, and is not asked to read the file. No setting raises it.",
+      "source": "https://code.claude.com/docs/en/hooks",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "skill-after-compaction",
+      "appliesTo": "Each skill's SKILL.md (the invoked text)",
+      "measure": "tokens",
+      "value": 5000,
+      "kind": "hard",
+      "overIt": "After auto-compaction only the first 5,000 tokens are re-attached; the rest of the runbook is lost. All re-attached skills share 25,000 tokens, most recent first.",
+      "source": "https://code.claude.com/docs/en/skills",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "skill-md-lines",
+      "appliesTo": "Each SKILL.md body",
+      "measure": "lines",
+      "value": 500,
+      "kind": "recommended",
+      "overIt": "Move detailed reference material to separate files.",
+      "source": "https://code.claude.com/docs/en/skills ; https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "skill-description-listing",
+      "appliesTo": "A skill's description plus when_to_use",
+      "measure": "characters",
+      "value": 1536,
+      "kind": "hard",
+      "overIt": "Truncated in the skill listing, so the trigger wording past the cap never reaches Claude.",
+      "source": "https://code.claude.com/docs/en/skills",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "skill-description-portable",
+      "appliesTo": "A skill's description field",
+      "measure": "characters",
+      "value": 1024,
+      "kind": "recommended",
+      "overIt": "Over the Agent Skills format maximum; fine in Claude Code, but report it as a note.",
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "claude-md-lines",
+      "appliesTo": "Every CLAUDE.md Claude loads (global and each project's)",
+      "measure": "lines",
+      "value": 200,
+      "kind": "recommended",
+      "overIt": "Consumes more context in every session and reduces adherence. Report characters too: long lines make the line count understate the cost.",
+      "source": "https://code.claude.com/docs/en/memory",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "memory-md-load",
+      "appliesTo": "Each MEMORY.md under ~/.claude/projects/*/memory/",
+      "measure": "lines or bytes, whichever comes first",
+      "value": "200 lines or 25KB",
+      "kind": "hard",
+      "overIt": "Content past the threshold is not loaded at session start.",
+      "source": "https://code.claude.com/docs/en/memory",
+      "verified": "2026-10-19"
+    },
+    {
+      "id": "reference-file-toc",
+      "appliesTo": "Each .md file other than SKILL.md under ~/.claude/skills/*/",
+      "measure": "lines",
+      "value": 100,
+      "kind": "recommended",
+      "overIt": "Over 100 lines, start the file with a table of contents so a partial read still shows its scope.",
+      "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+      "verified": "2026-10-19"
+    }
+  ],
+  "houseRules": [
+    {
+      "id": "gate-skill-runbook",
+      "appliesTo": "SKILL.md of vet-rule, vet-code, vet-ticket and wrap",
+      "measure": "characters",
+      "value": 12000,
+      "kind": "recommended",
+      "overIt": "Our own cap from GEN-845, stated in each of those files, to keep each runbook safely under the 5,000-token compaction limit. New detail goes in a reference file.",
+      "source": "GEN-845; stated in each file's own text",
+      "verified": "2026-10-19"
+    }
+  ]
+}
