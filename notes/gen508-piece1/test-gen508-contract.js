@@ -12,6 +12,12 @@
 // Red-by-design specs (their fix is a later step) use expectPending, exactly as the arm suite does: they
 // print as PEND and do NOT fail the gate, so a real regression still stands out.
 //
+// HISTORICAL (GEN-845 step 3, 2026-10-19): this test reads its own working copy vet-ticket-SKILL.md in
+// this folder, the single-file skill as it stood during GEN-508. The live skill is now a runbook plus
+// reference files in ~/.claude/skills/vet-ticket/ (the Step-5 pass template is in record-card-mint.md,
+// the GEN-58 lane in lanes.md, the probe in marker-probe.md), so a pass here says nothing about the
+// live skill. The live cross-references are checked by notes/gen845/xref-check-vet-ticket.js.
+//
 // Run:  node test-gen508-contract.js
 const H = require('./test-gen508-harness.js');
 const fs = require('fs');
