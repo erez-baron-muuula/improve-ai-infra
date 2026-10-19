@@ -34,6 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-19 (4) — GEN-845 step 4: /wrap split into a 106-line runbook plus six reference files and verified; the /compact check was not exercised live; the first real split /wrap ran clean; one finding appended to GEN-897. <!-- toc-session:30f18eaf-8406-4f82-b74a-889d08bc5b70 -->
 - 2026-10-19 (3) — GEN-845 step 3: vet-ticket is now a 167-line runbook plus seven reference files, the live /compact check passed and is noted on GEN-845, and GEN-912 was filed. <!-- toc-session:a063541c-3660-44bd-ba7a-3eaaf9d17ef3 -->
 - 2026-10-19 (2) — GEN-845 step 2: vet-code and vet-rule split into runbooks plus 7 reference files, live and verified; /compact test passed; GEN-911 filed, GEN-525 raised to High <!-- toc-session:b35635b5-dc7c-4de5-9264-1ea3da592a89 -->
 - 2026-10-19 — GEN-845 two-layer plan approved after a converged /check; step 1 (after-compaction skill reminder hook) built, double code-reviewed, live and synced; live /compact test pending <!-- toc-session:995ae71b-7d08-4a12-874f-786c1ffbcaba -->
@@ -260,6 +261,42 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-19 (4) — GEN-845 step 4: /wrap split into a short runbook plus six reference files
+<!-- session:30f18eaf-8406-4f82-b74a-889d08bc5b70 -->
+Erez asked what effort GEN-882 needs next. Answer: xhigh on the current model, for GEN-845 step 4 (the plan `~/.claude/plans/come-up-with-a-distributed-lark.md` sets xhigh for each step). Erez: "Start GEN-845 step 4: split /wrap into a short runbook plus reference files, including the two leftover pointers."
+
+- **Done and live (Erez: "Yes, install the /wrap split."):** `~/.claude/skills/wrap/SKILL.md` is now a runbook (74,324 → 11,987 bytes, 272 → 106 lines). New files in the same folder: `step0b-keys.md`, `step1-capture.md`, `readouts-3b-3c.md`, `readouts-3d-3j.md`, `step4-history-git.md`, `step7-report.md`. These were built by moving the old sections word for word (`build.js` in the scratchpad), with 3 pointer rewordings. Step numbers, step names and the `wrap-step1`/`wrap-step3c` tags are unchanged. One shared "Reporting rule" paragraph replaces the per-step report boilerplate in the runbook.
+- **Pointers:**
+  - vet-ticket `review.md`, Step 0b and the Step 2 consult note, now point to `wrap/step1-capture.md`.
+  - /wrap Step 3d now points directly to `vet-ticket/marker-probe.md`.
+  - Deliberately left: the /vet-code Step 8 probe pointer (it resolves via the vet-ticket stub) and `vet-ticket/record-card-mint.md:68` (`wrap/SKILL.md` Step 1, which still resolves).
+- **Deviations from the plan's letter:** the readout files are split 3b-3c / 3d-3j (15.6K / 16.6K) instead of 3b-3e / 3f-3j (19.6K / 11.9K), and there is no wrap `background.md`, since the old file had no rationale-only text.
+- **Vetting (/vet-rule):** /check converged in 2 rounds.
+  - Round 1: pre-mortem, holistic and soundness all PASS, no material findings.
+  - Advisories folded in:
+    - read each reference file once per wrap, and again after a compaction;
+    - Step 3c's filing is the exception to the rule that readouts take no action;
+    - Step 4 pre-read ban scoped to checking the top entry, and an empty session id means a BLOCKED wrap;
+    - Step 7 names the filing tally and allows the re-run note after a failed step;
+    - the reference-file headers note the reworded pointers.
+  - Round 2: a scoped re-review, PASS.
+  - Filing: 8 check-records. The 6 new files were created create-only by node. review.md and then SKILL.md were installed via `update-config.ps1 -Op write-file -ContentFile` (both exit 0, both passes consumed).
+- **Verified:**
+  - Installed files match the reviewed copies byte for byte (`cmp`, all 8).
+  - Sentence diff: 5 of 624 old units missing, all 5 the declared pointer rewordings.
+  - New `notes/gen845/xref-check-wrap.js` on the live tree: 115/115, and it catches 5/5 planted breaks.
+  - `xref-check-vet-ticket.js` (repointed to `step1-capture.md`): 92/92.
+  - `sync.ps1 -Direction From-Claude` ran ("no changes to commit").
+- **/compact check: not exercised live.** Erez ran /loghistory, then /compact. This session had edited /wrap but not run it, so the after-compaction reminder listed only /check and the runbook was not re-attached. Stand-in: the live file is 106 lines / 11,987 characters, about 4,300 tokens at GEN-845's calibrated 2.8 characters per token (an estimate), under the ~5,000-token keep limit; Step 8's last line is intact on disk. (I first told Erez "about 3,000 tokens", using characters / 4; corrected in chat before filing.)
+- **GEN-845 progress note filed** (Erez: "ok" to adding it) through /vet-ticket: reviewer PASS in 1 round (a892fff36790eda29), pass consumed, 10 blocks landed. GEN-845 stays In Progress.
+- **First real run of the split /wrap** (this wrap, at xhigh; Erez asked "xhigh?" and the recommendation held: tool-heavy, first run of a new runbook, unattended filings). Every step's reference-file pointer resolved and was read; no pointer failed.
+- **Noticed, not acted on:** `scheduled-tasks/gen430-avast-recheck` cites "/wrap Step 5b". On reading the task, this names GEN-437's deferred, not-yet-built step, not a broken pointer, so it is not a defect and nothing was filed.
+
+Unresolved items filed: none (one merged: `wrap` Step 0's no-project list contradicting the every-session steps 0b, 1, 3i and 3j appended to GEN-897 as an "Also surfaced" line; reviewer PASS, 1 round).
+Dropped learnings: the next-step box being refused twice by the GEN-619 gate (missing "📌 For you" block; a button without an effort tag) is already enforced by that gate; the token estimate given with characters / 4 instead of the ticket's own calibrated ratio was a one-off, corrected in chat and on GEN-845.
+
+---
+
 ## 2026-10-19 (3) — GEN-845 step 3: vet-ticket split into a short runbook plus seven reference files
 <!-- session:a063541c-3660-44bd-ba7a-3eaaf9d17ef3 -->
 Erez asked what to do next under GEN-882; recommended finishing GEN-845 step 3 (the only child In Progress) over GEN-886 (unblocks GEN-890/894). Live REST snapshot of GEN-882's 14 children: GEN-845 In Progress; GEN-825 Review; GEN-677 Done; GEN-890/892/894 Blocked; GEN-674/886/887/888/889/891/893/897 To Do. Erez: "Start GEN-845 step 3: split /vet-ticket into a short checklist plus reference files."
