@@ -1,0 +1,13 @@
+[
+  { "version": "2.1.300", "text": "Changed local session transcripts to also record each API request's system prompt" },
+  { "version": "2.1.299", "text": "Changed `UserPromptSubmit` hooks to run before a skill or custom slash command expands" },
+  { "version": "2.1.299", "text": "Added idle compaction in the terminal" },
+  { "version": "2.1.295", "text": "Added `onFailure: \"block\"` for command and HTTP hooks" },
+  { "version": "2.1.296", "text": "Fixed PowerShell commands not seeing variables that hooks write to CLAUDE_ENV_FILE" },
+  { "version": "2.1.295", "text": "Fixed variables a SessionStart hook writes to `CLAUDE_ENV_FILE` not reaching the Bash tool" },
+  { "version": "2.1.299", "text": "Fixed plan mode running a write (an MCP tool's, a file's, a shell command's)" },
+  { "version": "2.1.299", "text": "Changed MCP allow rules to reach only the server they name" },
+  { "version": "2.1.300", "text": "`updatedInput` from PreToolUse and PermissionRequest hooks is now validated" },
+  { "version": "2.1.299", "text": "Fixed scheduled tasks and loops firing again after every turn, or firing early, during the repeated hour" },
+  { "version": "2.1.299", "text": "Fixed `$.ui.open` reporting a mod's pane as placed" }
+]
