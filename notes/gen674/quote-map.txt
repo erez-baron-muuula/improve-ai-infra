@@ -1,0 +1,330 @@
+L2 (When asked about a project, read its CLAUDE.md in ): none
+L3 (When a new project is started (new folder, new rep): none
+L5 (| Project | Local path | GitHub | Notion epic |): none
+L6 (|---------|-----------|--------|-------------|): none
+L7 (| Invoice Automation | C:\Users\Erez\AI Projects\I): none
+L8 (| Documentation | C:\Users\Erez\AI Projects\Docume): none
+L9 (| Improve AI Infra | C:\Users\Erez\AI Projects\Imp): none
+L10 (| Memory Islands Dev | C:\Users\Erez\AI Projects\M): none
+L11 (| Improving PC Processes | C:\Users\Erez\AI Projec): none
+L13 (When a session's first message does not contain a ): none
+L19 (Married to Noa. Daughters: Arielle (b. May 3, 2020): none
+L21 (Instructions — Apply to All Chats): none
+L23 (When more than one rule could plausibly govern a r): none
+L25 (Concise, direct, truthful. Never guess unless aske): none
+L27 (When mentioning a file whose name could refer to m): none
+L29 (Whenever you mention or point to something that ca): none
+L31 (On Slack, keep a conversation in its thread: when ): none
+L33 (Honesty over confidence. If a solution won't work,): none
+L35 (Don't defer uncritically to assertions from third ): none
+L37 (Self-check everything. Correct me when I'm wrong. ): none
+L39 (When forming a non-routine recommendation or desig): none
+L41 (Verify before asserting or restating — no claims f): none
+L43 (For any non-routine answer (design, architecture, ): none
+L45 (Ticket status (Notion, Jira, etc.). Default: after): none
+L47 (Before any ticket goes to Done or Review (whether ): none
+L48 (No verification needed → Done.): none
+L49 (You can verify now → verify this session, then Don): none
+L50 (Verification must happen later (build, delayed eff): none
+L51 (Erez must verify (manual inspection, subjective ju): none
+L53 (For a follow-up action item, create a ticket: assi): none
+L55 (When recording a decision, quote Erez's answer ver): none
+L57 (When creating a ticket, the status you set or prop): 
+  .claude\skills\release-review\SKILL.md:194 [the one actually true]
+  .claude\skills\wrap\readouts-3b-3c.md:20 [When creating a ticket, the status]
+  .claude\skills\wrap\step1-capture.md:26 [When creating a ticket, the status]
+L59 (Route a ticket by the domain the problem belongs t): 
+  .claude\skills\release-review\SKILL.md:193 [route by domain]
+  .claude\skills\wrap\step1-capture.md:23 [route by domain]
+L61 (Name a ticket by the goal/outcome, not a presumed ): none
+L63 (When creating a Team-Tasks item, check whether a t): 
+  .claude\skills\wrap\step1-capture.md:26 [standing Team-Tasks rule]
+L65 (Before creating or materially changing a ticket in): 
+  .claude\skills\wrap\step1-capture.md:6 [Before creating or materially changing a]
+L67 (Break tasks into steps. One step at a time; wait f): none
+L69 (When given feedback with multiple items, address t): none
+L71 (When a ticket or document says something will be h): none
+L73 (When the user asks a question ("should we...?", "i): 
+  .claude\skills\suggest\SKILL.md:29 [When the user asks a question]
+L75 (Never chain shell commands on a single line when t): 
+  .claude\hooks\auto-approve.js:509 [Never chain shell commands on a]
+  .claude\hooks\auto-approve.js:688 [Never chain shell commands on a]
+L77 (QA-layer legend (used by the verification rules): ): 
+  .claude\skills\config-health\SKILL.md:60 [QA-layer legend]
+  .claude\skills\notion-ticket-lookup\SKILL.md:135 [Layer 5]
+  .claude\hooks\auto-approve.js:1913 [Layer 5]
+L79 (Default to silence on success: on a turn where wor): 
+  .claude\hooks\stop-claim-linter.js:71 [Default to silence on success]
+  .claude\scripts\prepend-log.ps1:367 [heartbeat]
+  .claude\scripts\prepend-log.tests\prepend-log.dev.ps1:367 [heartbeat]
+L81 (Sort anything you are about to tell Erez into thre): none
+L83 (Structure every turn that produced a bucket-(1) "A): 
+  .claude\skills\config-health\SKILL.md:78 [For you" block]
+  .claude\skills\config-health\SKILL.md:85 [For you" block]
+  .claude\skills\config-health\SKILL.md:109 [For you" block]
+  .claude\skills\release-review\SKILL.md:266 [For you" block]
+  .claude\skills\vet-ticket\apply-recover.md:25 [For you" block]
+  .claude\skills\vet-ticket\apply-recover.md:52 [For you" block]
+  .claude\skills\vet-ticket\marker-probe.md:58 [For you" block]
+  .claude\skills\vet-ticket\SKILL.md:155 [For you" block]
+  .claude\skills\wrap\readouts-3b-3c.md:6 [For you" block]
+  .claude\skills\wrap\readouts-3d-3j.md:94 [For you" block]
+  .claude\skills\wrap\SKILL.md:8 [For you" block]
+  .claude\skills\wrap\SKILL.md:12 [For you" block]
+  .claude\skills\wrap\SKILL.md:34 [For you" block]
+  .claude\skills\wrap\SKILL.md:37 [For you" block]
+  .claude\skills\wrap\SKILL.md:101 [For you" block]
+  .claude\skills\wrap\step0b-keys.md:15 [For you" block]
+  .claude\skills\wrap\step1-capture.md:17 [For you" block]
+  .claude\skills\wrap\step7-report.md:9 [For you" block]
+  .claude\hooks\auto-approve.js:2644 [For you" block]
+  .claude\hooks\auto-approve.js:2649 [For you" block]
+  .claude\hooks\auto-approve.js:3753 [For you" block]
+  .claude\hooks\pretooluse-effort-tag-gate.js:43 [For you" block]
+  .claude\hooks\pretooluse-effort-tag-gate.js:328 [For you" block]
+  .claude\hooks\prompt-wmcp-miss-reminder.js:88 [For you" block]
+  .claude\hooks\prompt-wmcp-miss-reminder.js:165 [For you" block]
+  .claude\hooks\refs\windows-mcp.md:5 [For you" block]
+  .claude\hooks\refs\windows-mcp.md:14 [For you" block]
+  .claude\hooks\stop-claim-linter.js:19 [block-after-check]
+  .claude\hooks\stop-claim-linter.js:31 [For you" block]
+  .claude\hooks\stop-claim-linter.js:117 [For you" block]
+  .claude\hooks\stop-claim-linter.js:140 [block-after-check]
+  .claude\hooks\stop-claim-linter.js:149 [For you" block]
+  .claude\hooks\stop-claim-linter.js:183 [block-after-check]
+  .claude\hooks\stop-claim-linter.js:188 [block-after-check]
+  .claude\hooks\stop-claim-linter.js:640 [For you" block]
+  .claude\hooks\stop-claim-linter.js:733 [For you" block]
+  .claude\hooks\stop-claim-linter.js:817 [block-after-check]
+  .claude\hooks\stop-claim-linter.js:975 [For you" block]
+  .claude\hooks\stop-claim-linter.js:1066 [block-after-check]
+  .claude\hooks\stop-claim-linter.js:1068 [For you" block]
+  .claude\hooks\stop-claim-linter.js:1091 [For you" block]
+  .claude\hooks\stop-claim-linter.js:1130 [For you" block]
+  .claude\hooks\stop-cred-denial-surface.js:20 [For you" block]
+  .claude\hooks\stop-cred-denial-surface.js:117 [For you" block]
+  .claude\hooks\stop-cred-denial-surface.js:139 [For you" block]
+  .claude\hooks\stop-cred-denial-surface.js:142 [For you" block]
+  .claude\hooks\stop-foryou-nudge.js:9 [block-after-check]
+  .claude\hooks\stop-foryou-nudge.js:181 [block-after-check]
+  .claude\hooks\stop-foryou-nudge.js:1381 [block-after-check]
+  .claude\hooks\stop-signal-surface.js:332 [For you" block]
+  .claude\hooks\stop-signal-surface.js:337 [For you" block]
+  .claude\hooks\stop-signal-surface.js:342 [For you" block]
+  .claude\commands\loghistory.md:29 [For you" block]
+L85 (When a "📌 For you" block, a next-step box's butto): 
+  .claude\hooks\pretooluse-effort-tag-gate.js:7 [reasoning-effort level]
+  .claude\hooks\pretooluse-effort-tag-gate.js:336 [reasoning-effort level]
+  .claude\hooks\pretooluse-effort-tag-gate.js:346 [tag rule]
+  .claude\hooks\stop-foryou-nudge.js:69 [tag rule]
+  .claude\hooks\stop-foryou-nudge.js:600 [tag rule]
+  .claude\hooks\stop-foryou-nudge.js:1409 [reasoning-effort level]
+  .claude\hooks\stop-foryou-nudge.js:1410 [tag rule]
+L87 (Surfacing silent project edits (a bucket-1 report)): 
+  .claude\skills\config-health\config-health-scan.ps1:48 [auto-approved-edits.jsonl]
+  .claude\skills\config-health\config-health-scan.ps1:243 [auto-approved-edits.jsonl]
+  .claude\hooks\auto-approve.js:169 [auto-approved-edits.jsonl]
+L89 (Before declaring a turn complete (one where you to): none
+L91 (After tool calls that mutate state outside the har): none
+L93 (Before destructive operations on stateful external): none
+L95 (Ask before adding unrequested info.): none
+L97 (When requesting or re-requesting review or sign-of): none
+L99 (When presenting anything to Erez for approval or a): 
+  .claude\skills\vet-rule\SKILL.md:62 [When presenting anything to Erez for]
+L101 (Describe actions, proposals, and reasoning to the ): none
+L103 (As a specific application of 'default to acting ra): none
+L105 (When accumulated context starts to slow or degrade): none
+L107 (End of session ("end session" / "wrap up") — run a): 
+  .claude\skills\vet-code\probe-fastpath.md:10 [End of session]
+  AI Projects\Memory Islands Dev\CLAUDE.md:38 [End of session]
+L109 (After updating any memory file, check if the files): none
+L111 (Learn from mistakes in the conversation; don't rep): none
+L113 (Before settling on how to obtain a capability a ta): none
+L115 (When you extract or compute numbers with a parser ): none
+L117 (Numbered lists never restart mid-list. Continue th): none
+L119 (Treat autocomplete suggestions as prompts, not ans): none
+L121 (When making a mistake, suggest what changes need t): none
+L123 (Before proposing a new rule, first confirm it clea): none
+L125 (When a session produces a learning worth keeping —): none
+L127 (When you build or propose any mechanism whose outp): 
+  .claude\skills\suggest\SKILL.md:75 [whose output is a signal]
+  .claude\skills\suggest\SKILL.md:76 [When you build or propose any]
+  .claude\hooks\posttooluse-signal-detect.js:14 [When you build or propose any]
+  .claude\hooks\stop-signal-surface.js:329 [When you build or propose any]
+  .claude\hooks\stop-signal-surface.js:330 [whose output is a signal]
+L129 (Before adding or editing a rule in a CLAUDE.md fil): 
+  .claude\skills\notion-ticket-lookup\SECURE-LOOKUP-DESIGN.md:22 [Before adding or editing a rule]
+  .claude\skills\vet-rule\SKILL.md:61 [Before adding or editing a rule]
+  .claude\hooks\auto-approve.js:1528 [purely mechanical fix]
+  .claude\hooks\auto-approve.js:1680 [purely mechanical fix]
+  .claude\hooks\auto-approve.js:1736 [Before adding or editing a rule]
+L131 (When drafting or revising a rule, state the behavi): 
+  .claude\skills\audit-rules\SKILL.md:45 [distinctive quoted phrase]
+  .claude\skills\config-health\SKILL.md:60 [distinctive quoted phrase]
+L133 (When we're working out an edit to existing text to): none
+L135 (Before writing code or automation, surface every a): none
+L137 (Ask one question at a time. Multiple sub-questions): none
+L139 (AskUserQuestion (the popup question/button widget)): 
+  .claude\hooks\deny-askuserquestion.js:5 [AskUserQuestion]
+  .claude\hooks\deny-askuserquestion.js:7 [AskUserQuestion]
+  .claude\hooks\deny-askuserquestion.js:18 [AskUserQuestion (the popup question/button widget) is]
+  .claude\hooks\deny-askuserquestion.js:46 [AskUserQuestion]
+  .claude\settings.json:236 [AskUserQuestion]
+  .claude\settings.json:240 [AskUserQuestion]
+L141 (When the user runs a slash command (e.g. /compact,): none
+L143 (When the user pushes back, distinguish (a) new inf): none
+L145 (When the user uses a specific identifier, name, or): none
+L147 (When targeting a page or issue by ID in any mutati): none
+L149 (When reading code or docs and encountering an abbr): none
+L151 (Track contradictions within a conversation. If you): none
+L153 (Before any destructive operation (DROP, ALTER, rep): none
+L155 (When a display problem (color, layout, rendering) ): none
+L157 (Before proposing or performing any file or folder ): none
+L159 (Before claiming something renders correctly (color): none
+L161 (Do not write time-varying facts — file paths, func): 
+  .claude\skills\config-health\SKILL.md:3 [time-varying facts]
+  .claude\skills\config-health\SKILL.md:54 [time-varying facts]
+  .claude\commands\loghistory.md:35 [time-varying facts]
+L163 (When comparing options across providers, tiers, or): none
+L165 (When claiming one rule, option, or concept subsume): none
+L167 (Don't claim uniqueness or exhaustiveness without c): 
+  .claude\skills\suggest\SKILL.md:63 [uniqueness or exhaustiveness]
+L169 (Before committing to an architecture on any platfo): none
+L171 (When you delegate review or analysis to a sub-agen): none
+L173 (When deploying is part of the current task — the r): none
+L175 (Project Rules — Apply to All Projects): none
+L177 (Never ask Erez to paste, share, or type API tokens): 
+  .claude\hooks\auto-approve.js:306 [API tokens and keys - AI]
+  .claude\hooks\auto-approve.js:340 [API tokens and keys - AI]
+  .claude\hooks\auto-approve.js:346 [API tokens and keys - AI]
+  AI Projects\Documentation\CLAUDE.md:130 [Never ask Erez to paste, share,]
+  AI Projects\InvoiceAutomation\CLAUDE.md:62 [Never ask Erez to paste, share,]
+L181 (On "apply learnings": review the session for behav): 
+  .claude\skills\wrap\step1-capture.md:6 [apply learnings]
+  AI Projects\Documentation\CLAUDE.md:13 [apply learnings]
+  AI Projects\Documentation\CLAUDE.md:15 [apply learnings]
+  AI Projects\InvoiceAutomation\CLAUDE.md:8 [apply learnings]
+L183 (When authoring content the dev team will read, ref): none
+L187 (On-demand reference notes for Notion, Jira, shell,): none
+L189 (Notion (MCP) gotcha: notion-duplicate-page creates): 
+  .claude\skills\notion-howto\SKILL.md:3 [notion-duplicate-page]
+  .claude\skills\notion-howto\SKILL.md:18 [notion-duplicate-page]
+  .claude\skills\vet-ticket\review.md:71 [notion-duplicate-page]
+  .claude\skills\vet-ticket\scope.md:10 [notion-duplicate-page]
+  .claude\skills\vet-ticket\scope.md:37 [notion-duplicate-page]
+  .claude\skills\vet-ticket\SKILL.md:24 [notion-duplicate-page]
+  .claude\hooks\auto-approve.js:1877 [notion-duplicate-page]
+  .claude\hooks\auto-approve.js:1881 [notion-duplicate-page]
+  .claude\hooks\auto-approve.js:2747 [notion-duplicate-page]
+  .claude\hooks\inject-notion-refs.js:9 [notion-duplicate-page]
+  .claude\hooks\refs\notion.md:1 [notion-duplicate-page]
+L191 (When a reasoning failure surfaces (wrong design co): 
+  .claude\skills\config-health\SKILL.md:54 [GEN-58]
+  .claude\skills\notion-ticket-lookup\SECURE-LOOKUP-DESIGN.md:109 [GEN-58]
+  .claude\skills\notion-ticket-lookup\SKILL.md:135 [GEN-58]
+  .claude\skills\vet-ticket\background.md:86 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:3 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:9 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:11 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:25 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:27 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:33 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:41 [GEN-58]
+  .claude\skills\vet-ticket\lanes.md:47 [GEN-58]
+  .claude\skills\vet-ticket\marker-probe.md:45 [GEN-58]
+  .claude\skills\vet-ticket\record-card-mint.md:68 [GEN-58]
+  .claude\skills\vet-ticket\review.md:14 [GEN-58]
+  .claude\skills\vet-ticket\scope.md:39 [GEN-58]
+  .claude\skills\vet-ticket\scope.md:43 [GEN-58]
+  .claude\skills\vet-ticket\scope.md:45 [GEN-58]
+  .claude\skills\vet-ticket\scope.md:46 [GEN-58]
+  .claude\skills\vet-ticket\SKILL.md:26 [GEN-58]
+  .claude\skills\vet-ticket\SKILL.md:34 [GEN-58]
+  .claude\skills\vet-ticket\SKILL.md:36 [GEN-58]
+  .claude\skills\vet-ticket\SKILL.md:70 [GEN-58]
+  .claude\skills\wrap\step1-capture.md:15 [GEN-58]
+  .claude\hooks\auto-approve.js:1812 [GEN-58]
+  .claude\hooks\auto-approve.js:1840 [GEN-58]
+  .claude\hooks\auto-approve.js:1859 [GEN-58]
+  .claude\hooks\auto-approve.js:1913 [GEN-58]
+  .claude\hooks\auto-approve.js:1914 [GEN-58]
+  .claude\hooks\auto-approve.js:1952 [GEN-58]
+  .claude\hooks\auto-approve.js:1958 [GEN-58]
+  .claude\hooks\auto-approve.js:1971 [GEN-58]
+  .claude\hooks\auto-approve.js:1980 [GEN-58]
+  .claude\hooks\auto-approve.js:2121 [GEN-58]
+  .claude\hooks\auto-approve.js:2239 [GEN-58]
+  .claude\hooks\auto-approve.js:2241 [GEN-58]
+  .claude\hooks\auto-approve.js:2259 [GEN-58]
+  .claude\hooks\auto-approve.js:2299 [GEN-58]
+  .claude\hooks\auto-approve.js:2305 [GEN-58]
+  .claude\hooks\auto-approve.js:2358 [GEN-58]
+  .claude\hooks\auto-approve.js:2359 [GEN-58]
+  .claude\hooks\auto-approve.js:2497 [GEN-58]
+  .claude\hooks\auto-approve.js:2520 [GEN-58]
+  .claude\hooks\auto-approve.js:2521 [GEN-58]
+  .claude\hooks\auto-approve.js:2752 [GEN-58]
+  .claude\hooks\auto-approve.js:2756 [GEN-58]
+  .claude\hooks\auto-approve.js:2762 [GEN-58]
+  .claude\hooks\auto-approve.js:2764 [GEN-58]
+  .claude\hooks\auto-approve.js:2770 [GEN-58]
+  .claude\hooks\auto-approve.js:3098 [GEN-58]
+  .claude\hooks\auto-approve.js:3112 [GEN-58]
+  .claude\hooks\auto-approve.js:3115 [GEN-58]
+  .claude\hooks\auto-approve.js:3126 [GEN-58]
+  .claude\hooks\auto-approve.js:3149 [GEN-58]
+  .claude\hooks\auto-approve.js:3186 [GEN-58]
+  .claude\hooks\auto-approve.js:3673 [GEN-58]
+  .claude\hooks\auto-approve.js:3674 [GEN-58]
+  .claude\hooks\auto-approve.js:3675 [GEN-58]
+  .claude\hooks\auto-approve.js:3682 [GEN-58]
+  .claude\hooks\auto-approve.js:3683 [GEN-58]
+  .claude\hooks\auto-approve.js:3687 [GEN-58]
+  .claude\hooks\auto-approve.js:3727 [GEN-58]
+  .claude\hooks\notion-write-verify.js:15 [GEN-58]
+  .claude\hooks\notion-write-verify.js:16 [GEN-58]
+  .claude\hooks\notion-write-verify.js:31 [GEN-58]
+  .claude\hooks\notion-write-verify.js:190 [GEN-58]
+  .claude\hooks\notion-write-verify.js:197 [GEN-58]
+  .claude\hooks\notion-write-verify.js:219 [GEN-58]
+  .claude\hooks\notion-write-verify.js:228 [GEN-58]
+  .claude\hooks\notion-write-verify.js:229 [GEN-58]
+  .claude\hooks\notion-write-verify.js:241 [GEN-58]
+  .claude\hooks\notion-write-verify.js:243 [GEN-58]
+  .claude\hooks\refs\notion-read.md:5 [GEN-58]
+  .claude\hooks\refs\notion-rest.md:3 [GEN-58]
+  .claude\hooks\refs\notion-rest.md:4 [GEN-58]
+  .claude\hooks\refs\notion-rest.md:5 [GEN-58]
+  .claude\hooks\refs\notion-write.md:4 [GEN-58]
+  .claude\hooks\refs\notion.md:15 [GEN-58]
+  .claude\hooks\refs\shell-ps.md:6 [GEN-58]
+  .claude\hooks\stop-claim-linter.js:50 [GEN-58]
+  .claude\hooks\stop-claim-linter.js:52 [GEN-58]
+  .claude\hooks\stop-claim-linter.js:276 [GEN-58]
+  .claude\hooks\stop-claim-linter.js:647 [GEN-58]
+  .claude\hooks\stop-foryou-nudge.js:988 [GEN-58]
+  .claude\hooks\ticket-gate-readout.js:14 [GEN-58]
+  .claude\hooks\ticket-gate-readout.js:238 [GEN-58]
+  .claude\hooks\ticket-gate-readout.js:301 [GEN-58]
+L193 (Further GEN-58 triggers: (a) the user pushes back ): none
+L195 (PowerShell & shell gotchas (Windows, PS 5.1 + the ): 
+  .claude\skills\audit-rules\SKILL.md:26 [PowerShell & shell gotchas]
+  .claude\hooks\refs\shell.md:1 [PowerShell & shell gotchas (Windows, PS]
+L196 (Literal $ in arguments: pass text containing liter): none
+L197 (String.Replace(x, $null) silently deletes x: .NET ): none
+L198 (Empty-string arg dropped when calling a native exe): none
+L200 (The shared config files settings.json, settings.lo): 
+  .claude\skills\audit-rules\SKILL.md:53 [update-global-rule.ps1]
+  .claude\skills\config-health\SKILL.md:120 [update-global-rule.ps1]
+  .claude\skills\config-health\SKILL.md:121 [update-global-rule.ps1]
+  .claude\skills\vet-rule\claude-md-apply.md:9 [update-global-rule.ps1]
+  .claude\skills\vet-rule\SKILL.md:31 [update-global-rule.ps1]
+  .claude\skills\vet-rule\SKILL.md:132 [update-global-rule.ps1]
+  .claude\hooks\auto-approve.js:264 [update-global-rule.ps1]
+  .claude\hooks\auto-approve.js:1495 [update-global-rule.ps1]
+  .claude\hooks\auto-approve.js:1594 [update-global-rule.ps1]
+  .claude\hooks\auto-approve.js:1642 [update-global-rule.ps1]
+  .claude\hooks\refs\shell.md:7 [update-global-rule.ps1]
+L202 (The environment readout's "Shell" / "Platform" fie): none
+L204 (Sub-agents (the Agent tool) can't run Bash/PowerSh): none
+L206 (For analytics/data questions, don't assume the que): none
