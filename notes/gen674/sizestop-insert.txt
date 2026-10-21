@@ -1,0 +1,307 @@
+// ---- GEN-674: hard size stop on the global CLAUDE.md ------------------------------------------
+// Erez's approved rule (GEN-674 headroom step, 2026-10-21): refuse any change that would take the
+// global ~/.claude/CLAUDE.md over its line limit unless he explicitly OKs it. The limit is
+// Anthropic's recommended 200 lines; the size-limits file may LOWER it, never raise it.
+// Runs inside enforceCheckDue, after the chain/multiline guard and before any check pass is
+// consumed. It is an ALLOWLIST. A write reaches the global file only by
+//   (1) update-config.ps1 -File <global> -Op write-file -ContentFile <literal path> -- measured
+//       exactly, because that op overwrites the whole file with the ContentFile's bytes; or
+//   (2) a plain-literal replacement (update-config.ps1 -Op text-replace, or update-global-rule.ps1)
+//       whose -OldText and -NewText are quoted literals that cannot hold a newline, so it cannot
+//       add a line however many times OldText occurs.
+// Every other shape that resolves to the global file is refused, naming why. Any error in this
+// path ends in exit 2, never a return: main has no try/catch here, and an uncaught throw would let
+// the call proceed (see findPassInDir's note). Break-glass skips it with the rest of this gate.
+// The override: a crossing passes only on a check pass carrying
+//   "sizeApproval": {"lines": N, "question": "...", "answer": "<Erez's words, verbatim>"}
+// where N >= the measured result, the question names N and appears verbatim in Claude's text just
+// before Erez's LATEST typed message (the last transcript record with type "user" and origin.kind
+// "human", whatever its content shape, harness-injected spans removed), and the answer is that
+// whole latest message, verbatim.
+// The line rule mirrors config-health-scan.ps1 Get-LineCount -- keep the two in step.
+const CLAUDE_MD_LINE_CEILING = 200;
+const SIZE_GUIDELINES_FILE = path.join(HOOK_DIR, '..', '..', 'AI Projects', 'Improve AI Infra', 'notes', 'anthropic-guidelines.json');
+const SIZE_TRANSCRIPT_TAIL_BYTES = 20 * 1024 * 1024;
+const SIZE_FLAGS = new Set(['-file', '-op', '-oldtext', '-newtext', '-contentfile', '-versionmessage']);
+const SIZE_BOM = String.fromCharCode(0xFEFF);
+// PowerShell treats these as real quote delimiters (same sets scanChain uses, GEN-743), so a plain
+// ASCII reading of a command that holds one can disagree with PowerShell's. Refuse the command.
+const SIZE_TYPO_QUOTES = new RegExp('[' + String.fromCharCode(0x2018) + '-' + String.fromCharCode(0x201E) + ']');
+const SIZE_ROUTE_HINT =
+  'Write the global CLAUDE.md only as  & "<...>\\update-config.ps1" -File "CLAUDE.md" -Op write-file ' +
+  '-ContentFile "<absolute literal path>"  (measured exactly), or as a one-line update-global-rule.ps1 ' +
+  "-OldText '...' -NewText '...' with plain quoted literals, from the PowerShell tool. -VersionMessage " +
+  'is allowed as a plain quoted literal.';
+
+function sizeStopRefuse(msg) {
+  process.stderr.write('Refused (rules-file size stop, GEN-674): ' + msg + '\n');
+  process.exit(2);
+}
+
+function sizeStripBom(s) {
+  s = String(s);
+  return s.charAt(0) === SIZE_BOM ? s.slice(1) : s;
+}
+
+// Same rule as config-health-scan.ps1 Get-LineCount: 0 for empty text, otherwise the number of LF
+// characters, plus one when the text does not end in LF.
+function sizeLineCount(text) {
+  const s = sizeStripBom(text);
+  if (s.length === 0) return 0;
+  let n = 0;
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++;
+  if (s.charCodeAt(s.length - 1) !== 10) n++;
+  return n;
+}
+
+function sizeLimit() {
+  try {
+    const j = JSON.parse(sizeStripBom(fs.readFileSync(SIZE_GUIDELINES_FILE, 'utf8')));
+    const e = (j && Array.isArray(j.limits)) ? j.limits.find(x => x && x.id === 'claude-md-lines') : null;
+    const v = e ? e.value : null;
+    if (Number.isInteger(v) && v > 0) return Math.min(v, CLAUDE_MD_LINE_CEILING);
+  } catch (e) { /* unreadable or malformed -> the ceiling */ }
+  return CLAUDE_MD_LINE_CEILING;
+}
+
+// Split a single-line PowerShell command into whitespace-separated tokens, each
+// {kind: 'bare'|'sq'|'dq', text}. Returns null (the caller refuses) for anything outside the plain
+// grammar: a typographic quote anywhere; a single-quoted literal with any escape other than '';
+// a double-quoted literal holding $, a backtick or an inner quote; a quoted literal not followed by
+// whitespace or the end; a bare token holding a quote or any of $ ` ( ) { } ; | > < @ , + %.
+function sizeTokenize(cmd) {
+  const s = String(cmd);
+  if (SIZE_TYPO_QUOTES.test(s)) return null;
+  const toks = [];
+  const n = s.length;
+  const isWs = ch => ch === ' ' || ch === '\t';
+  let i = 0;
+  while (i < n) {
+    const c = s[i];
+    if (isWs(c)) { i++; continue; }
+    if (c === "'") {
+      let j = i + 1, text = '';
+      for (;;) {
+        if (j >= n) return null;
+        if (s[j] === "'") {
+          if (s[j + 1] === "'") { text += "'"; j += 2; continue; }
+          break;
+        }
+        text += s[j]; j++;
+      }
+      j++;
+      if (j < n && !isWs(s[j])) return null;
+      toks.push({ kind: 'sq', text }); i = j; continue;
+    }
+    if (c === '"') {
+      let j = i + 1, text = '';
+      for (;;) {
+        if (j >= n) return null;
+        const d = s[j];
+        if (d === '"') break;
+        if (d === '$' || d === '`') return null;
+        text += d; j++;
+      }
+      j++;
+      if (j < n && !isWs(s[j])) return null;
+      toks.push({ kind: 'dq', text }); i = j; continue;
+    }
+    let j = i, text = '';
+    while (j < n && !isWs(s[j])) {
+      // Bare tokens are printable ASCII only: PowerShell also splits on non-ASCII whitespace (NBSP,
+      // U+2028, ...) and treats U+2013-2015 as parameter dashes, so anything outside 0x21-0x7E could
+      // be read differently by PowerShell than here.
+      const code = s.charCodeAt(j);
+      if (code < 0x21 || code > 0x7E) return null;
+      if ("'\"$`(){};|><@,+%".indexOf(s[j]) !== -1) return null;
+      text += s[j]; j++;
+    }
+    toks.push({ kind: 'bare', text }); i = j;
+  }
+  return toks;
+}
+
+// For checkDueTargets Case 2: read an update-config.ps1 invocation's -File with the strict
+// tokenizer. Returns {ok:true, key} (key = the resolved target, or null when -File is absent) or
+// {ok:false} when the command cannot be read plainly: an unreadable token, a positional argument,
+// or a flag that is not one of the script's full parameter names (a prefix such as -Fi or a colon
+// form such as -File:x binds in PowerShell but not here).
+function sizeUpdateConfigTarget(command, cwd) {
+  const toks = sizeTokenize(String(command || ''));
+  if (!toks || toks.length === 0) return { ok: false };
+  const k = (toks[0].kind === 'bare' && toks[0].text === '&') ? 1 : 0;
+  if (!toks[k] || path.win32.basename(toks[k].text).toLowerCase() !== 'update-config.ps1') return { ok: false };
+  let file = null;
+  for (let i = k + 1; i < toks.length; i += 2) {
+    const t = toks[i], v = toks[i + 1];
+    if (t.kind !== 'bare' || t.text.charAt(0) !== '-' || !v) return { ok: false };
+    const name = t.text.toLowerCase();
+    if (!SIZE_FLAGS.has(name) && name !== '-entry') return { ok: false };
+    if (name === '-file') {
+      if (file !== null) return { ok: false };
+      file = v.text;
+    }
+  }
+  if (file === null) return { ok: true, key: null };
+  const key = file.toLowerCase() === 'claude.md' ? GLOBAL_CLAUDE_MD : resolveUpdateConfigFile(' -File "' + file + '"');
+  return { ok: true, key: key || null };
+}
+
+// Classify a write that targets the global CLAUDE.md. Returns {measured:false} for a provably
+// zero-growth replacement, or {measured:true, result, current, limit, chars}. Refuses (exit 2) on
+// every other shape.
+function sizeStopCheck(tool, command, cwd) {
+  if (tool !== 'PowerShell') sizeStopRefuse('the global CLAUDE.md can only be written from the PowerShell tool. ' + SIZE_ROUTE_HINT);
+  const cmd = String(command || '');
+  if (/[\r\n]/.test(cmd)) sizeStopRefuse('multi-line command. ' + SIZE_ROUTE_HINT);
+  const toks = sizeTokenize(cmd);
+  if (!toks || toks.length === 0) sizeStopRefuse('the command could not be read plainly (a value that is not a plain quoted literal, a typographic quote, or a special character). ' + SIZE_ROUTE_HINT);
+  let k = (toks[0].kind === 'bare' && toks[0].text === '&') ? 1 : 0;
+  const scriptTok = toks[k];
+  const base = scriptTok ? path.win32.basename(scriptTok.text).toLowerCase() : '';
+  const script = base === 'update-config.ps1' ? 'uc' : (base === 'update-global-rule.ps1' ? 'ugr' : null);
+  if (!script) sizeStopRefuse('only update-config.ps1 or update-global-rule.ps1 may write the global CLAUDE.md. ' + SIZE_ROUTE_HINT);
+  const flags = {};
+  for (let i = k + 1; i < toks.length; i += 2) {
+    const t = toks[i];
+    if (t.kind !== 'bare' || t.text.charAt(0) !== '-') sizeStopRefuse('unexpected argument "' + t.text + '" (every argument must follow a named flag). ' + SIZE_ROUTE_HINT);
+    const name = t.text.toLowerCase();
+    if (!SIZE_FLAGS.has(name)) sizeStopRefuse('unrecognised flag ' + t.text + ' (use full flag names: -File, -Op, -OldText, -NewText, -ContentFile, -VersionMessage). ' + SIZE_ROUTE_HINT);
+    if (flags[name]) sizeStopRefuse('flag given twice: ' + t.text + '.');
+    const v = toks[i + 1];
+    if (!v || (v.kind === 'bare' && v.text.charAt(0) === '-')) sizeStopRefuse('flag without a value: ' + t.text + '.');
+    flags[name] = v;
+  }
+  const isLit = v => !!v && (v.kind === 'sq' || v.kind === 'dq');
+  if (flags['-versionmessage'] && !isLit(flags['-versionmessage'])) sizeStopRefuse('-VersionMessage must be a plain quoted literal.');
+  const zeroGrowth = () => {
+    const o = flags['-oldtext'], nt = flags['-newtext'];
+    if (!isLit(o) || !isLit(nt)) sizeStopRefuse('-OldText and -NewText must each be a plain quoted literal. ' + SIZE_ROUTE_HINT);
+    if (/[\r\n]/.test(o.text + nt.text)) sizeStopRefuse('a replacement text holds a line break. ' + SIZE_ROUTE_HINT);
+    return { measured: false };
+  };
+  if (script === 'ugr') {
+    if (flags['-file'] || flags['-op'] || flags['-contentfile']) sizeStopRefuse('update-global-rule.ps1 takes only -OldText, -NewText and -VersionMessage.');
+    return zeroGrowth();
+  }
+  const fileV = flags['-file'];
+  if (!fileV) sizeStopRefuse('update-config.ps1 needs -File. ' + SIZE_ROUTE_HINT);
+  if (!(fileV.text.toLowerCase() === 'claude.md' || normPath(fileV.text, cwd) === GLOBAL_CLAUDE_MD)) {
+    sizeStopRefuse('this command reaches the global CLAUDE.md, but not through its -File argument. ' + SIZE_ROUTE_HINT);
+  }
+  const opV = flags['-op'];
+  const op = opV ? opV.text.toLowerCase() : '';
+  if (op === 'text-replace') {
+    if (flags['-contentfile']) sizeStopRefuse('-ContentFile does not belong on -Op text-replace.');
+    return zeroGrowth();
+  }
+  if (op !== 'write-file') sizeStopRefuse('unsupported -Op "' + (opV ? opV.text : '') + '" for the global CLAUDE.md. ' + SIZE_ROUTE_HINT);
+  if (flags['-oldtext'] || flags['-newtext']) sizeStopRefuse('-OldText/-NewText do not belong on -Op write-file.');
+  const cf = flags['-contentfile'];
+  // Quoted and absolute only: a bare value can be number-converted by PowerShell (1kb -> 1024) and a
+  // relative one resolves against PowerShell's $PWD, so either could name a different file from the
+  // one measured here.
+  if (!cf || !isLit(cf) || !/^[A-Za-z]:\\/.test(cf.text)) sizeStopRefuse('-Op write-file needs -ContentFile "<absolute literal path>" in quotes (for example "C:\\...\\CLAUDE.md").');
+  const cfPath = cf.text;
+  let next, cur;
+  try { next = fs.readFileSync(cfPath, 'utf8'); } catch (e) { sizeStopRefuse('could not read the -ContentFile (' + cfPath + '); give an absolute literal path to an existing file.'); }
+  try { cur = fs.readFileSync(GLOBAL_CLAUDE_MD, 'utf8'); } catch (e) { sizeStopRefuse('could not read the live global CLAUDE.md to compare sizes.'); }
+  return { measured: true, result: sizeLineCount(next), current: sizeLineCount(cur), limit: sizeLimit(), chars: [...sizeStripBom(next)].length };
+}
+
+// Text a record carries: a string content, or the text items of an array content.
+function sizeRecordText(rec) {
+  const c = rec && rec.message && rec.message.content;
+  let text = '';
+  if (typeof c === 'string') text = c;
+  else if (Array.isArray(c)) text = c.filter(x => x && x.type === 'text' && typeof x.text === 'string').map(x => x.text).join('\n');
+  return text.replace(/\r\n?/g, '\n');
+}
+
+// Remove harness-injected spans (system reminders, side-session events) from a human record's
+// text: they are prepended by the harness and can carry text other Claude sessions wrote.
+function sizeStripInjected(text) {
+  return String(text)
+    .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, ' ')
+    .replace(/<side-sessions-event>[\s\S]*?<\/side-sessions-event>/g, ' ');
+}
+
+const sizeSquash = s => String(s).replace(/\s+/g, ' ').trim();
+
+// Erez's latest typed message: the last record in the transcript tail with top-level type "user"
+// and origin.kind "human" (any content shape: a string, or the text items of an array such as a
+// message sent with a screenshot), with harness-injected spans removed. Never falls back to an
+// earlier record. Also returns the text of the assistant records between the previous human
+// record and that one (where the size question must have been asked). Returns {text, asked} or
+// {error}.
+function sizeLatestHumanText(input) {
+  const tp = input && input.transcript_path;
+  if (!tp || typeof tp !== 'string') return { error: 'no transcript path in the hook input' };
+  let fd;
+  try {
+    const size = fs.statSync(tp).size;
+    const start = Math.max(0, size - SIZE_TRANSCRIPT_TAIL_BYTES);
+    const len = size - start;
+    const buf = Buffer.alloc(len);
+    fd = fs.openSync(tp, 'r');
+    fs.readSync(fd, buf, 0, len, start);
+    let s = buf.toString('utf8');
+    if (start > 0) { const nl = s.indexOf('\n'); s = nl === -1 ? '' : s.slice(nl + 1); }
+    const lines = s.split('\n');
+    const parse = ln => { try { return JSON.parse(ln); } catch (e) { return null; } };
+    const isHuman = rec => !!rec && typeof rec === 'object' && rec.type === 'user' && !!rec.origin && rec.origin.kind === 'human';
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const ln = lines[i].trim();
+      if (!ln) continue;
+      const rec = parse(ln);
+      if (!isHuman(rec)) continue;
+      const text = sizeStripInjected(sizeRecordText(rec));
+      if (!text.trim()) return { error: "Erez's latest message has no text of his own" };
+      const asked = [];
+      for (let j = i - 1; j >= 0; j--) {
+        const lj = lines[j].trim();
+        if (!lj) continue;
+        const rj = parse(lj);
+        if (isHuman(rj)) break;
+        if (rj && rj.type === 'assistant') asked.push(sizeRecordText(rj));
+      }
+      return { text, asked: asked.reverse().join('\n') };
+    }
+    return { error: 'no message typed by Erez was found in the transcript' };
+  } catch (e) {
+    return { error: 'could not read the transcript (' + (e && e.message) + ')' };
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch (e) { /* ignore */ } }
+  }
+}
+
+// True iff pass `p` carries a sizeApproval that covers `gate` (the measured crossing): `lines` is at
+// least the measured result; `question` names that line count and appears verbatim (whitespace
+// collapsed) in what Claude wrote just before Erez's latest message; and `answer` is that whole
+// latest message, verbatim (whitespace collapsed). Never throws.
+function sizeApprovalOk(p, gate) {
+  try {
+    const a = p && p.sizeApproval;
+    if (!a || typeof a !== 'object') return false;
+    if (!Number.isInteger(a.lines) || a.lines < gate.result) return false;
+    if (typeof a.question !== 'string' || typeof a.answer !== 'string') return false;
+    const q = sizeSquash(a.question), ans = sizeSquash(a.answer);
+    if (!q || !ans) return false;
+    if (!new RegExp('(^|[^0-9])' + a.lines + '([^0-9]|$)').test(q)) return false;
+    if (typeof gate.latest !== 'string' || typeof gate.asked !== 'string') return false;
+    if (sizeSquash(gate.asked).indexOf(q) === -1) return false;
+    return sizeSquash(gate.latest) === ans;
+  } catch (e) { return false; }
+}
+
+function sizeCrossingRefusal(gate) {
+  return 'this write takes the global CLAUDE.md from ' + gate.current + ' to ' + gate.result + ' lines (' +
+    gate.chars + ' characters), over its ' + gate.limit + '-line limit. Put it to Erez as an explicit ' +
+    'question in plain words, offering a version that stays at or under ' + gate.limit + ' lines first; ' +
+    'revised text restarts /check and his approval. If he OKs the crossing, mint the check pass with ' +
+    '"sizeApproval": {"lines": ' + gate.result + ', "question": "<your question, copied verbatim from ' +
+    'your message just before his reply, naming ' + gate.result + ' lines>", "answer": "<his whole ' +
+    'latest message, verbatim>"} and re-run.' +
+    (gate.latestError ? ' (Could not read his latest message: ' + gate.latestError + '.)' : '');
+}
+
