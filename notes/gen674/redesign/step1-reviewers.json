@@ -1,0 +1,12 @@
+{
+  "_about": "vet-code Step 1b capture: the check-reviewer agentIds of the GEN-674 size-stop design /check panel (converged in 2 rounds, all three lenses PASS in round 2). Pass B ids are NOT listed here.",
+  "checkReviewerAgentIds": [
+    "a0fe5d6e829af11e7",
+    "ae1b8920ee4c61090",
+    "a049d0c09e76abbaf",
+    "ad872019dee86a429",
+    "abdfdd76b6a6e6c03",
+    "adae65cfbfe95b6dd"
+  ],
+  "capturedVerdicts": "Round 1: pre-mortem REVISE (folder name collides with hook file name; grant written before the click can outlive a denial), holistic REVISE (same collision), soundness REVISE (same collision). Round 2: pre-mortem PASS, holistic PASS, soundness PASS (both findings RESOLVED; advisories folded into the plan)."
+}

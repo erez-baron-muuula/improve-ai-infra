@@ -1,0 +1,21 @@
+@@@OLD
+            "command": "node \"C:/Users/Erez/.claude/hooks/inject-topic-refs.js\" notion-vetticket notion-rest shell-tools shell-ps shell-scripting"
+          }
+        ]
+      },
+@@@NEW
+            "command": "node \"C:/Users/Erez/.claude/hooks/inject-topic-refs.js\" notion-vetticket notion-rest shell-tools shell-ps shell-scripting"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|PowerShell|Monitor|mcp__windows-mcp__PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/Erez/.claude/hooks/size-approval-prompt.js\"",
+            "timeout": 15
+          }
+        ]
+      },
+@@@END

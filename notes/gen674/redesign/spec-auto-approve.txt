@@ -1,0 +1,220 @@
+@@@OLD
+const WMCP_PASS_DIR_NAME = 'wmcp-task' + '-passes';
+const WMCP_FILE_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+
+function enforceWmcpPassGuard(tool, ti) {
+  if (typeof tool !== 'string' || !ti || typeof ti !== 'object') return;
+  let s;
+  if (WMCP_FILE_WRITE_TOOLS.has(tool)) s = String(ti.file_path || '') + '\n' + String(ti.notebook_path || '');
+  else if (SHELL_TOOLS.has(tool) || tool === 'Monitor' || tool.startsWith('mcp__windows-mcp__')) s = JSON.stringify(ti);
+  else return;
+  // Upper- then lower-case folds look-alike letters (e.g. the long s) the way Windows file names compare.
+  if (String(s).toUpperCase().toLowerCase().indexOf(WMCP_PASS_DIR_NAME) === -1) return;
+  process.stderr.write(
+    'Refused (PC-control task-pass guard, GEN-908): this call would touch the folder where the ' +
+    'PC-control approval window keeps "Allow for this task" passes. Only that window writes there, ' +
+    'after Erez clicks the button; Claude must never create, change or delete a pass. To get a task ' +
+    'pass, write the "PC task:" block in chat and let Erez approve it in the window.\n');
+  process.exit(2);
+}
+@@@NEW
+const WMCP_PASS_DIR_NAME = 'wmcp-task' + '-passes';
+// GEN-674: the folder of the rules-file size approvals gets the same guard, for the same reason (no
+// Claude action there is legitimate). hooks/size-approval-prompt.js writes a one-time grant there only
+// in a run where it also forces Erez's prompt; update-config.ps1 reads and deletes it, and keeps an
+// approval record beside it that the session-start check reads. Built from parts like the name above.
+const SIZE_OK_DIR_NAME = 'rulesize' + '-ok';
+const GUARDED_PASS_DIRS = [
+  {
+    name: WMCP_PASS_DIR_NAME,
+    refusal:
+      'Refused (PC-control task-pass guard, GEN-908): this call would touch the folder where the ' +
+      'PC-control approval window keeps "Allow for this task" passes. Only that window writes there, ' +
+      'after Erez clicks the button; Claude must never create, change or delete a pass. To get a task ' +
+      'pass, write the "PC task:" block in chat and let Erez approve it in the window.\n',
+  },
+  {
+    name: SIZE_OK_DIR_NAME,
+    refusal:
+      "Refused (rules-file size approval guard, GEN-674): this call would touch the folder where Erez's " +
+      'one-time approvals for growing the global CLAUDE.md past its line limit are kept. Only the size ' +
+      'approval prompt hook and update-config.ps1 write there; Claude must never create, change or delete ' +
+      'anything in it, or name it in a command, description or commit message. To let the file grow, ask ' +
+      'Erez in chat, then run update-config.ps1 with -ApproveSizeUpTo so he approves the prompt. To look ' +
+      'at the folder, use the Read or Glob tool.\n',
+  },
+];
+const WMCP_FILE_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+
+function enforceApprovalFolderGuard(tool, ti) {
+  if (typeof tool !== 'string' || !ti || typeof ti !== 'object') return;
+  let s;
+  if (WMCP_FILE_WRITE_TOOLS.has(tool)) s = String(ti.file_path || '') + '\n' + String(ti.notebook_path || '');
+  else if (SHELL_TOOLS.has(tool) || tool === 'Monitor' || tool.startsWith('mcp__windows-mcp__')) s = JSON.stringify(ti);
+  else return;
+  // Upper- then lower-case folds look-alike letters (e.g. the long s) the way Windows file names compare.
+  const folded = String(s).toUpperCase().toLowerCase();
+  for (const d of GUARDED_PASS_DIRS) {
+    if (folded.indexOf(d.name) === -1) continue;
+    process.stderr.write(d.refusal);
+    process.exit(2);
+  }
+}
+@@@END
+@@@OLD
+  // GEN-908: PC-control task-pass folder guard. Hard-blocks (exit 2) any Claude write or command
+  // that names the folder holding "Allow for this task" passes. Before every allow path; no break-glass.
+  enforceWmcpPassGuard(tool, input.tool_input);
+@@@NEW
+  // GEN-908 / GEN-674: approval-folder guard. Hard-blocks (exit 2) any Claude write or command that
+  // names the folder holding PC-control "Allow for this task" passes or the rules-file size approvals.
+  // Before every allow path; no break-glass.
+  enforceApprovalFolderGuard(tool, input.tool_input);
+@@@END
+@@@OLD
+function isProtectedCodeTarget(key) {
+  if (!key) return false;
+  const inHooks = key.startsWith(HOOKS_DIR + '\\') && key.endsWith('.js');
+@@@NEW
+// GEN-674: the two Drive scripts that write the locked config files are vetting-locked too. They carry
+// the rules-file size stop, which an ordinary edit could otherwise remove (in auto mode such an edit can
+// pass without Erez). Exact normalized paths, with the same existence anchor as the hooks/scripts dirs.
+// sync.ps1 and config-json-edit.js are not covered (accepted residual, GEN-674 plan).
+const PROTECTED_DRIVE_SCRIPTS = new Set([
+  'g:\\my drive\\ai projects\\_tooling\\claude\\update-config.ps1',
+  'g:\\my drive\\ai projects\\_tooling\\claude\\update-global-rule.ps1',
+]);
+
+function isProtectedCodeTarget(key) {
+  if (!key) return false;
+  // A Bash-tool path (/g/My Drive/...) normalizes to \g\my drive\...; read it as g:\my drive\...
+  const driveKey = String(key).replace(/^\\([a-z])\\/, '$1:\\');
+  if (PROTECTED_DRIVE_SCRIPTS.has(driveKey)) {
+    try { return fs.existsSync(driveKey) && fs.statSync(driveKey).isFile(); } catch (e) { return false; }
+  }
+  const inHooks = key.startsWith(HOOKS_DIR + '\\') && key.endsWith('.js');
+@@@END
+@@@OLD
+        if (!tok) continue;
+        push(normPath(tok, cwd), false);
+      }
+    }
+  }
+  return out;
+}
+@@@NEW
+        if (!tok) continue;
+        const k = normPath(tok, cwd);
+        // GEN-674: a direct shell write to the global CLAUDE.md skips update-config.ps1, where its size is
+        // measured; enforceCheckDue refuses it even with a pass.
+        if (k === GLOBAL_CLAUDE_MD && isCheckDueTarget(k)) out.directRulesWrite = true;
+        push(k, false);
+      }
+    }
+    // GEN-674: a crude second signal, for the global CLAUDE.md only. The destination patterns above miss
+    // ordinary shapes (Copy-Item ... -Force, Set-Content -Value before -Path, a Bash redirect to
+    // ~/.claude/CLAUDE.md or /c/Users/...), so a command that is not an update-config.ps1 /
+    // update-global-rule.ps1 run, names the global file in a common form, and carries a write mechanism
+    // counts as a direct write too. Over-inclusive on purpose: it only ever refuses, never approves.
+    if (!UPDATE_CONFIG_RE.test(command) && !UPDATE_GLOBAL_RULE_RE.test(command) &&
+        commandWritesRulesFile(command, cwd) && isCheckDueTarget(GLOBAL_CLAUDE_MD)) {
+      out.directRulesWrite = true;
+      push(GLOBAL_CLAUDE_MD, false);
+    }
+  }
+  return out;
+}
+@@@END
+@@@OLD
+function blockCheckDue(reason) {
+@@@NEW
+// GEN-674: does a shell command name the global CLAUDE.md in a common form IN A WRITE POSITION? Forms
+// (after lower-casing and turning backslashes into slashes): the absolute path, its Bash form
+// (/c/users/...), ~ or $HOME or $env:USERPROFILE + /.claude/claude.md, or a bare claude.md when the
+// command runs in the ~/.claude folder. A named occurrence is a write when, in the same pipeline segment
+// before it, there is: a > or >> redirect right before it (not 2> or an arrow); a content writer
+// (Set-Content, Add-Content, Out-File, Tee-Object, tee); a .NET file writer call; sed -i / perl -i; a
+// move or rename (the file is taken away); or a copy verb with something already given before it (a
+// source, or -Path / -Destination), so the file is the copy's destination. Copying the file OUT (it is
+// the copy's first argument), reading it, or piping it elsewhere is not a write.
+const RULES_COPY_VERB_RE = /\b(?:copy-item|cpi|cp|copy|xcopy|robocopy)\b([^|;&]*)$/;
+const RULES_MOVE_VERB_RE = /\b(?:move-item|rename-item|mi|rni|mv|move|ren|rename)\b[^|;&]*$/;
+function commandWritesRulesFile(command, cwd) {
+  const norm = String(command).toLowerCase().replace(/\\+/g, '/');
+  const abs = GLOBAL_CLAUDE_MD.replace(/\\/g, '/');
+  const hits = [];
+  for (const form of [abs, abs.replace(/^([a-z]):/, '/$1')]) {
+    for (let i = norm.indexOf(form); i !== -1; i = norm.indexOf(form, i + 1)) hits.push(i);
+  }
+  let m;
+  const homeForm = /(?:~|\$home|\$\{home\}|\$env:userprofile|%userprofile%)\/\.claude\/claude\.md/g;
+  while ((m = homeForm.exec(norm)) !== null) hits.push(m.index);
+  if (normPath('.', cwd) === path.dirname(GLOBAL_CLAUDE_MD)) {
+    const bare = /(^|[\s'"(=,])((?:\.\/)?claude\.md)(?=$|[\s'"),;|])/g;
+    while ((m = bare.exec(norm)) !== null) hits.push(m.index + m[1].length);
+  }
+  for (const i of hits) {
+    const before = norm.slice(0, i);
+    if (/(?:^|[^0-9>&=-])>{1,2}\s*["']?$/.test(before)) return true;
+    if (/\b(?:set-content|add-content|out-file|tee-object|tee)\b[^|;&]*$/.test(before)) return true;
+    if (/\[(?:system\.)?io\.file\]::(?:write|append|copy|move)\w*\([^)]*$/.test(before)) return true;
+    if (/\b(?:sed|perl)\s+(?:-[a-z]*\s+)*-[a-z]*i\b[^|;&]*$/.test(before)) return true;
+    if (RULES_MOVE_VERB_RE.test(before)) return true;
+    const c = RULES_COPY_VERB_RE.exec(before);
+    if (c) {
+      const toks = c[1].replace(/["']/g, ' ').split(/\s+/).filter(Boolean);
+      const last = toks.length ? toks[toks.length - 1] : '';
+      if (/^-destination\b/.test(last)) return true;          // -Destination <it>
+      if (/^-(?:path|literalpath)\b/.test(last)) continue;    // -Path <it>: it is the source
+      if (toks.some(t => !t.startsWith('-') || /^-(?:path|literalpath)\b/.test(t))) return true; // a source came first
+    }
+  }
+  return false;
+}
+
+function blockCheckDue(reason) {
+@@@END
+@@@OLD
+function commandTouchesProtectedTree(command, cwd) {
+  const normCmd = String(command).replace(/\//g, '\\').toLowerCase();
+  if (normCmd.includes(HOOKS_DIR) || normCmd.includes(SCRIPTS_DIR)) return true;
+@@@NEW
+// GEN-674: the two vetting-locked Drive scripts count as protected for this guard too (any drive letter,
+// or the Bash /g/... form), except in a command that simply runs one of them, whose own arguments (a
+// -VersionMessage, say) may hold a copy word.
+const DRIVE_SCRIPT_TAILS = [
+  '\\my drive\\ai projects\\_tooling\\claude\\update-config.ps1',
+  '\\my drive\\ai projects\\_tooling\\claude\\update-global-rule.ps1',
+];
+const RUNS_DRIVE_SCRIPT_RE = /^\s*(?:&\s*)?(?:"[^"]*update-(?:config|global-rule)\.ps1"|'[^']*update-(?:config|global-rule)\.ps1'|[^\s"']*update-(?:config|global-rule)\.ps1)(?=\s|$)/i;
+function commandTouchesProtectedTree(command, cwd) {
+  const normCmd = String(command).replace(/\//g, '\\').toLowerCase();
+  if (normCmd.includes(HOOKS_DIR) || normCmd.includes(SCRIPTS_DIR)) return true;
+  if (DRIVE_SCRIPT_TAILS.some(t => normCmd.includes(t)) && !RUNS_DRIVE_SCRIPT_RE.test(String(command))) return true;
+@@@END
+@@@OLD
+    'references the protected hooks (~/.claude/hooks/*.js) or scripts (~/.claude/scripts/*.ps1) tree, ' +
+@@@NEW
+    'references the protected hooks (~/.claude/hooks/*.js) or scripts (~/.claude/scripts/*.ps1) tree or ' +
+    'the Drive update-config.ps1 / update-global-rule.ps1, ' +
+@@@END
+@@@OLD
+  if (!targets || targets.length === 0) return; // no check-due target -> not our concern
+@@@NEW
+  if (!targets || targets.length === 0) return; // no check-due target -> not our concern
+
+  // GEN-674: the global CLAUDE.md is written only through update-config.ps1 / update-global-rule.ps1,
+  // which measure its size on the exact bytes they write. A direct shell write would skip that, so it is
+  // refused here, before any pass is looked up (a pass is never consumed by it).
+  if (targets.directRulesWrite) {
+    process.stderr.write(
+      'Refused (rules-file size stop, GEN-674): this command writes the global CLAUDE.md directly (a ' +
+      'redirect, Set-Content/Add-Content/Out-File/Tee-Object, a copy or move destination, or ' +
+      '[IO.File]::Write*), which skips the size measurement. Write it only through update-config.ps1 ' +
+      '(-Op write-file -ContentFile, or -Op text-replace) or update-global-rule.ps1. If the command only ' +
+      'quotes such a fragment inside replacement text, apply that text with -Op write-file -ContentFile ' +
+      'instead.\n'
+    );
+    process.exit(2);
+  }
+@@@END

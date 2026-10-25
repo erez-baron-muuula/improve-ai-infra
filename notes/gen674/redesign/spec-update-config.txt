@@ -1,0 +1,257 @@
+@@@OLD
+#   5 = pending-sync marker found: a previous edit was written locally but never pushed to Drive
+@@@NEW
+#   5 = pending-sync marker found: a previous edit was written locally but never pushed to Drive
+#   6 = size stop (GEN-674): the write would take the global CLAUDE.md over its line limit without
+#       Erez's one-time approval; nothing was written
+#
+# -ApproveSizeUpTo <N> (GEN-674): needed only when a text-replace or write-file would take the
+# always-loaded global CLAUDE.md past its line limit (Anthropic's recommended 200 lines; the
+# claude-md-lines entry in Improve AI Infra\notes\anthropic-guidelines.json may lower it, never raise
+# it). The switch alone approves nothing: hooks\size-approval-prompt.js sees it in the command, makes
+# Claude Code ask Erez, and leaves a one-time grant that this script requires and deletes. Shrinking or
+# same-size writes never need it. Example:
+#   .\update-config.ps1 -File CLAUDE.md -Op write-file -ContentFile "C:\tmp\new.md" -ApproveSizeUpTo 203
+@@@END
+@@@OLD
+    [string]$VersionMessage = ""
+)
+@@@NEW
+    [string]$VersionMessage = "",
+
+    [int]$ApproveSizeUpTo = 0
+)
+@@@END
+@@@OLD
+$JsonEditor   = "G:\My Drive\AI Projects\_Tooling\Claude\config-json-edit.js"
+@@@NEW
+$JsonEditor   = "G:\My Drive\AI Projects\_Tooling\Claude\config-json-edit.js"
+
+# ---- GEN-674: rules-file size stop ----------------------------------------------------------------
+# The always-loaded global CLAUDE.md may not grow past its line limit unless Erez clicks Allow on the
+# Claude Code prompt that hooks\size-approval-prompt.js raises for -ApproveSizeUpTo. Measured here, on
+# the exact bytes about to be written, so the wording of the command plays no part. A target is "the
+# rules file" when its current bytes equal the global CLAUDE.md's (both read after the Drive pull),
+# which also covers every other path to the same file (.\CLAUDE.md, a trailing dot, an 8.3 name, a hard
+# link) and the Drive copy. A guard against mistakes, not a wall against a determined script (the same
+# stance as auto-approve.js's PC-control pass guard, GEN-903).
+$RulesFile      = Join-Path $ClaudeBase "CLAUDE.md"
+$RulesLineCap   = 200
+$UserHome       = Split-Path $ClaudeBase -Parent
+$GuidelinesFile = Join-Path $UserHome "AI Projects\Improve AI Infra\notes\anthropic-guidelines.json"
+# Folder name in two parts: auto-approve.js refuses any Claude tool input that names it whole.
+$SizeOkDir      = Join-Path (Join-Path $UserHome ".claude-staging") ("rulesize" + "-ok")
+$SizeRecordFile = Join-Path $SizeOkDir "record.json"
+$script:RulesWrite = $null
+
+# UTF-8 text of a byte array with a leading BOM dropped (the same reading as config-health-scan.ps1
+# Read-SizeText).
+function Get-RulesText([byte[]]$Data) {
+    $decoded = [System.Text.Encoding]::UTF8.GetString($Data)
+    if ($decoded.Length -gt 0 -and $decoded[0] -eq [char]0xFEFF) { $decoded = $decoded.Substring(1) }
+    return $decoded
+}
+
+# Same rule as config-health-scan.ps1 Get-LineCount and hooks\sessionstart-backup-surfacer.js
+# rulesFileSizeLine: 0 for empty text, else the number of LF characters, plus one when the text does not
+# end in LF. Keep the three in step.
+function Get-RulesLineCount([string]$Body) {
+    if (-not $Body) { return 0 }
+    $lfCount = $Body.Split([char]10).Length - 1
+    if ($Body[$Body.Length - 1] -ne [char]10) { $lfCount++ }
+    return $lfCount
+}
+
+# The line limit: 200, or the claude-md-lines value in the size-limits file when that is a smaller
+# positive whole number. Any read or parse problem leaves 200, so the file can only lower the limit.
+function Get-RulesLineLimit {
+    $lineLimit = $RulesLineCap
+    try {
+        $limitsJson = [System.IO.File]::ReadAllText($GuidelinesFile, [System.Text.Encoding]::UTF8)
+        if ($limitsJson.Length -gt 0 -and $limitsJson[0] -eq [char]0xFEFF) { $limitsJson = $limitsJson.Substring(1) }
+        foreach ($limitEntry in @(($limitsJson | ConvertFrom-Json).limits)) {
+            if ($limitEntry.id -eq 'claude-md-lines') {
+                $limitValue = $limitEntry.value
+                # Any whole number counts, however JSON wrote it (190, 190.0, 1.9e2), as in the
+                # session-start check's Number.isInteger.
+                if ($limitValue -is [int] -or $limitValue -is [long] -or $limitValue -is [decimal] -or $limitValue -is [double]) {
+                    $limitNumber = [double]$limitValue
+                    if ($limitNumber -eq [Math]::Floor($limitNumber) -and $limitNumber -gt 0 -and $limitNumber -lt $lineLimit) {
+                        $lineLimit = [int]$limitNumber
+                    }
+                }
+            }
+        }
+    } catch { }
+    return $lineLimit
+}
+
+# Lower-case hex SHA-256 of a byte array (the session-start check hashes the file the same way).
+function Get-BytesSha256([byte[]]$Data) {
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($hasher.ComputeHash($Data)) -replace '-', '').ToLowerInvariant() }
+    finally { $hasher.Dispose() }
+}
+
+# Refuse with exit 6. Runs before the pending-sync marker and the write, inside the main try, so the
+# finally below still releases the lock (as exit 5 does).
+function Stop-RulesSize([string]$Why, [string[]]$Guidance) {
+    Write-Output "SIZE STOP (GEN-674): $Why Nothing was written."
+    foreach ($guideLine in $Guidance) { Write-Output $guideLine }
+    # Not Write-Error: under a caller's $ErrorActionPreference = 'Stop' that would throw before the exit.
+    [Console]::Error.WriteLine("SIZE STOP (GEN-674): refused; see the lines above.")
+    exit 6
+}
+
+# Measure a text-replace or write-file before anything is written. Returns when the write may go ahead,
+# leaving $script:RulesWrite set when the target is the rules file; otherwise exits 6.
+function Invoke-RulesSizeStop([string]$TargetAbs, [byte[]]$NewBytes) {
+    $script:RulesWrite = $null
+    # Read both whole (no FileInfo length shortcut: for a symlink it gives the link's own size).
+    $targetBytes = $null
+    $rulesBytes = $null
+    try { $targetBytes = [System.IO.File]::ReadAllBytes($TargetAbs) } catch { }
+    try { $rulesBytes = [System.IO.File]::ReadAllBytes($RulesFile) } catch { }
+    if ($null -eq $targetBytes -or $null -eq $rulesBytes) {
+        $leafName = ([System.IO.Path]::GetFileName($TargetAbs)).TrimEnd('.', ' ')
+        if ($leafName -ieq 'CLAUDE.md') {
+            Stop-RulesSize "could not read the target or the global CLAUDE.md to measure this change." @()
+        }
+        return
+    }
+    $preSha = Get-BytesSha256 $targetBytes
+    if ($targetBytes.Length -ne $rulesBytes.Length -or $preSha -ne (Get-BytesSha256 $rulesBytes)) { return }
+
+    $existingText = Get-RulesText $targetBytes
+    $proposedText = Get-RulesText $NewBytes
+    if ($proposedText -match "`r(?!`n)") {
+        Stop-RulesSize "the new text of the global CLAUDE.md holds a carriage return that is not followed by a line feed, which would make its line count wrong. Use LF (or CRLF) line endings." @()
+    }
+    $existingLines = Get-RulesLineCount $existingText
+    $proposedLines = Get-RulesLineCount $proposedText
+    $lineLimit = Get-RulesLineLimit
+    $approvedCrossing = $false
+    if ($proposedLines -gt $lineLimit -and $proposedLines -gt $existingLines) {
+        $codePoints = 0
+        foreach ($oneChar in $proposedText.ToCharArray()) { if (-not [char]::IsLowSurrogate($oneChar)) { $codePoints++ } }
+        $what = "this change takes the always-loaded rules file ~/.claude/CLAUDE.md from $existingLines to $proposedLines lines ($codePoints characters); its limit is $lineLimit lines."
+        if ($ApproveSizeUpTo -le 0) {
+            Stop-RulesSize $what @(
+                "To go ahead:",
+                "  1. Ask Erez in plain words, offering a version at or under $lineLimit lines first. Revised text restarts /check.",
+                "  2. If he still wants $proposedLines lines, re-run through update-config.ps1 (update-global-rule.ps1 has no approval switch):",
+                "       & `"$PSCommandPath`" -File `"CLAUDE.md`" -Op $Op <the same other arguments> -ApproveSizeUpTo $proposedLines",
+                "     Spell the switch out in full and run it as its own tool call (not in a parallel batch), with a 10-minute",
+                "     timeout. Claude Code then shows Erez a prompt; he clicks Allow once (not 'always').",
+                "  3. The check pass this run used is spent (a Deny spends the next one too): re-mint it per /vet-rule recovery first.",
+                "The approval lasts 10 minutes from when the prompt appears and covers that one command only; any other shell",
+                "command this session runs in between cancels it. In an acceptEdits or bypassPermissions session no approval",
+                "is recorded, so the crossing waits for a normal session."
+            )
+        }
+        if ($ApproveSizeUpTo -lt $proposedLines) {
+            Stop-RulesSize "$what -ApproveSizeUpTo $ApproveSizeUpTo is below the $proposedLines lines this change makes." @(
+                "Ask Erez about $proposedLines lines and re-run with -ApproveSizeUpTo $proposedLines."
+            )
+        }
+        # Grants are per session: hooks\size-approval-prompt.js names each one after the session that
+        # raised the prompt, and this command reads only its own session's (CLAUDE_SESSION_ID, exported by
+        # hooks\sessionstart-loggate.js).
+        $sessionId = [string]$env:CLAUDE_SESSION_ID
+        if ($sessionId -notmatch '^[A-Za-z0-9-]{1,80}$') {
+            Stop-RulesSize "$what This command's session id (CLAUDE_SESSION_ID) is missing, so Erez's approval cannot be matched to it." @(
+                "Run it from Claude Code's own PowerShell tool, where hooks\sessionstart-loggate.js provides the id."
+            )
+        }
+        $sizeGrantFile = Join-Path $SizeOkDir ("grant-" + $sessionId + ".json")
+        $grantLines = 0
+        $grantExpiresMs = 0
+        try {
+            $grantJson = [System.IO.File]::ReadAllText($sizeGrantFile, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+            $grantLines = [long]$grantJson.lines
+            $grantExpiresMs = [long]$grantJson.expiresMs
+        } catch { }
+        if ($grantLines -le 0 -or $grantExpiresMs -le [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) {
+            Stop-RulesSize "$what Erez's one-time approval for it was not found or has expired." @(
+                "Likely causes: this session ran another shell command after the prompt, more than 10 minutes passed, the",
+                "prompt was denied, the session is in acceptEdits or bypassPermissions mode, or the switch was not spelled out",
+                "in full as -ApproveSizeUpTo so no prompt was raised. Ask Erez again, then re-run."
+            )
+        }
+        if ($grantLines -lt $proposedLines) {
+            Stop-RulesSize "$what Erez's approval covers only $grantLines lines." @(
+                "Ask Erez about $proposedLines lines and re-run with -ApproveSizeUpTo $proposedLines."
+            )
+        }
+        Remove-Item -LiteralPath $sizeGrantFile -Force -ErrorAction SilentlyContinue
+        $approvedCrossing = $true
+        Write-Output "Size stop: Erez's approval covers $proposedLines lines (limit $lineLimit); going ahead."
+    }
+    # The approval record follows writes to the real file only, never to a copy that merely matches it.
+    $isCanonical = $false
+    try { $isCanonical = ([System.IO.Path]::GetFullPath($TargetAbs) -ieq [System.IO.Path]::GetFullPath($RulesFile)) } catch { }
+    $script:RulesWrite = @{
+        NewLines  = $proposedLines
+        Limit     = $lineLimit
+        Approved  = $approvedCrossing
+        PreSha    = $preSha
+        NewSha    = (Get-BytesSha256 $NewBytes)
+        Canonical = $isCanonical
+    }
+}
+
+# Keep the approval record in step with a write to the rules file: none is needed at or under the limit;
+# an approved crossing records the new text's hash; a later trim or same-size write that stays over the
+# limit carries the record forward only when it covered the text before the write. The session-start
+# check (hooks\sessionstart-backup-surfacer.js) flags an over-limit file whose hash the record lacks.
+function Update-RulesSizeRecord {
+    $written = $script:RulesWrite
+    if ($null -eq $written -or -not $written.Canonical) { return }
+    try {
+        if ($written.NewLines -le $written.Limit) {
+            Remove-Item -LiteralPath $SizeRecordFile -Force -ErrorAction SilentlyContinue
+            return
+        }
+        $approvedOn = $null
+        if ($written.Approved) {
+            $approvedOn = (Get-Date).ToUniversalTime().ToString('o')
+        } else {
+            try {
+                $oldRecord = [System.IO.File]::ReadAllText($SizeRecordFile, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+                if ($oldRecord.sha256 -eq $written.PreSha) { $approvedOn = [string]$oldRecord.approvedOn }
+            } catch { }
+        }
+        if ($null -eq $approvedOn) { return }
+        New-Item -ItemType Directory -Force -Path $SizeOkDir | Out-Null
+        $recordJson = '{"lines":' + $written.NewLines + ',"sha256":"' + $written.NewSha + '","approvedOn":"' + $approvedOn + '"}'
+        [System.IO.File]::WriteAllText($SizeRecordFile, $recordJson, (New-Object System.Text.UTF8Encoding $false))
+    } catch {
+        Write-Output "Note: could not update the rules-file size record ($_); the next session start may flag the file."
+    }
+}
+@@@END
+@@@OLD
+            $absPath = (Resolve-Path -LiteralPath $TargetPath).Path
+@@@NEW
+            $absPath = (Resolve-Path -LiteralPath $TargetPath).Path
+            # GEN-674 size stop: measured on the exact bytes WriteAllText writes below.
+            Invoke-RulesSizeStop $absPath ((New-Object System.Text.UTF8Encoding $false).GetBytes($newContent))
+@@@END
+@@@OLD
+                $bytes = $stripped
+            }
+@@@NEW
+                $bytes = $stripped
+            }
+            # GEN-674 size stop: measured on the exact bytes WriteAllBytes writes below.
+            Invoke-RulesSizeStop $dstAbs $bytes
+@@@END
+@@@OLD
+    # ---- Step 4: Push back to Drive + git history. ----
+@@@NEW
+    # GEN-674: keep the size approval record in step with what was just written, before the push, so a
+    # push failure cannot leave an approved over-limit file without its record.
+    Update-RulesSizeRecord
+
+    # ---- Step 4: Push back to Drive + git history. ----
+@@@END

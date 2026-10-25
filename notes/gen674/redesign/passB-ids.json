@@ -1,0 +1,6 @@
+{
+  "_about": "vet-code Step 3 Pass B agentIds for the GEN-674 size stop (round 1 after Pass A fixes; round 2 after Pass B fixes). Both pinned to model opus.",
+  "passBAgentIds": ["a1d25d2079072272a", "a474bd553b394c120"],
+  "round1": "FINDINGS: MEDIUM Drive-script copy guard gap (Copy-Item -Force); LOW false refusals of the second signal; LOW symlink length shortcut; LOW stale grant after /clear; LOW limit parse mismatch. All fixed.",
+  "round2": "FINDINGS, no HIGH: MEDIUM copy into the folder / relative names not seen; MEDIUM Drive-script lock misses Set-Content -Encoding, [System.IO.File], sed/perl/node; LOW false refusals (sibling .bak, words in quotes, read-as-input); LOW RUNS exemption broad/narrow; LOW any update-config mention disables second signal; LOW Bash-path pass mismatch; LOW hook-timeout window; LOW corpus replay cannot test real paths. Not fixed: standoff surfaced to Erez per vet-code Step 3."
+}
