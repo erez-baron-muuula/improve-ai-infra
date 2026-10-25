@@ -1,0 +1,257 @@
+# update-config.ps1 -- Atomic, OS-locked edit of any managed Claude config file. (GEN-103)
+#
+# Generalizes update-global-rule.ps1 (which was CLAUDE.md-only) to every shared
+# config file. A SINGLE global lock serializes all config edits on this machine,
+# so no two sessions can interleave a read-change-write. Before editing it pulls
+# the latest from Drive; after editing it pushes back to Drive + git history.
+#
+# Why one global lock (not per-file): sync.ps1 copies and commits the WHOLE managed
+# set on every push, so two concurrent edits to different files would still clobber
+# each other through the whole-set sync. One lock removes that race entirely.
+#
+# The pre-edit pull (Step 2) is now non-destructive to any other in-session local
+# edit not yet pushed (GEN-355) -- sync.ps1's To-Claude direction compares each
+# file's content against a local baseline rather than blindly overwriting. See
+# sync.ps1's header for the full mechanism.
+#
+# Operations:
+#   text-replace   : find OldText, replace with NewText (markdown / rules files)
+#   add-allow      : add an entry to permissions.allow in a JSON file (idempotent)
+#   remove-allow   : remove an entry from permissions.allow in a JSON file (idempotent)
+#   write-file     : overwrite the whole target with the contents of -ContentFile
+#
+# Usage:
+#   .\update-config.ps1 -File <pathOrName> -Op text-replace -OldText "..." -NewText "..."
+#   .\update-config.ps1 -File settings.json -Op add-allow    -Entry "Bash(npm test:*)"
+#   .\update-config.ps1 -File settings.json -Op remove-allow -Entry "Bash(npm test:*)"
+#   .\update-config.ps1 -File <pathOrName> -Op write-file -ContentFile "C:\tmp\new.md"
+#
+# -File accepts a short logical name (CLAUDE.md, settings.json, settings.local.json,
+# auto-approve.js, MEMORY.md, user_profile.md, feedback_behavior.md) or a full path.
+#
+# Exit codes:
+#   0 = success
+#   1 = another session holds the lock (after retries)
+#   2 = target not found / OldText not found / bad arguments
+#   3 = no change made (OldText == NewText, or JSON entry already in desired state)
+#   4 = sync to/from Drive failed (includes sync.ps1 exit 6 -- gave up waiting on ITS
+#       OWN concurrency lock; treat identically to any other sync failure: nothing
+#       was pulled/pushed, so the edit was correctly aborted rather than proceeding
+#       on stale state -- GEN-353)
+#   5 = pending-sync marker found: a previous edit was written locally but never pushed to Drive
+
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$File,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateSet("text-replace", "add-allow", "remove-allow", "write-file")]
+    [string]$Op,
+
+    [string]$OldText,
+    [string]$NewText,
+    [string]$Entry,
+    [string]$ContentFile,
+    [string]$VersionMessage = ""
+)
+
+$ClaudeBase   = "C:\Users\Erez\.claude"
+$MemoryBase   = Join-Path $ClaudeBase "projects\C--Users-Erez\memory"
+$LockFile     = Join-Path $ClaudeBase "claude-config.lock"
+$PendingSync  = Join-Path $ClaudeBase "claude-config-pending-sync"
+$SyncScript   = "G:\My Drive\AI Projects\_Tooling\Claude\sync.ps1"
+$JsonEditor   = "G:\My Drive\AI Projects\_Tooling\Claude\config-json-edit.js"
+
+# Map short logical names to absolute local paths.
+$ManagedFiles = @{
+    "CLAUDE.md"            = Join-Path $ClaudeBase "CLAUDE.md"
+    "settings.json"        = Join-Path $ClaudeBase "settings.json"
+    "settings.local.json"  = Join-Path $ClaudeBase "settings.local.json"
+    "auto-approve.js"      = Join-Path $ClaudeBase "hooks\auto-approve.js"
+    "MEMORY.md"            = Join-Path $MemoryBase "MEMORY.md"
+    "user_profile.md"      = Join-Path $MemoryBase "user_profile.md"
+    "feedback_behavior.md" = Join-Path $MemoryBase "feedback_behavior.md"
+}
+
+if ($ManagedFiles.ContainsKey($File)) {
+    $TargetPath = $ManagedFiles[$File]
+} else {
+    $TargetPath = $File
+}
+
+# ---- Step 1: Acquire the single global lock. ----
+# Retry window widened (GEN-219): the lock is held across a full Drive pull+edit+push,
+# which can now also include sync.ps1 waiting on ITS OWN concurrency lock (GEN-353,
+# up to ~120s) if another sync is mid-flight. Sized to comfortably exceed that nested
+# worst case rather than a bare network round trip. Heartbeat output every ~10s so a
+# long wait is visibly progressing rather than looking hung.
+$lockStream = $null
+$maxAttempts = 60
+$retryDelayMs = 3000
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    try {
+        $lockStream = [System.IO.File]::Open(
+            $LockFile,
+            [System.IO.FileMode]::OpenOrCreate,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+        break
+    } catch [System.IO.IOException] {
+        if ($attempt -lt $maxAttempts) {
+            if ($attempt -eq 1 -or ($attempt % 5) -eq 0) {
+                $elapsedApprox = [Math]::Round(($attempt - 1) * $retryDelayMs / 1000)
+                Write-Output "Config lock held by another session; retrying (${attempt}/${maxAttempts}, ~${elapsedApprox}s elapsed)..."
+            }
+            Start-Sleep -Milliseconds $retryDelayMs
+        } else {
+            Write-Error "Another Claude session is editing config (lock held) after ~$([Math]::Round($maxAttempts * $retryDelayMs / 1000))s. Try again in a moment."
+            exit 1
+        }
+    }
+}
+
+try {
+    Write-Output "Lock acquired."
+
+    # ---- Pending-sync guard (GEN-306): block the pre-edit pull if a previous run wrote
+    # a local edit but never finished pushing it to Drive. ----
+    if (Test-Path -LiteralPath $PendingSync) {
+        Write-Error "PENDING SYNC DETECTED: a previous edit was written locally but was never pushed to Drive."
+        Write-Output "Marker file: $PendingSync"
+        Write-Output ""
+        Write-Output "Recovery options:"
+        Write-Output "  1. Re-run the push manually: & '$SyncScript' -Direction From-Claude"
+        Write-Output "     This pushes the pending local edit to Drive and removes the marker."
+        Write-Output "  2. If you want to DISCARD the local edit and take Drive's copy instead:"
+        Write-Output "     Delete the marker file ($PendingSync), then run:"
+        Write-Output "     & '$SyncScript' -Direction To-Claude -DiscardLocal"
+        Write-Output "     (Deleting the marker alone is not enough -- sync.ps1's non-destructive"
+        Write-Output "     pull (GEN-355) would otherwise keep your local edit since it still"
+        Write-Output "     differs from Drive. -DiscardLocal forces Drive's copy to win.)"
+        exit 5
+    }
+
+    # ---- Step 2: Pull latest from Drive. ----
+    Write-Output "Pulling latest from Drive..."
+    try {
+        & $SyncScript -Direction To-Claude | Out-Null
+        if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { throw "sync To-Claude exit $LASTEXITCODE" }
+    } catch {
+        Write-Error "Pull from Drive failed: $_"
+        exit 4
+    }
+
+    if (-not (Test-Path $TargetPath)) {
+        Write-Error "Target file not found: $TargetPath. Edit aborted."
+        exit 2
+    }
+
+    # ---- Step 3: Apply the requested operation. ----
+    switch ($Op) {
+        "text-replace" {
+            if (-not $PSBoundParameters.ContainsKey('OldText') -or -not $PSBoundParameters.ContainsKey('NewText')) {
+                Write-Error "text-replace requires -OldText and -NewText."
+                exit 2
+            }
+            $content = Get-Content -Raw -Path $TargetPath -Encoding UTF8
+            # Strip any pre-existing leading BOM so already-BOM'd files self-heal on next edit
+            if ($content.Length -gt 0 -and $content[0] -eq [char]0xFEFF) { $content = $content.Substring(1) }
+            if (-not $content.Contains($OldText)) {
+                Write-Error "OldText not found in $TargetPath. Edit aborted (file unchanged)."
+                exit 2
+            }
+            $newContent = $content.Replace($OldText, $NewText)
+            if ($newContent -eq $content) {
+                Write-Error "Replacement made no change (OldText equals NewText?). Edit aborted."
+                exit 3
+            }
+            # Write UTF-8 WITHOUT a BOM (PS 5.1 'Set-Content -Encoding UTF8' prepends a BOM, which corrupts JS/JSON). GEN-214
+            # Resolve to an absolute LiteralPath first: WriteAllText resolves a relative path against .NET's cwd (not $PWD),
+            # and -LiteralPath stops [ ] * ? in the path being treated as wildcards. Existence already checked above.
+            $absPath = (Resolve-Path -LiteralPath $TargetPath).Path
+            # Marker written before the file write so any interruption or push failure leaves it in place. (GEN-306)
+            [IO.File]::WriteAllText($PendingSync, "$TargetPath`n$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')", (New-Object System.Text.UTF8Encoding $false))
+            [IO.File]::WriteAllText($absPath, $newContent, (New-Object System.Text.UTF8Encoding $false))
+            Write-Output "Applied text-replace to $TargetPath."
+        }
+        { $_ -in @("add-allow", "remove-allow") } {
+            if (-not $Entry) {
+                Write-Error "$Op requires -Entry."
+                exit 2
+            }
+            # Pass the entry via env, not argv: PowerShell 5.1 mangles embedded
+            # double-quotes when passing arguments to a native program (node.exe).
+            $env:CFG_ENTRY = $Entry
+            # Marker written before the file write so any interruption or push failure leaves it in place. (GEN-306)
+            [IO.File]::WriteAllText($PendingSync, "$TargetPath`n$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')", (New-Object System.Text.UTF8Encoding $false))
+            try {
+                & node $JsonEditor $TargetPath $Op
+                $code = $LASTEXITCODE
+            } finally {
+                Remove-Item Env:\CFG_ENTRY -ErrorAction SilentlyContinue
+            }
+            if ($code -eq 3) {
+                # No file was written; remove the marker we pre-emptively created. (GEN-306)
+                Remove-Item -LiteralPath $PendingSync -ErrorAction SilentlyContinue
+                Write-Output "No change needed; entry already in desired state."
+                exit 3
+            } elseif ($code -ne 0) {
+                # Node editor failed before writing; remove the marker. (GEN-306)
+                Remove-Item -LiteralPath $PendingSync -ErrorAction SilentlyContinue
+                Write-Error "JSON edit failed (exit $code)."
+                exit 2
+            }
+            Write-Output "Applied $Op to $TargetPath."
+        }
+        "write-file" {
+            if (-not $ContentFile -or -not (Test-Path -LiteralPath $ContentFile)) {
+                Write-Error "write-file requires -ContentFile pointing to an existing file."
+                exit 2
+            }
+            # Copy the source onto the target, stripping a leading UTF-8 BOM if the source has one, so
+            # write-file cannot re-introduce the GEN-214 corruption on JS/JSON targets. Byte-level (not a
+            # text re-encode) to avoid mangling content / line-endings / non-UTF-8 sources. GEN-216
+            # Guard A: pin both paths to absolute LiteralPaths -- ReadAllBytes/WriteAllBytes resolve a
+            # relative path against .NET's cwd (not $PWD), and -LiteralPath stops [ ] * ? being wildcards.
+            $srcAbs = (Resolve-Path -LiteralPath $ContentFile).Path
+            $dstAbs = (Resolve-Path -LiteralPath $TargetPath).Path
+            $bytes  = [IO.File]::ReadAllBytes($srcAbs)
+            if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+                # Guard B: [Array]::Copy handles the BOM-only (length==3 -> empty) case cleanly, avoiding
+                # PowerShell's descending-range quirk on $bytes[3..($bytes.Length-1)].
+                $stripped = New-Object byte[] ($bytes.Length - 3)
+                [Array]::Copy($bytes, 3, $stripped, 0, $bytes.Length - 3)
+                $bytes = $stripped
+            }
+            # Marker written before the file write so any interruption or push failure leaves it in place. (GEN-306)
+            [IO.File]::WriteAllText($PendingSync, "$TargetPath`n$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')", (New-Object System.Text.UTF8Encoding $false))
+            [IO.File]::WriteAllBytes($dstAbs, $bytes)
+            Write-Output "Overwrote $TargetPath from $ContentFile (BOM stripped if present)."
+        }
+    }
+
+    # ---- Step 4: Push back to Drive + git history. ----
+    Write-Output "Pushing to Drive..."
+    $commitMsg = if ($VersionMessage) { $VersionMessage } else { "Config edit ($Op $File) at $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
+    try {
+        & $SyncScript -Direction From-Claude -CommitMessage $commitMsg | Out-Null
+        if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { throw "sync From-Claude exit $LASTEXITCODE" }
+    } catch {
+        Write-Error "Push to Drive failed: $_  LOCAL FILE WAS UPDATED but Drive may be out of sync."
+        exit 4
+    }
+
+    # Step 4 succeeded: remove the pending-sync marker. (GEN-306)
+    Remove-Item -LiteralPath $PendingSync -ErrorAction SilentlyContinue
+
+    Write-Output ""
+    Write-Output "Done. $File updated and synced."
+} finally {
+    if ($lockStream) {
+        $lockStream.Close()
+        $lockStream.Dispose()
+        Remove-Item -Path $LockFile -ErrorAction SilentlyContinue
+        Write-Output "Lock released."
+    }
+}

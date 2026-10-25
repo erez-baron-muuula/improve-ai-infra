@@ -1,0 +1,11 @@
+{
+  "_about": "vet-code Step 1b capture for OPTION E (session fcf033ca-3339-405a-8865-cf04273bee62): the check-reviewer agentIds of the option-E design /check panel (round 1: pre-mortem REVISE, holistic REVISE, soundness PASS; round 2: pre-mortem PASS, holistic PASS). Pass B ids are NOT listed here.",
+  "checkReviewerAgentIds": [
+    "a07844a5663502f14",
+    "a4674b608b28c8940",
+    "a78f4965cd33a3b16",
+    "a3a99e4cd9a119099",
+    "ae3b420427aeb079e"
+  ],
+  "capturedVerdicts": "Round 1 (option D): pre-mortem REVISE (notice wording 'approved' is false assurance; switch self-serve for unattended runs), holistic REVISE (a static permissions.ask rule gives the forced click with no hook -> D+), soundness PASS (advisories: splatted/abbreviated switch binds; reason param and notified field unspecified; folder guard dropped makes record forgeable; exit-6 rewrite). Round 2 (option E = D + ask rule + literal-name check + quote): pre-mortem PASS (both findings RESOLVED; advisories: wrapper path literal check, helper-script route, multi-line $MyInvocation.Line, nuisance prompts, Bash probe), holistic PASS (finding RESOLVED; advisories: Get-PSCallStack helper-file refusal, real invocation triggers rule, settings.json route for permissions.ask, raw-command prompt)."
+}

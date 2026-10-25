@@ -1,0 +1,13 @@
+@@@OLD
+    ]
+  },
+  "model": "opus[1m]",
+@@@NEW
+    ],
+    "ask": [
+      "PowerShell(*ApproveSizeUpTo*)",
+      "Bash(*ApproveSizeUpTo*)"
+    ]
+  },
+  "model": "opus[1m]",
+@@@END
