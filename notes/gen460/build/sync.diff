@@ -1,0 +1,866 @@
+diff --git a/G:/My Drive/AI Projects/_Tooling/Claude/sync.ps1 b/sync.ps1
+index 1c9d7ef..182205e 100644
+--- a/G:/My Drive/AI Projects/_Tooling/Claude/sync.ps1	
++++ b/sync.ps1
+@@ -11,40 +11,13 @@
+ #   - settings.json
+ #   - settings.local.json
+ #   - memory\   (entire folder -- memory index + all memory files; GEN-140)
+-#   - hooks\auto-approve.js  (GEN-76 auto-approval PreToolUse hook)
++#   - hooks\*.js, hooks\*.ps1  (every hook's code, found on EITHER side -- this PC or Drive -- so a
++#     new hook needs no edit here and a To-Claude pull restores every hook; GEN-460. What each hook
++#     does is in its own header comment and its settings.json registration. A hook removed on
++#     purpose is kept out of the backup by a 'retired' decision -- see "Backup triage" below.)
+ #   - hooks\secret-patterns.json  (shared secret-scan patterns; GEN-233)
+-#   - hooks\sessionstart-loggate.js  (compact-gate SessionStart hook)
+-#   - hooks\precompact-loggate.js    (compact-gate PreCompact hook)
+-#   - hooks\confirm-send.js  (GEN-242 confirm-before-send Slack gate PreToolUse hook)
+-#   - hooks\notion-schema-guard.js  (GEN-184 Track A destructive-Notion-schema gate PreToolUse hook)
+-#   - hooks\permission-denied-log.js  (GEN-316 credential-denial detector PermissionDenied hook)
+-#   - hooks\stop-cred-denial-surface.js  (GEN-316 credential-denial detector Stop hook)
+-#   - hooks\stop-foryou-nudge.js  (GEN-422 "For you" block nudge Stop hook)
+-#   - hooks\stop-claim-linter.js  (GEN-450 unverified-claim linter Stop hook)
+-#   - hooks\posttooluse-signal-detect.js  (GEN-501 signal-surfacing detector PostToolUse hook)
+-#   - hooks\stop-signal-surface.js  (GEN-501 signal-surfacing deliverer Stop hook)
+-#   - hooks\account-session-sync.js  (GEN-859 two-account desktop session-list sync SessionStart + Stop hook)
+-#   - hooks\inject-notion-refs.js  (GEN-86 Notion reference-injection UserPromptSubmit hook)
+-#   - hooks\inject-shell-refs.js   (GEN-86 shell reference-injection PreToolUse hook)
+-#   - hooks\inject-deployment-refs.js  (GEN-673 Invoice-Automation deployment reference-injection PreToolUse hook)
+-#   - hooks\deny-askuserquestion.js  (GEN-337(c) AskUserQuestion popup block PreToolUse hook)
+-#   - hooks\pretooluse-effort-tag-gate.js  (GEN-619 effort-level check on next-step boxes + plan approvals, PreToolUse hook)
+-#   - hooks\inject-edit-refs.js  (GEN-340 file-editing reference-injection PreToolUse hook)
+-#   - hooks\inject-perk-refs.js  (perk-reminder UserPromptSubmit + PreToolUse(WebSearch) hook; list in hooks\refs\perks.md)
+-#   - hooks\reviewer-verdict-guard.js  (GEN-812 ticket-reviewer verdict-line bounce PreToolUse hook)
+-#   - hooks\ticket-gate-readout.js  (GEN-636 ticket-gate aggregate readout CLI for /wrap Step 3i -- not a registered hook)
+-#   - hooks\windows-mcp-delete-guard.js, windows-mcp-approval.js, windows-mcp-approval.ps1, windows-mcp-approval.test.js
+-#     (GEN-879 Windows-MCP add-on delete guard + approval window PreToolUse hooks, all folders; .test.js is not registered)
+-#   - hooks\windows-mcp-delete-guard.test.js  (GEN-885 offline tests for the delete guard -- not a registered hook)
+-#   - hooks\windows-mcp-point.ps1  (GEN-908 screen-point check run by windows-mcp-approval.js for task passes)
+-#   - hooks\browser-site-gate.js  (GEN-924 browser-extension site gate: PreToolUse/PostToolUse/PostToolUseFailure)
+-#   - hooks\inject-browser-refs.js  (GEN-883/GEN-742 browser notes + not-connected diagnosis: PostToolUse/PostToolUseFailure;
+-#     its notes and account labels live in hooks\refs\)
+-#   - hooks\prompt-wmcp-miss-reminder.js, inject-windows-mcp-refs.js  (2026-10-18: missed PC-control approval reminder
+-#     UserPromptSubmit hook; PC-control lessons PostToolUse injector, list in hooks\refs\windows-mcp.md)
+-#   - hooks\inject-topic-refs.js  (GEN-825 split Notion/shell topic-note injector: UserPromptSubmit + PreToolUse
+-#     + SessionStart(compact) hook; notes in hooks\refs\notion-*.md and shell-*.md)
+-#   - hooks\sessionstart-skill-restore.js  (GEN-845 after-compaction skill re-read reminder, SessionStart(compact) hook)
++#   - backup-triage.json  (GEN-460 backup-triage decisions; merged across PCs, not hash-synced --
++#     see "Backup triage" below)
+ #   - skills\   (entire folder -- /check and any future skills; GEN-223)
+ #   - agents\   (entire folder -- check-reviewer and any future agents; GEN-232)
+ #   - commands\ (entire folder -- /loghistory and any future slash commands)
+@@ -118,74 +91,88 @@
+ # A second sync run that cannot acquire the lock within its retry budget gives up
+ # with a DISTINCT exit code (6) rather than silently succeeding -- see Exit codes.
+ #
++# ---- Backup triage (GEN-460) -------------------------------------------------
++# A From-Claude run sorts every path under .claude that is not in the backup set, so a new file
++# never has to be sorted by hand:
++#   - hook code (hooks\*.js, hooks\*.ps1) is always backed up (see "Files synced" above);
++#   - a hook's marker file (<hook name>.accepted / .off / .on / .testonly / .disabled / .bak / .orig),
++#     and a new top-level folder that is empty or holds only ignore-listed files (locks, temp saves,
++#     logs), is skipped by rule: recorded in backup-triage.json and reported ONCE as a
++#     "BACKUP-TRIAGE: skipped ..." warning (a rule-skipped folder that later gains other files is
++#     raised again);
++#   - anything else gets a "BACKUP-TRIAGE NEEDED" warning telling the session's Claude to find what
++#     wrote it and record a decision with -TriageDecide (below) in the same turn.
++# All triage output goes to the WARNING stream, because update-config.ps1 runs this script with
++# | Out-Null, which discards normal output but not warnings.
++#
++#   .\sync.ps1 -TriageDecide '<path under .claude>' -As skip|backup|retired -Reason '<why>'
++#       records one decision (no sync). 'backup' is for one plainly named file shared across PCs,
++#       stored on Drive and in git under triage-backup\; it is refused for credential-like or
++#       ignore-listed names, files over 1 MB, or content that matches hooks\secret-patterns.json.
++#       'retired' is only for a hook's code that is no longer on this PC and that settings.json no
++#       longer mentions (it stops the hook being pulled back). A file beside the .claude folder is
++#       named '..\.claude<rest>' and can only be skipped.
++#   Every push re-checks hook code and Claude-chosen backups: a file over 1 MB or matching a secret
++#   pattern is left out of that push with a warning. A hook deleted on this PC is not pulled back by
++#   To-Claude; it raises a NEEDED warning instead (retire it, or ask Erez).
++#   .\sync.ps1 -CoverageOnly    runs the triage and prints the backup set; changes no file (it does
++#                               take the sync lock, so it waits while another sync runs).
++#   -RootOverride <dir>         tests only: <dir>\claude, <dir>\drive and <dir>\git replace the real paths.
++#
+ # Exit codes:
+ #   0 = success (sync completed; a subordinate git push warning does not change this -- GEN-237)
++#   1 = -TriageDecide refused the decision (nothing recorded)
+ #   5 = secret-scan abort, OR the secret-patterns file is missing/unreadable (fail-closed)
+ #   6 = gave up waiting for the sync lock (another sync is running); NOTHING was synced -- treat like a failure
+ 
++[CmdletBinding(DefaultParameterSetName = 'Sync')]
+ param(
+-    [Parameter(Mandatory = $true)]
++    [Parameter(Mandatory = $true, ParameterSetName = 'Sync')]
+     [ValidateSet("To-Claude", "From-Claude")]
+     [string]$Direction,
+ 
++    [Parameter(ParameterSetName = 'Sync')]
+     [string]$CommitMessage = "",
+ 
+-    [switch]$DiscardLocal
++    [Parameter(ParameterSetName = 'Sync')]
++    [switch]$DiscardLocal,
++
++    [Parameter(Mandatory = $true, ParameterSetName = 'Coverage')]
++    [switch]$CoverageOnly,
++
++    [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
++    [string]$TriageDecide,
++
++    [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
++    [ValidateSet("skip", "backup", "retired")]
++    [string]$As,
++
++    [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
++    [string]$Reason,
++
++    [string]$RootOverride = ""
+ )
+ 
+-$DriveBase   = "G:\My Drive\AI Projects\_Tooling\Claude"
+-$ClaudeBase  = "C:\Users\Erez\.claude"
++if ($RootOverride) {
++    $DriveBase   = Join-Path $RootOverride "drive"
++    $ClaudeBase  = Join-Path $RootOverride "claude"
++    $GitHistory  = Join-Path $RootOverride "git"
++} else {
++    $DriveBase   = "G:\My Drive\AI Projects\_Tooling\Claude"
++    $ClaudeBase  = "C:\Users\Erez\.claude"
++    $GitHistory  = "C:\Users\Erez\.claude-git-history"
++}
+ $MemoryBase  = Join-Path $ClaudeBase "projects\C--Users-Erez\memory"
+-$GitHistory  = "C:\Users\Erez\.claude-git-history"
+ $SyncLockFile = Join-Path $ClaudeBase "sync.lock"
+ $BaselineFile = Join-Path $ClaudeBase "sync-baseline.json"
++$TriageFileName = "backup-triage.json"
+ 
+ $FileMap = @(
+     @{ Drive = Join-Path $DriveBase "CLAUDE.md";                   Claude = Join-Path $ClaudeBase "CLAUDE.md";    Git = Join-Path $GitHistory "CLAUDE.md" },
+     @{ Drive = Join-Path $DriveBase "settings.json";               Claude = Join-Path $ClaudeBase "settings.json"; Git = Join-Path $GitHistory "settings.json" },
+     @{ Drive = Join-Path $DriveBase "settings.local.json";         Claude = Join-Path $ClaudeBase "settings.local.json"; Git = Join-Path $GitHistory "settings.local.json" },
+     @{ Drive = Join-Path $DriveBase ".settings-health-keep.json";  Claude = Join-Path $ClaudeBase ".settings-health-keep.json"; Git = Join-Path $GitHistory ".settings-health-keep.json" },
+-    @{ Drive = Join-Path $DriveBase "hooks\auto-approve.js";       Claude = Join-Path $ClaudeBase "hooks\auto-approve.js"; Git = Join-Path $GitHistory "hooks\auto-approve.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\secret-patterns.json";  Claude = Join-Path $ClaudeBase "hooks\secret-patterns.json"; Git = Join-Path $GitHistory "hooks\secret-patterns.json" },
+-    @{ Drive = Join-Path $DriveBase "hooks\sessionstart-loggate.js"; Claude = Join-Path $ClaudeBase "hooks\sessionstart-loggate.js"; Git = Join-Path $GitHistory "hooks\sessionstart-loggate.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\precompact-loggate.js";   Claude = Join-Path $ClaudeBase "hooks\precompact-loggate.js";   Git = Join-Path $GitHistory "hooks\precompact-loggate.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\confirm-send.js";         Claude = Join-Path $ClaudeBase "hooks\confirm-send.js";         Git = Join-Path $GitHistory "hooks\confirm-send.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\notion-schema-guard.js";  Claude = Join-Path $ClaudeBase "hooks\notion-schema-guard.js";  Git = Join-Path $GitHistory "hooks\notion-schema-guard.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\permission-denied-log.js"; Claude = Join-Path $ClaudeBase "hooks\permission-denied-log.js"; Git = Join-Path $GitHistory "hooks\permission-denied-log.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\stop-cred-denial-surface.js"; Claude = Join-Path $ClaudeBase "hooks\stop-cred-denial-surface.js"; Git = Join-Path $GitHistory "hooks\stop-cred-denial-surface.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-notion-refs.js";    Claude = Join-Path $ClaudeBase "hooks\inject-notion-refs.js";    Git = Join-Path $GitHistory "hooks\inject-notion-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-shell-refs.js";     Claude = Join-Path $ClaudeBase "hooks\inject-shell-refs.js";     Git = Join-Path $GitHistory "hooks\inject-shell-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-deployment-refs.js"; Claude = Join-Path $ClaudeBase "hooks\inject-deployment-refs.js"; Git = Join-Path $GitHistory "hooks\inject-deployment-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\deny-askuserquestion.js";  Claude = Join-Path $ClaudeBase "hooks\deny-askuserquestion.js";  Git = Join-Path $GitHistory "hooks\deny-askuserquestion.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\pretooluse-effort-tag-gate.js"; Claude = Join-Path $ClaudeBase "hooks\pretooluse-effort-tag-gate.js"; Git = Join-Path $GitHistory "hooks\pretooluse-effort-tag-gate.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-edit-refs.js";      Claude = Join-Path $ClaudeBase "hooks\inject-edit-refs.js";      Git = Join-Path $GitHistory "hooks\inject-edit-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\notion-fetch-staleness.js"; Claude = Join-Path $ClaudeBase "hooks\notion-fetch-staleness.js"; Git = Join-Path $GitHistory "hooks\notion-fetch-staleness.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\notion-write-verify.js";   Claude = Join-Path $ClaudeBase "hooks\notion-write-verify.js";   Git = Join-Path $GitHistory "hooks\notion-write-verify.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-jira-refs.js";      Claude = Join-Path $ClaudeBase "hooks\inject-jira-refs.js";      Git = Join-Path $GitHistory "hooks\inject-jira-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-perk-refs.js";      Claude = Join-Path $ClaudeBase "hooks\inject-perk-refs.js";      Git = Join-Path $GitHistory "hooks\inject-perk-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\sessionstart-backup-surfacer.js"; Claude = Join-Path $ClaudeBase "hooks\sessionstart-backup-surfacer.js"; Git = Join-Path $GitHistory "hooks\sessionstart-backup-surfacer.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\sessionstart-backup-spawner.js"; Claude = Join-Path $ClaudeBase "hooks\sessionstart-backup-spawner.js"; Git = Join-Path $GitHistory "hooks\sessionstart-backup-spawner.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\sessionstart-configunlock-reaper.js"; Claude = Join-Path $ClaudeBase "hooks\sessionstart-configunlock-reaper.js"; Git = Join-Path $GitHistory "hooks\sessionstart-configunlock-reaper.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\sessionstart-session-backup.js"; Claude = Join-Path $ClaudeBase "hooks\sessionstart-session-backup.js"; Git = Join-Path $GitHistory "hooks\sessionstart-session-backup.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\stop-foryou-nudge.js"; Claude = Join-Path $ClaudeBase "hooks\stop-foryou-nudge.js"; Git = Join-Path $GitHistory "hooks\stop-foryou-nudge.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\stop-claim-linter.js"; Claude = Join-Path $ClaudeBase "hooks\stop-claim-linter.js"; Git = Join-Path $GitHistory "hooks\stop-claim-linter.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\posttooluse-signal-detect.js"; Claude = Join-Path $ClaudeBase "hooks\posttooluse-signal-detect.js"; Git = Join-Path $GitHistory "hooks\posttooluse-signal-detect.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\stop-signal-surface.js"; Claude = Join-Path $ClaudeBase "hooks\stop-signal-surface.js"; Git = Join-Path $GitHistory "hooks\stop-signal-surface.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\reviewer-verdict-guard.js"; Claude = Join-Path $ClaudeBase "hooks\reviewer-verdict-guard.js"; Git = Join-Path $GitHistory "hooks\reviewer-verdict-guard.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\ticket-gate-readout.js"; Claude = Join-Path $ClaudeBase "hooks\ticket-gate-readout.js"; Git = Join-Path $GitHistory "hooks\ticket-gate-readout.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\account-session-sync.js"; Claude = Join-Path $ClaudeBase "hooks\account-session-sync.js"; Git = Join-Path $GitHistory "hooks\account-session-sync.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\windows-mcp-delete-guard.js"; Claude = Join-Path $ClaudeBase "hooks\windows-mcp-delete-guard.js"; Git = Join-Path $GitHistory "hooks\windows-mcp-delete-guard.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\windows-mcp-approval.js"; Claude = Join-Path $ClaudeBase "hooks\windows-mcp-approval.js"; Git = Join-Path $GitHistory "hooks\windows-mcp-approval.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\windows-mcp-approval.ps1"; Claude = Join-Path $ClaudeBase "hooks\windows-mcp-approval.ps1"; Git = Join-Path $GitHistory "hooks\windows-mcp-approval.ps1" },
+-    @{ Drive = Join-Path $DriveBase "hooks\windows-mcp-point.ps1"; Claude = Join-Path $ClaudeBase "hooks\windows-mcp-point.ps1"; Git = Join-Path $GitHistory "hooks\windows-mcp-point.ps1" },
+-    @{ Drive = Join-Path $DriveBase "hooks\browser-site-gate.js"; Claude = Join-Path $ClaudeBase "hooks\browser-site-gate.js"; Git = Join-Path $GitHistory "hooks\browser-site-gate.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\windows-mcp-approval.test.js"; Claude = Join-Path $ClaudeBase "hooks\windows-mcp-approval.test.js"; Git = Join-Path $GitHistory "hooks\windows-mcp-approval.test.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\windows-mcp-delete-guard.test.js"; Claude = Join-Path $ClaudeBase "hooks\windows-mcp-delete-guard.test.js"; Git = Join-Path $GitHistory "hooks\windows-mcp-delete-guard.test.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\prompt-wmcp-miss-reminder.js"; Claude = Join-Path $ClaudeBase "hooks\prompt-wmcp-miss-reminder.js"; Git = Join-Path $GitHistory "hooks\prompt-wmcp-miss-reminder.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-windows-mcp-refs.js"; Claude = Join-Path $ClaudeBase "hooks\inject-windows-mcp-refs.js"; Git = Join-Path $GitHistory "hooks\inject-windows-mcp-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-browser-refs.js"; Claude = Join-Path $ClaudeBase "hooks\inject-browser-refs.js"; Git = Join-Path $GitHistory "hooks\inject-browser-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\inject-topic-refs.js"; Claude = Join-Path $ClaudeBase "hooks\inject-topic-refs.js"; Git = Join-Path $GitHistory "hooks\inject-topic-refs.js" },
+-    @{ Drive = Join-Path $DriveBase "hooks\sessionstart-skill-restore.js"; Claude = Join-Path $ClaudeBase "hooks\sessionstart-skill-restore.js"; Git = Join-Path $GitHistory "hooks\sessionstart-skill-restore.js" }
++    @{ Drive = Join-Path $DriveBase "hooks\secret-patterns.json";  Claude = Join-Path $ClaudeBase "hooks\secret-patterns.json"; Git = Join-Path $GitHistory "hooks\secret-patterns.json" }
+ )
+ 
+ # Whole-folder syncs -- every file under these dirs is backed up, so new skills/agents are
+@@ -331,7 +318,7 @@ function Save-Baseline {
+ function Get-AllManagedFiles {
+     $all = @()
+     foreach ($pair in $FileMap) {
+-        $all += [PSCustomObject]@{ Claude = $pair.Claude; Drive = $pair.Drive; Git = $pair.Git }
++        $all += [PSCustomObject]@{ Claude = $pair.Claude; Drive = $pair.Drive; Git = $pair.Git; HookCode = [bool]$pair.HookCode }
+     }
+     foreach ($pair in $DirMap) {
+         if (Test-Path -LiteralPath $pair.Claude) {
+@@ -390,6 +377,16 @@ function Invoke-NonDestructivePull {
+             continue
+         }
+ 
++        if ($null -eq $localHash -and $e.HookCode -and $null -ne $baselineHash -and $driveHash -eq $baselineHash) {
++            # GEN-460: hook code this PC already had (it has a baseline entry) and that is unchanged on
++            # Drive since, but is now missing here -- deleted on this PC. Don't silently bring it back.
++            $rel = "hooks\" + (Split-Path $e.Claude -Leaf)
++            Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' was deleted on this PC but is still on Drive, so it was not pulled back. " +
++                "Claude: if it was removed on purpose, keep it out with: " + (Get-TriageCommandText -RelPath $rel -Choices 'retired') +
++                " -- if not, ask Erez whether to restore it.")
++            continue
++        }
++
+         if ($null -eq $localHash) {
+             # File doesn't exist locally yet -- safe to bring it down.
+             Copy-Item -LiteralPath $e.Drive -Destination $e.Claude -Force
+@@ -513,6 +510,311 @@ function Repair-StaleIndexLock {
+     }
+ }
+ 
++# ---- Secret patterns (GEN-233; shared by the boundary scan and GEN-460 triage) ----
++# Throws if the shared patterns file is missing, unreadable or empty -- callers fail closed.
++function Get-SecretPatternDefs {
++    $patternsFile = Join-Path $ClaudeBase "hooks\secret-patterns.json"
++    if (-not (Test-Path -LiteralPath $patternsFile)) { throw "patterns file not found: $patternsFile" }
++    $defs = Get-Content -Raw -LiteralPath $patternsFile -Encoding UTF8 | ConvertFrom-Json
++    if (-not $defs) { throw "patterns file is empty" }
++    return $defs
++}
++
++# Returns the name of the first pattern that matches $Text, or $null.
++function Find-SecretMatch {
++    param([string]$Text, $Defs)
++    if (-not $Text) { return $null }
++    foreach ($def in $Defs) {
++        if ([regex]::Match($Text, $def.regex).Success) { return [string]$def.name }
++    }
++    return $null
++}
++
++# ---- Backup triage decisions (GEN-460) -------------------------------------
++# backup-triage.json remembers how each path outside the fixed backup set was sorted, so each one is
++# decided -- and reported -- once. It is shared across PCs but deliberately NOT in $FileMap: every run
++# merges the local and Drive copies (a skip/retired beats a backup for the same path; otherwise the
++# newer date wins) and writes the merged result locally, and From-Claude also writes it to Drive, so
++# neither PC's decisions are lost and the hash-based pull never reports it as a conflict.
++
++function ConvertTo-TriageKey {
++    param([string]$RelPath)
++    return ($RelPath -replace '/', '\').TrimStart('\').ToLowerInvariant()
++}
++
++function Test-IsHookCodeName {
++    param([string]$Name)
++    return (($Name -like '*.js' -or $Name -like '*.ps1') -and $Name -notlike 'tmp_*' -and $Name -notlike '*.tmp*')
++}
++
++function Test-MatchesAnyPattern {
++    param([string]$Name, [string[]]$Patterns)
++    foreach ($p in $Patterns) { if ($Name -like $p) { return $true } }
++    return $false
++}
++
++# Reads one copy of the decisions file. Ok=$false means it exists but could not be parsed: the caller
++# treats it as empty and must NOT rewrite it (a rewrite would erase decisions it could not read).
++function Read-TriageFile {
++    param([string]$Path, [string]$Label)
++    $result = @{ Ok = $true; Map = @{}; Raw = $null }
++    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $result }
++    try {
++        $raw = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8)
++        $result.Raw = $raw
++        if ($raw.Trim()) {
++            $obj = $raw | ConvertFrom-Json
++            if ($null -eq $obj -or $null -eq $obj.PSObject.Properties['decisions']) { throw "no 'decisions' list" }
++            foreach ($d in @($obj.decisions)) {
++                if ($null -eq $d -or -not $d.path -or @('skip', 'backup', 'retired') -notcontains [string]$d.decision) { throw "malformed entry" }
++                $key = ConvertTo-TriageKey ([string]$d.path)
++                # A path that normalizes to nothing, or carries a drive/stream colon, is never one this
++                # script wrote; reject the file rather than let a later path call throw mid-sync.
++                if (-not $key -or $key.Contains(':')) { throw "entry with an unusable path" }
++                $result.Map[$key] = $d
++            }
++        }
++    } catch {
++        $result.Ok = $false
++        $result.Map = @{}
++        Write-Warning "BACKUP-TRIAGE: could not read the $Label decisions file $Path ($($_.Exception.Message)) -- treating it as empty and NOT rewriting it. Fix or delete that file, then sync again."
++    }
++    return $result
++}
++
++function Merge-TriageMaps {
++    param([hashtable]$First, [hashtable]$Second)
++    $out = @{}
++    foreach ($k in $First.Keys) { $out[$k] = $First[$k] }
++    foreach ($k in $Second.Keys) {
++        if (-not $out.ContainsKey($k)) { $out[$k] = $Second[$k]; continue }
++        $x = $out[$k]
++        $y = $Second[$k]
++        $xKeepsOut = ([string]$x.decision -ne 'backup')
++        $yKeepsOut = ([string]$y.decision -ne 'backup')
++        $bothClaude = ([string]$x.decidedBy -eq 'claude' -and [string]$y.decidedBy -eq 'claude')
++        if ($xKeepsOut -ne $yKeepsOut -and -not $bothClaude) {
++            # One says keep it out, the other says back it up, and they were not both Claude's explicit
++            # choices: keeping out wins (the safe side), except that Claude's NEWER 'backup' overrides an
++            # older automatic rule skip.
++            $out[$k] = if ($xKeepsOut) { $x } else { $y }
++            $skipD = $out[$k]
++            $backupD = if ($xKeepsOut) { $y } else { $x }
++            if ([string]$skipD.decidedBy -eq 'rule' -and [string]$backupD.decidedBy -eq 'claude' -and [string]$backupD.date -gt [string]$skipD.date) {
++                $out[$k] = $backupD
++            }
++            continue
++        }
++        # Same kind of decision, or two explicit Claude decisions: the newer one wins -- otherwise a PC
++        # still holding Claude's old 'skip' would silently undo a later 'backup' made on the other PC.
++        # (A 'backup' that wins here is still re-checked on every run before anything is pushed.)
++        if ([string]$y.date -gt [string]$x.date) { $out[$k] = $y }
++    }
++    return $out
++}
++
++# Why a 'backup' decision for $Rel must not be pushed to Drive and git, or $null if it may.
++# Used both when Claude records the decision and on every run that rebuilds the backup set from
++# the merged decisions file -- whose Drive copy anything with Drive access could have edited.
++function Get-BackupRefusal {
++    param([string]$Rel)
++    if (-not $Rel) { return "the path is empty" }
++    if (-not ($Rel -match '^[^\\]+$' -or $Rel -match '^hooks\\[^\\]+$')) { return "only a top-level file or a file directly in hooks\ can be added" }
++    # Plain names only: no wildcard characters ([ ] * ?), which a -Path copy would expand into OTHER
++    # files, and no trailing dot or space, which Windows strips on open so the name checks below would
++    # be matching a different name than the file actually read.
++    $leaf = $Rel.Split('\')[-1]
++    if ($leaf -notmatch '^[A-Za-z0-9._ -]+$' -or $leaf -match '[. ]$' -or $leaf -eq '.' -or $leaf -eq '..') {
++        return "the name must be plain letters, digits, dot, dash, underscore or space, not ending in a dot or space"
++    }
++    if ($Rel -match '^hooks\\' -and (Test-IsHookCodeName $leaf)) { return "hook code is backed up automatically" }
++    foreach ($pat in @('.credentials*', '*credential*', '*token*', '*secret*', '*password*', '*.key', '*.pem', '*.pfx', '*.p12')) {
++        if ($leaf -like $pat) { return "its name looks like a credential file ($pat)" }
++    }
++    if (Test-MatchesAnyPattern $leaf $BackupIgnorePatterns) { return "its name is on the per-machine ignore list" }
++    $full = Join-Path $ClaudeBase $Rel
++    if ((Test-Path -LiteralPath $full -PathType Leaf) -and (Get-Item -LiteralPath $full).Length -gt 1MB) { return "it is over 1 MB" }
++    return $null
++}
++
++function ConvertTo-TriageJson {
++    param([hashtable]$Map)
++    $list = @()
++    foreach ($k in ($Map.Keys | Sort-Object)) {
++        $d = $Map[$k]
++        $list += [PSCustomObject][ordered]@{
++            path      = [string]$d.path
++            decision  = [string]$d.decision
++            reason    = [string]$d.reason
++            decidedBy = [string]$d.decidedBy
++            date      = [string]$d.date
++        }
++    }
++    $doc = [PSCustomObject][ordered]@{
++        note      = "Backup-triage decisions for sync.ps1 (GEN-460). Change with: sync.ps1 -TriageDecide '<path>' -As skip|backup|retired -Reason '<why>'"
++        decisions = $list
++    }
++    return ($doc | ConvertTo-Json -Depth 5)
++}
++
++# Writes via a temp file + replace, so a crash mid-write never leaves a half-written decisions file.
++# The temp name matches the '*.json.tmp.*' ignore pattern, so a leftover is never itself flagged.
++function Write-TriageFileAtomic {
++    param([string]$Path, [string]$Text)
++    $dir = Split-Path $Path -Parent
++    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
++    $tmp = "$Path.tmp." + [guid]::NewGuid().ToString('N')
++    try {
++        [IO.File]::WriteAllText($tmp, $Text, (New-Object System.Text.UTF8Encoding $false))
++        if (Test-Path -LiteralPath $Path) {
++            [IO.File]::Replace($tmp, $Path, [NullString]::Value)
++        } else {
++            [IO.File]::Move($tmp, $Path)
++        }
++    } finally {
++        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
++    }
++}
++
++# Saves the merged decisions: to the local file, and to Drive on From-Claude -- never over a copy
++# that could not be read (its decisions would be lost). Writes only when the content actually
++# changed, so a quiet run touches nothing. Returns $false if the local save failed.
++function Save-TriageState {
++    param([bool]$ToDrive)
++    if (-not $TriageLocal.Ok) { return $false }
++    if ($Triage.Count -eq 0 -and $null -eq $TriageLocal.Raw -and $null -eq $TriageDrive.Raw) { return $true }
++    $text = ConvertTo-TriageJson -Map $Triage
++    try {
++        if ($text -ne $TriageLocal.Raw) { Write-TriageFileAtomic -Path $TriageLocalPath -Text $text }
++    } catch {
++        Write-Warning "BACKUP-TRIAGE: could not save $TriageLocalPath ($($_.Exception.Message)); this run's decisions will be made again next run."
++        return $false
++    }
++    if ($ToDrive -and $TriageDrive.Ok -and $text -ne $TriageDrive.Raw) {
++        try {
++            if (-not (Test-Path -LiteralPath $DriveBase)) { throw "Drive folder not found: $DriveBase" }
++            Copy-Item -LiteralPath $TriageLocalPath -Destination $TriageDrivePath -Force
++        } catch {
++            Write-Warning "BACKUP-TRIAGE: could not copy the decisions file to Drive ($($_.Exception.Message)); the next From-Claude sync retries."
++        }
++    }
++    return $true
++}
++
++# The command a session should run to record a decision (named in every NEEDED warning).
++function Get-TriageCommandText {
++    param([string]$RelPath, [string]$Choices)
++    return "& '" + $PSCommandPath + "' -TriageDecide '" + $RelPath + "' -As " + $Choices + " -Reason '<why, in plain words with no quotes or apostrophes>'"
++}
++
++function Write-TriageNeeded {
++    param([string]$RelPath, [string]$What, [string]$Choices, [bool]$Folder = $false)
++    $folderNote = if ($Folder) { " (A folder that should be backed up needs a sync.ps1 change; raise that with Erez instead.)" } else { "" }
++    Write-Warning ("BACKUP-TRIAGE NEEDED: '" + $RelPath + "' (" + $What + ") is new and not in the backup set. " +
++        "Claude: find what wrote it (file times, session logs, mentions in our hooks/scripts/skills), decide, record it with: " +
++        (Get-TriageCommandText -RelPath $RelPath -Choices $Choices) +
++        " -- then tell Erez in one line what you decided and why. Ask Erez only if the evidence cannot settle it." + $folderNote)
++}
++
++# GEN-460 rule skips: record (unless a dry run) and report once.
++function Add-RuleSkip {
++    param([hashtable]$Decisions, [bool]$Record, [string]$RelPath, [string]$Why)
++    if ($Record) {
++        $Decisions[(ConvertTo-TriageKey $RelPath)] = [PSCustomObject]@{
++            path = $RelPath; decision = 'skip'; reason = $Why; decidedBy = 'rule'
++            date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
++        }
++        Write-Warning "BACKUP-TRIAGE: skipped '$RelPath' -- $Why. Recorded in $TriageFileName; not shown again."
++    } else {
++        Write-Warning "BACKUP-TRIAGE (dry run): would skip '$RelPath' -- $Why."
++    }
++}
++
++# -TriageDecide: validate one decision, then record it. Returns the process exit code (0 or 1).
++function Invoke-TriageDecide {
++    param([string]$RawPath, [string]$Decision, [string]$Why)
++    $refuse = { param($msg) Write-Error "BACKUP-TRIAGE: refused -- $msg Nothing was recorded."; return 1 }
++
++    if (-not $Why -or $Why -match '[^\x20-\x7E]' -or $Why.Length -gt 300) {
++        return (& $refuse "-Reason must be plain ASCII text, 1-300 characters.")
++    }
++    $rel = ([string]$RawPath).Trim() -replace '/', '\'
++    $rooted = $true
++    try { $rooted = [IO.Path]::IsPathRooted($rel) } catch { $rooted = $true }   # throws on < > | -- treat as unusable
++    if (-not $rel -or $rel.Contains(':') -or $rel.StartsWith('\') -or $rooted) {
++        return (& $refuse "'$RawPath' must be a path relative to the .claude folder.")
++    }
++    if (-not $TriageLocal.Ok) {
++        return (& $refuse "the local $TriageFileName could not be read; fix or delete it first.")
++    }
++    $key = ConvertTo-TriageKey $rel
++    $prior = $Triage[$key]
++
++    if ($rel.StartsWith('..\')) {
++        # A file BESIDE the .claude folder (the sibling class Test-BackupCoverage watches).
++        $name = $rel.Substring(3)
++        if ($name -notmatch '^\.claude[^\\]+$') { return (& $refuse "a path outside .claude must be '..\.claude<name>' (one file beside the folder).") }
++        if ($Decision -ne 'skip') { return (& $refuse "a file beside the .claude folder can only be skipped.") }
++        if (-not (Test-Path -LiteralPath (Join-Path (Split-Path $ClaudeBase -Parent) $name) -PathType Leaf)) { return (& $refuse "'$rel' does not exist.") }
++    } else {
++        foreach ($seg in $rel.Split('\')) {
++            if ($seg -eq '' -or $seg -eq '.' -or $seg -eq '..') { return (& $refuse "'$RawPath' has an empty, '.' or '..' part.") }
++        }
++        $full = Join-Path $ClaudeBase $rel
++        if ($key -eq (ConvertTo-TriageKey $TriageFileName)) { return (& $refuse "the decisions file itself is backed up already.") }
++        foreach ($p in $StaticBackupFiles) { if ($p -ieq $full) { return (& $refuse "'$rel' is already in the fixed backup list.") } }
++        foreach ($pair in $DirMap) {
++            if ($full -ieq $pair.Claude -or $full -like (Join-Path $pair.Claude '*')) { return (& $refuse "'$rel' is inside a folder that is backed up whole.") }
++        }
++        $isHookCode = ($rel -match '^hooks\\[^\\]+$') -and (Test-IsHookCodeName (Split-Path $rel -Leaf))
++
++        if ($Decision -eq 'retired') {
++            if (-not $isHookCode) { return (& $refuse "'retired' is only for a hook's code (hooks\<name>.js or .ps1).") }
++            if (Test-Path -LiteralPath $full) { return (& $refuse "'$rel' is still on this PC; delete it first (hook code on this PC is always backed up).") }
++            if (-not (Test-Path -LiteralPath (Join-Path $DriveBase $rel) -PathType Leaf)) { return (& $refuse "'$rel' is not on Drive either, so there is nothing to keep from coming back.") }
++            # A hook settings.json still registers is live: retiring it would stop it reaching a fresh PC
++            # while settings.json there still tries to run it (e.g. a safety gate silently missing).
++            $settingsPath = Join-Path $ClaudeBase 'settings.json'
++            $leafName = Split-Path $rel -Leaf
++            $settingsText = $null
++            try { if (Test-Path -LiteralPath $settingsPath) { $settingsText = [IO.File]::ReadAllText($settingsPath, [Text.Encoding]::UTF8) } } catch { return (& $refuse "settings.json could not be read to check that '$leafName' is no longer registered.") }
++            if ($settingsText -and $settingsText.IndexOf($leafName, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
++                return (& $refuse "settings.json still mentions '$leafName', so the hook looks registered; unregister it first.")
++            }
++        } else {
++            if ($isHookCode) { return (& $refuse "hook code is always backed up; to stop a removed hook coming back, delete it here and use -As retired.") }
++            if (-not (Test-Path -LiteralPath $full)) { return (& $refuse "'$rel' does not exist under $ClaudeBase.") }
++            if ($Decision -eq 'skip') {
++                if ($rel.Contains('\') -and -not ($rel -match '^hooks\\[^\\]+$')) {
++                    return (& $refuse "only a top-level item or a file directly in hooks\ is triaged; '$rel' is deeper.")
++                }
++            } else {
++                # backup: one file, shared across PCs (stored on Drive and in git under triage-backup\, so
++                # it can never land on a tooling file). Every refusal below keeps something private,
++                # per-machine or oversized out of Drive and git.
++                if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return (& $refuse "'backup' is for a single file; a folder can only be skipped.") }
++                $why = Get-BackupRefusal -Rel $rel
++                if ($why) { return (& $refuse "'$rel' cannot be backed up: $why.") }
++                try { $defs = Get-SecretPatternDefs } catch { return (& $refuse "the secret patterns could not be loaded ($($_.Exception.Message)), so the file cannot be checked.") }
++                try { $text = [IO.File]::ReadAllText($full, [Text.Encoding]::UTF8) } catch { return (& $refuse "'$rel' could not be read for the secret check.") }
++                $hit = Find-SecretMatch -Text $text -Defs $defs
++                if ($hit) { return (& $refuse "'$rel' contains a value matching the '$hit' secret pattern.") }
++            }
++        }
++    }
++
++    $Triage[$key] = [PSCustomObject]@{
++        path = $rel; decision = $Decision; reason = $Why; decidedBy = 'claude'
++        date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
++    }
++    if (-not (Save-TriageState -ToDrive $true)) { return (& $refuse "the decisions file could not be saved (see the warning above).") }
++    $was = if ($prior) { " (replaces the earlier '" + [string]$prior.decision + "' decision)" } else { "" }
++    # Write-Host, not Write-Output: anything written to the output stream here would become part of
++    # this function's return value, which the caller uses as the exit code.
++    Write-Host "BACKUP-TRIAGE: recorded '$rel' as $Decision$was -- $Why"
++    return 0
++}
++
+ # ==============================================================================
+ # Main
+ # ==============================================================================
+@@ -561,90 +863,218 @@ if ($Direction -eq "From-Claude") {
+     }
+ }
+ 
+-# ---- Backup coverage check (GEN-140) ---------------------------------------
+-# On every From-Claude run, warn about any config-relevant file or folder that is
+-# neither in the backup set ($FileMap/$DirMap) nor on an explicit ignore list, so
+-# a new file can never sit silently unprotected. Covered-ness derives from the live
+-# maps above -- the ignore lists are the only extra data to maintain. Warn-only:
+-# never blocks the sync, never changes the exit code; an internal error degrades
+-# to a single warning (fail-open). ALL enumeration uses -Force: PS 5.1 skips
++# Per-machine / ephemeral / harness-managed -- deliberately not backed up. One list for
++# files and folders alike: Claude Code writes some of these names as either (e.g. its
++# '*.lock' lock folders, 2026-10-25).
++$BackupIgnorePatterns = @('backup-sweep-state','backups','cache','debug','downloads','file-history','plans','plugins','scheduled-tasks',
++                        'session-backup-state','session-env','sessions','shell-snapshots','state','tasks','telemetry',
++                        'account-session-sync',
++                        'spares',   # empty folder Claude Code creates itself, seen 2026-10-25
++                        '.credentials.json','*.jsonl','*.jsonl.bak','tmp_*.json','.loggate-*',
++                        '.config-health-global-marker','.last-cleanup','.settings-health-nudge',
++                        '*.lock','mcp-needs-auth-cache.json','policy-limits.json','policy-limits.json.stamp.json','*.json.tmp.*','remote-settings.json',
++                        'sync-baseline.json','claude-config-pending-sync','.cred-denial-pending-*',
++                        'backup-sweep-surfacer-cursor.json',
++                        '.last-update-result.json','remote-settings.json.synced-at',   # Claude Code's own update result / settings-fetch timestamp, rewritten automatically (2026-10-18)
++                        'policy-limits.json.signature*.json','remote-settings.json.signature*.json',   # Claude Code's signature files for the two ignored files above, rewritten automatically (2026-10-21)
++                        '.claude.json')   # stray first-start stub (machine/user IDs only), seen 2026-10-14; real config is the sibling ~/.claude.json
++
++# ---- Backup coverage check (GEN-140; triage GEN-460) -------------------------
++# On every From-Claude run, sort any config-relevant file or folder that is neither in
++# the backup set ($FileMap/$DirMap) nor on the ignore list nor already decided in
++# backup-triage.json: a hook's marker file, or a top-level folder that is empty or holds
++# only ignore-listed files, is skipped by rule (recorded, reported once); anything else
++# gets a BACKUP-TRIAGE NEEDED warning (see "Backup triage" at the top). Covered-ness
++# derives from the live maps -- the ignore list is the only extra data to maintain.
++# Warn-only: never blocks the sync, never changes the exit code; an internal error
++# degrades to a single warning (fail-open). ALL enumeration uses -Force: PS 5.1 skips
+ # hidden/system files without it, and dotfiles are exactly the class to watch.
+ function Test-BackupCoverage {
++    param([hashtable]$Decisions, [bool]$Record)
+     try {
+-        # Per-machine / ephemeral / harness-managed -- deliberately not backed up.
+-        $IgnoreDirs = @('backup-sweep-state','backups','cache','debug','downloads','file-history','plans','plugins','scheduled-tasks',
+-                        'session-backup-state','session-env','sessions','shell-snapshots','state','tasks','telemetry',
+-                        'account-session-sync',
+-                        'spares')   # empty folder Claude Code creates itself, seen 2026-10-25
+-        $IgnoreFiles = @('.credentials.json','*.jsonl','*.jsonl.bak','tmp_*.json','.loggate-*',
+-                         '.config-health-global-marker','.last-cleanup','.settings-health-nudge',
+-                         '*.lock','mcp-needs-auth-cache.json','policy-limits.json','policy-limits.json.stamp.json','*.json.tmp.*','remote-settings.json',
+-                         'sync-baseline.json','claude-config-pending-sync','.cred-denial-pending-*',
+-                         'backup-sweep-surfacer-cursor.json',
+-                         '.last-update-result.json','remote-settings.json.synced-at',   # Claude Code's own update result / settings-fetch timestamp, rewritten automatically (2026-10-18)
+-                         'policy-limits.json.signature*.json','remote-settings.json.signature*.json',   # Claude Code's signature files for the two ignored files above, rewritten automatically (2026-10-21)
+-                         '.claude.json',   # stray first-start stub (machine/user IDs only), seen 2026-10-14; real config is the sibling ~/.claude.json
+-                         'reviewer-verdict-guard.accepted','reviewer-verdict-guard.off','reviewer-verdict-guard.testonly')
++        $IgnorePatterns = $BackupIgnorePatterns
+         # Siblings of .claude -- see the NOT-synced header note for the .claude.json rationale.
+         # Wildcards allowed: .claude.json.tmp.* are the harness's transient atomic-write temp files.
+         $IgnoreSiblings = @('.claude.json','.claude.json.backup','.claude.json.tmp.*')
++        # A hook's own state/switch files are named <hook name>.<one of these> (e.g.
++        # reviewer-verdict-guard.accepted / .off / .testonly, GEN-812).
++        $MarkerExts = @('accepted','off','on','testonly','disabled','bak','orig')
+ 
+         $mapFiles = @($FileMap | ForEach-Object { $_.Claude })
+         $mapDirs  = @($DirMap  | ForEach-Object { $_.Claude })
+-        $remedy = 'Add it to $FileMap/$DirMap in sync.ps1 (to back it up) or to the ignore lists in Test-BackupCoverage (to declare it per-machine).'
++        $hooksDir = Join-Path $ClaudeBase 'hooks'
++        $hookBases = @()
++        if (Test-Path -LiteralPath $hooksDir) {
++            $hookBases = @(Get-ChildItem -LiteralPath $hooksDir -File -Force |
++                Where-Object { Test-IsHookCodeName $_.Name } |
++                ForEach-Object { [IO.Path]::GetFileNameWithoutExtension($_.Name).ToLowerInvariant() })
++        }
+ 
+         # (a) Top-level folders in .claude: covered if any mapped path is the folder
+         #     itself or lies under it.
+-        foreach ($d in (Get-ChildItem -Path $ClaudeBase -Directory -Force)) {
++        foreach ($d in (Get-ChildItem -LiteralPath $ClaudeBase -Directory -Force)) {
+             $covered = $false
+             foreach ($p in ($mapFiles + $mapDirs)) {
+                 if ($p -eq $d.FullName -or $p -like (Join-Path $d.FullName '*')) { $covered = $true; break }
+             }
+-            # '*.lock' folders: Claude Code's transient lock dirs (e.g. policy-limits.json.signature-iat.json.lock), 2026-10-25
+-            if (-not $covered -and $IgnoreDirs -notcontains $d.Name -and $d.Name -notlike '*.lock') {
+-                Write-Warning "BACKUP-COVERAGE: top-level folder '$($d.Name)' is not covered by the backup set and not on the ignore list. $remedy"
++            if ($covered -or (Test-MatchesAnyPattern $d.Name $IgnorePatterns)) { continue }
++            $prior = $Decisions[(ConvertTo-TriageKey $d.Name)]
++            if ($prior -and [string]$prior.decidedBy -ne 'rule') { continue }   # Claude's decision stands
++            $enumErrors = $null
++            $files = @(Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Force -ErrorAction SilentlyContinue -ErrorVariable enumErrors)
++            $others = @($files | Where-Object { -not (Test-MatchesAnyPattern $_.Name $IgnorePatterns) })
++            if ($enumErrors -and $enumErrors.Count -gt 0) {
++                Write-TriageNeeded -RelPath $d.Name -What "folder whose contents could not all be read" -Choices 'skip' -Folder $true
++            } elseif ($others.Count -gt 0) {
++                $was = if ($prior) { "folder skipped earlier by rule, now holding $($others.Count) other file(s)" } else { "folder holding $($others.Count) file(s) not on the ignore list" }
++                Write-TriageNeeded -RelPath $d.Name -What $was -Choices 'skip' -Folder $true
++            } elseif (-not $prior) {
++                $why = if ($files.Count -eq 0) { "empty folder, nothing to back up" } else { "folder holding only lock, temp or log files ($($files.Count)), per-machine state" }
++                Add-RuleSkip -Decisions $Decisions -Record $Record -RelPath $d.Name -Why $why
+             }
+         }
+ 
+         # (b) Files in the .claude root and in hooks\ (non-recursive; hooks subfolders
+         #     are whole-folder DirMap entries).
+-        foreach ($sd in @($ClaudeBase, (Join-Path $ClaudeBase 'hooks'))) {
+-            foreach ($f in (Get-ChildItem -Path $sd -File -Force)) {
++        foreach ($sd in @($ClaudeBase, $hooksDir)) {
++            if (-not (Test-Path -LiteralPath $sd)) { continue }
++            $inHooks = ($sd -eq $hooksDir)
++            foreach ($f in (Get-ChildItem -LiteralPath $sd -File -Force)) {
+                 if ($mapFiles -contains $f.FullName) { continue }
+                 $inMappedDir = $false
+                 foreach ($md in $mapDirs) {
+                     if ($f.FullName -like (Join-Path $md '*')) { $inMappedDir = $true; break }
+                 }
+                 if ($inMappedDir) { continue }
+-                $ignored = $false
+-                foreach ($pat in $IgnoreFiles) {
+-                    if ($f.Name -like $pat) { $ignored = $true; break }
+-                }
+-                if (-not $ignored) {
+-                    Write-Warning "BACKUP-COVERAGE: file '$($f.FullName)' is not in the backup set and not on the ignore list. $remedy"
++                if ($inHooks -and (Test-IsHookCodeName $f.Name)) { continue }   # rule 1 owns hook code (incl. one left out for a secret)
++                if (Test-MatchesAnyPattern $f.Name $IgnorePatterns) { continue }
++                if (-not $inHooks -and $f.Name -ieq $TriageFileName) { continue }   # synced by its own merge
++                $rel = if ($inHooks) { "hooks\" + $f.Name } else { $f.Name }
++                if ($Decisions.ContainsKey((ConvertTo-TriageKey $rel))) { continue }
++                if ($inHooks) {
++                    $dot = $f.Name.LastIndexOf('.')
++                    if ($dot -gt 0) {
++                        $base = $f.Name.Substring(0, $dot).ToLowerInvariant()
++                        $ext  = $f.Name.Substring($dot + 1).ToLowerInvariant()
++                        if ($MarkerExts -contains $ext -and $hookBases -contains $base) {
++                            Add-RuleSkip -Decisions $Decisions -Record $Record -RelPath $rel -Why "on/off or state marker of the '$base' hook, per-machine"
++                            continue
++                        }
++                    }
+                 }
++                Write-TriageNeeded -RelPath $rel -What "file" -Choices 'skip|backup'
+             }
+         }
+ 
+         # (c) .claude* sibling files beside the .claude folder (e.g. a future
+         #     .claude.something config) -- the .claude-rooted scan cannot see these.
+         $parentDir = Split-Path $ClaudeBase -Parent
+-        foreach ($f in (Get-ChildItem -Path $parentDir -File -Force -Filter '.claude*')) {
+-            $ignored = $false
+-            foreach ($pat in $IgnoreSiblings) {
+-                if ($f.Name -like $pat) { $ignored = $true; break }
+-            }
+-            if (-not $ignored) {
+-                Write-Warning "BACKUP-COVERAGE: sibling file '$($f.FullName)' is not in the backup set and not on the ignore list. $remedy"
+-            }
++        foreach ($f in (Get-ChildItem -LiteralPath $parentDir -File -Force -Filter '.claude*')) {
++            if (Test-MatchesAnyPattern $f.Name $IgnoreSiblings) { continue }
++            $rel = "..\" + $f.Name
++            if ($Decisions.ContainsKey((ConvertTo-TriageKey $rel))) { continue }
++            Write-TriageNeeded -RelPath $rel -What "file beside the .claude folder" -Choices 'skip'
+         }
+     } catch {
+         Write-Warning "BACKUP-COVERAGE: the coverage check itself failed ($($_.Exception.Message)); sync continues unaffected."
+     }
+ }
+ 
++# ---- Backup triage state + rule-built backup entries (GEN-460) ---------------
++$TriageLocalPath = Join-Path $ClaudeBase $TriageFileName
++$TriageDrivePath = Join-Path $DriveBase $TriageFileName
++$TriageLocal = Read-TriageFile -Path $TriageLocalPath -Label 'local'
++$TriageDrive = Read-TriageFile -Path $TriageDrivePath -Label 'Drive'
++$Triage = Merge-TriageMaps -First $TriageLocal.Map -Second $TriageDrive.Map
++$StaticBackupFiles = @($FileMap | ForEach-Object { $_.Claude })
++
++if ($PSCmdlet.ParameterSetName -eq 'Triage') {
++    $triageExit = @(Invoke-TriageDecide -RawPath $TriageDecide -Decision $As -Why $Reason)[-1]
++    exit $triageExit
++}
++
++# Why a file that is about to be PUSHED must be left out this run (over 1 MB, unreadable, or holding
++# a value that matches a secret pattern), or $null. Run on From-Claude for every file the rules or
++# Claude's decisions added -- the fixed list and whole-folder backups keep their own GEN-233 scan.
++function Get-PushRefusal {
++    param([string]$Path)
++    try {
++        if ((Get-Item -LiteralPath $Path).Length -gt 1MB) { return "it is over 1 MB" }
++        if ($null -eq $script:patternDefs) { $script:patternDefs = Get-SecretPatternDefs }
++        $hit = Find-SecretMatch -Text ([IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8)) -Defs $script:patternDefs
++        if ($hit) { return "it contains a value matching the '$hit' secret pattern" }
++    } catch {
++        return "it could not be checked for secrets ($($_.Exception.Message))"
++    }
++    return $null
++}
++$checkPushes = ($Direction -eq 'From-Claude' -or $CoverageOnly)
++
++# Rule 1: every hook's code on EITHER side is in the backup set (so a To-Claude pull restores a
++# hook added on another PC). The exceptions: a 'retired' hook that is no longer on this PC (keeps
++# a deliberately removed hook from being pulled back), and, when pushing, a hook file that is over
++# 1 MB or matches a secret pattern (left out of this push with a warning, like any other file
++# added without a person looking at it).
++$hookCodeNames = [ordered]@{}
++foreach ($hd in @((Join-Path $ClaudeBase 'hooks'), (Join-Path $DriveBase 'hooks'))) {
++    if (-not (Test-Path -LiteralPath $hd)) { continue }
++    foreach ($f in (Get-ChildItem -LiteralPath $hd -File -Force)) {
++        if ((Test-IsHookCodeName $f.Name) -and -not $hookCodeNames.Contains($f.Name.ToLowerInvariant())) {
++            $hookCodeNames[$f.Name.ToLowerInvariant()] = $f.Name
++        }
++    }
++}
++foreach ($name in $hookCodeNames.Values) {
++    $rel = "hooks\" + $name
++    $claudePath = Join-Path $ClaudeBase $rel
++    $d = $Triage[(ConvertTo-TriageKey $rel)]
++    $isLocal = Test-Path -LiteralPath $claudePath -PathType Leaf
++    if ($d -and [string]$d.decision -eq 'retired' -and -not $isLocal) { continue }
++    if ($checkPushes -and $isLocal) {
++        $why = Get-PushRefusal -Path $claudePath
++        if ($why) {
++            Write-Warning "BACKUP-TRIAGE: left hook '$rel' out of this backup -- $why. Fix the file; it is backed up again once it passes."
++            continue
++        }
++    }
++    $FileMap += @{ Drive = Join-Path $DriveBase $rel; Claude = $claudePath; Git = Join-Path $GitHistory $rel; HookCode = $true }
++}
++
++# Files Claude decided to back up ('backup' decisions). They are stored on Drive and in git under
++# triage-backup\, so one can never land on a tooling file at the Drive root. Every run re-applies
++# the refusals -TriageDecide used (the Drive copy of the decisions file could have been edited);
++# every push requires the exact file to exist here and re-checks it for size and secrets.
++foreach ($k in @($Triage.Keys | Sort-Object)) {
++    $d = $Triage[$k]
++    if ([string]$d.decision -ne 'backup') { continue }
++    $rel = ([string]$d.path -replace '/', '\').TrimStart('\')
++    $claudePath = Join-Path $ClaudeBase $rel
++    if ($StaticBackupFiles -contains $claudePath) { continue }
++    $refusal = Get-BackupRefusal -Rel $rel
++    if ($refusal) {
++        Write-Warning "BACKUP-TRIAGE: ignored the 'backup' decision for '$rel' in $TriageFileName -- $refusal. Record it as skip with: $(Get-TriageCommandText -RelPath $rel -Choices 'skip')"
++        continue
++    }
++    if ($checkPushes) {
++        if (-not (Test-Path -LiteralPath $claudePath -PathType Leaf)) { continue }
++        $why = Get-PushRefusal -Path $claudePath
++        if ($why) {
++            Write-Warning "BACKUP-TRIAGE: left '$rel' out of this backup -- $why. Fix the file, or record it as skip with: $(Get-TriageCommandText -RelPath $rel -Choices 'skip')"
++            continue
++        }
++    }
++    $FileMap += @{ Drive = Join-Path $DriveBase "triage-backup\$rel"; Claude = $claudePath; Git = Join-Path $GitHistory "triage-backup\$rel" }
++}
++
++if ($CoverageOnly) {
++    Test-BackupCoverage -Decisions $Triage -Record $false
++    foreach ($pair in $FileMap) { Write-Output "COVERAGE-ONLY file: $($pair.Claude)" }
++    foreach ($pair in $DirMap)  { Write-Output "COVERAGE-ONLY folder: $($pair.Claude)" }
++    exit 0
++}
++
+ if ($Direction -eq "From-Claude") {
+-    Test-BackupCoverage
++    Test-BackupCoverage -Decisions $Triage -Record $true
+ }
+ 
+ $copied = 0
+@@ -656,27 +1086,42 @@ if ($Direction -eq "To-Claude") {
+     $Baseline = Load-Baseline -Path $BaselineFile
+     Invoke-NonDestructivePull -Baseline $Baseline -Discard:$DiscardLocal.IsPresent
+     Save-Baseline -Path $BaselineFile -Baseline $Baseline
++    $null = Save-TriageState -ToDrive $false
+     $copied = $Baseline.Count
+ } else {
+     # From-Claude (local -> Drive) stays a straightforward overwrite: this machine's
+     # local state is always the source of truth when pushing. Cross-machine
+     # divergence on the Drive side is out of scope here (GEN-287).
++    $Baseline = Load-Baseline -Path $BaselineFile
+     foreach ($pair in $FileMap) {
+         $src = $pair.Claude
+         $dst = $pair.Drive
+ 
+-        if (-not (Test-Path $src)) {
+-            Write-Warning "Source not found, skipping: $src"
++        # -LiteralPath (GEN-460): rule-built entries carry real file names, which may hold [ ] -- a
++        # -Path test/copy would treat those as wildcards and could copy a DIFFERENT file.
++        if (-not (Test-Path -LiteralPath $src)) {
++            if ($pair.HookCode -and $null -ne $Baseline[$src]) {
++                # This PC had the hook (baseline entry) and it is gone: deleted here.
++                $rel = "hooks\" + (Split-Path $src -Leaf)
++                Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' was deleted on this PC but is still on Drive. Claude: if it was removed on purpose, " +
++                    "keep it from being pulled back with: " + (Get-TriageCommandText -RelPath $rel -Choices 'retired') +
++                    " -- if not, ask Erez whether to restore it.")
++            } elseif ($pair.HookCode) {
++                # Never on this PC: a hook added on another PC. The next To-Claude sync brings it here.
++                Write-Output "Hook on Drive only (added on another PC; the next To-Claude sync brings it here): $src"
++            } else {
++                Write-Warning "Source not found, skipping: $src"
++            }
+             $skipped++
+             continue
+         }
+ 
+         $dstDir = Split-Path $dst -Parent
+-        if (-not (Test-Path $dstDir)) {
++        if (-not (Test-Path -LiteralPath $dstDir)) {
+             New-Item -ItemType Directory -Path $dstDir -Force | Out-Null
+         }
+ 
+-        Copy-Item -Path $src -Destination $dst -Force
++        Copy-Item -LiteralPath $src -Destination $dst -Force
+         Write-Output "Copied: $src  ->  $dst"
+         $copied++
+     }
+@@ -698,12 +1143,12 @@ if ($Direction -eq "To-Claude") {
+ 
+     # Refresh the baseline for every file we just pushed, so a subsequent To-Claude
+     # pull on this machine correctly sees them as "unedited since last sync".
+-    $Baseline = Load-Baseline -Path $BaselineFile
+     foreach ($e in (Get-AllManagedFiles)) {
+         $h = Get-FileHashSafe -Path $e.Claude
+         if ($null -ne $h) { $Baseline[$e.Claude] = $h }
+     }
+     Save-Baseline -Path $BaselineFile -Baseline $Baseline
++    $null = Save-TriageState -ToDrive $true
+ }
+ 
+ Write-Output ""
+@@ -736,12 +1181,15 @@ if ($Direction -eq "From-Claude") {
+ 
+         # Mirror the synced files into the git folder.
+         foreach ($pair in $FileMap) {
+-            if (-not (Test-Path $pair.Claude)) { continue }
++            if (-not (Test-Path -LiteralPath $pair.Claude)) { continue }
+             $gitDir = Split-Path $pair.Git -Parent
+-            if (-not (Test-Path $gitDir)) {
++            if (-not (Test-Path -LiteralPath $gitDir)) {
+                 New-Item -ItemType Directory -Path $gitDir -Force | Out-Null
+             }
+-            Copy-Item -Path $pair.Claude -Destination $pair.Git -Force
++            Copy-Item -LiteralPath $pair.Claude -Destination $pair.Git -Force
++        }
++        if ($TriageLocal.Ok -and (Test-Path -LiteralPath $TriageLocalPath)) {
++            Copy-Item -LiteralPath $TriageLocalPath -Destination (Join-Path $GitHistory $TriageFileName) -Force
+         }
+ 
+         # Mirror the whole-folder syncs into the git folder (recursive, additive).
