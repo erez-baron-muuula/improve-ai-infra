@@ -1,6 +1,8 @@
 # GEN-674 size-stop redesign — handoff (cold start)
 
-Status: built and tested, NOT installed. Waiting on Erez's answer to one question.
+Status (2026-10-25): SUPERSEDED IN PART. Erez chose option E ("Go with option E. Start with the one-click prompt test.") — read `option-e-proposal.md` (this folder) first; its step 1 (ask-rule prompt test) passed. Next: rebuild the working copies to option E, then two code reviews, approval card, install. The B+/A text below is history.
+
+Original status: built and tested, NOT installed. Waiting on Erez's answer to one question.
 
 ## Pending decision (asked 2026-10-21, not yet answered)
 "Which way should the size stop go in?"

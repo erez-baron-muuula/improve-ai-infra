@@ -1,0 +1,67 @@
+@@@OLD
+function isProtectedCodeTarget(key) {
+  if (!key) return false;
+  const inHooks = key.startsWith(HOOKS_DIR + '\\') && key.endsWith('.js');
+@@@NEW
+// GEN-674: the two Drive scripts that write the locked config files are vetting-locked too. They carry
+// the rules-file size stop, which an ordinary edit could otherwise remove (in auto mode such an edit can
+// pass without Erez). Exact normalized paths, with the same existence anchor as the hooks/scripts dirs.
+// sync.ps1 and config-json-edit.js are not covered (accepted residual, GEN-674 plan). Shell write shapes
+// the destination patterns miss reach them unchecked, as for every hook (GEN-938); the session-start
+// check flags a stop that has gone missing.
+const PROTECTED_DRIVE_SCRIPTS = new Set([
+  'g:\\my drive\\ai projects\\_tooling\\claude\\update-config.ps1',
+  'g:\\my drive\\ai projects\\_tooling\\claude\\update-global-rule.ps1',
+]);
+
+function isProtectedCodeTarget(key) {
+  if (!key) return false;
+  // A Bash-tool path (/g/My Drive/...) normalizes to \g\my drive\...; read it as g:\my drive\...
+  const driveKey = String(key).replace(/^\\([a-z])\\/, '$1:\\');
+  if (PROTECTED_DRIVE_SCRIPTS.has(driveKey)) {
+    try { return fs.existsSync(driveKey) && fs.statSync(driveKey).isFile(); } catch (e) { return false; }
+  }
+  const inHooks = key.startsWith(HOOKS_DIR + '\\') && key.endsWith('.js');
+@@@END
+@@@OLD
+        if (!tok) continue;
+        push(normPath(tok, cwd), false);
+      }
+    }
+  }
+  return out;
+}
+@@@NEW
+        if (!tok) continue;
+        const k = normPath(tok, cwd);
+        // GEN-674: a direct shell write to the global CLAUDE.md skips update-config.ps1, where its size is
+        // measured; enforceCheckDue refuses it even with a pass. Only the write shapes the patterns above
+        // recognise; any other shape is caught afterwards by the session-start size check.
+        if (k === GLOBAL_CLAUDE_MD && isCheckDueTarget(k)) out.directRulesWrite = true;
+        push(k, false);
+      }
+    }
+  }
+  return out;
+}
+@@@END
+@@@OLD
+  if (!targets || targets.length === 0) return; // no check-due target -> not our concern
+@@@NEW
+  if (!targets || targets.length === 0) return; // no check-due target -> not our concern
+
+  // GEN-674: the global CLAUDE.md is written only through update-config.ps1 / update-global-rule.ps1,
+  // which measure its size on the exact bytes they write. A direct shell write would skip that, so it is
+  // refused here, before any pass is looked up (a pass is never consumed by it).
+  if (targets.directRulesWrite) {
+    process.stderr.write(
+      'Refused (rules-file size stop, GEN-674): this command writes the global CLAUDE.md directly (a ' +
+      'redirect, Set-Content/Add-Content/Out-File/Tee-Object, a copy or move destination, or ' +
+      '[IO.File]::Write*), which skips the size measurement. Write it only through update-config.ps1 ' +
+      '(-Op write-file -ContentFile, or -Op text-replace) or update-global-rule.ps1. If the command only ' +
+      'quotes such a fragment inside replacement text, apply that text with -Op write-file -ContentFile ' +
+      'instead.\n'
+    );
+    process.exit(2);
+  }
+@@@END
