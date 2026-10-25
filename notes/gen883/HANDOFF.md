@@ -1,5 +1,11 @@
 # GEN-883 bundle — handoff (state as of 2026-10-25)
 
+> **2026-10-25 (later): superseded in part.** Comet 155 refuses Claude's clicks/screenshots
+> ("Host access is restricted by policy", anthropics/claude-code#103981), so browser work moved to
+> Google Chrome (profiles "Erez Work" = erez@, "info@muuula.com" = info@). Hook, labels and
+> browser.md were switched to Chrome via /vet-code the same day. Where this file says Comet, read
+> Chrome. The current remaining list is the 2026-10-25 "Comet blocks Claude's clicks" entry on GEN-883.
+
 Tickets: GEN-883 (primary, In Progress) https://app.notion.com/p/3fa6e495d07c812db9f9dc734fbe1659 ·
 GEN-742 browser notes https://app.notion.com/p/3e86e495d07c81398465c1667e8881af ·
 GEN-928 window unusable https://app.notion.com/p/3ff6e495d07c8136921ec9adc1991f8b ·
