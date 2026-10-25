@@ -1,0 +1,488 @@
+# Open tickets by cause group (2026-10-25)
+
+One line per ticket: id [status, flag] problem. Flags: maybe-already-done / unclear come from the reading pass and are unverified.
+
+## A. Claude states or acts on things it has not checked (62)
+- GEN-177 [To Do] Session-start follow-up list showed a ticket as open that was already Done.
+- GEN-231 [To Do] Claude flagged existing production behaviour as an open question, and later proposed 'new' next steps that already existed, instead of checking the code/infrastructure first.
+- GEN-262 [To Do] Claude cited a link or mechanism as a source without verifying it actually held or governed the claimed content.
+- GEN-297 [To Do] Claude read an empty result from a failed/throttled call, and from a measurement that could not fire, as a valid 'nothing found'.
+- GEN-326 [To Do] Claude asserted a false categorical ('skills only run when the user types them') contradicted by a tool in use, and no reviewer challenged it; ticket is to log it.
+- GEN-383 [To Do] Claude nearly reverted a same-day rule fix by drafting from the rule's older wording.
+- GEN-396 [To Do] Claude relays machine warnings, classifier messages and sub-agent answers to Erez as verified fact.
+- GEN-402 [To Do] Claude drops one part of a multi-part request or item list and declares the work complete.
+- GEN-421 [To Do] Claude ran /vet-code from memory of its steps and skipped a step added earlier that day, then crossed a one-way gate.
+- GEN-427 [To Do, unclear] Claude inferred that Notion writes ran silently from the absence of an interruption it cannot observe, and built an investigation on it.
+- GEN-450 [To Do, maybe-already-done] Claude writes unverified capability, config and outcome claims as fact (GEN-58 Class A, 26 instances).
+- GEN-452 [To Do] When two independent doc fetches contradict, Claude treated one as settled and load-bore a design on it.
+- GEN-468 [To Do, unclear] Claude proposed a hook-plumbing fix for an ordering problem that lives in the model's own prose within a turn.
+- GEN-502 [To Do] Claude listed the skills folder, concluded /vet-rule did not exist, and told Erez so wrongly.
+- GEN-522 [To Do] Claude reported a mis-filed invoice as working as designed without testing the design against Erez's recorded intent.
+- GEN-529 [To Do] Several review rounds were spent on a hook design whose core platform assumption was wrong and checkable from the docs at the start.
+- GEN-537 [Review, maybe-already-done] Erez has to keep typing 'verify your answer' because Claude presents answers it could have verified against live state.
+- GEN-544 [To Do] Claude designed a scoring model without searching the project's own notes where an earlier decision had already rejected that approach.
+- GEN-555 [To Do] Claude built heavy defences against a threat (malicious local forger) that does not exist in this context, and under-rated a real downside until pushed.
+- GEN-567 [To Do] The 'designed or diagnosed on an unverified primitive' failure class has 105+ logged instances and keeps growing despite a dozen per-instance rules.
+- GEN-594 [Backlog] A counting script mis-attributed bullets at a section boundary and Claude reported the bogus result as a finding three times.
+- GEN-598 [Backlog] Claude wrote a guessed ticket ID (a real unrelated ticket) into hook comments before the ticket existed.
+- GEN-605 [Backlog] Claude wrote to the wrong Notion ticket by reusing a page ID from an earlier search result, changing an unrelated ticket's priority.
+- GEN-606 [Review, maybe-already-done] Claude offered Erez destinations for a finding without first searching the board for an existing ticket that already covered it.
+- GEN-610 [Backlog] A validation fix reported a dependent check alongside its failed prerequisite, giving contradictory advice that made the caller fail again.
+- GEN-609 [Backlog] Claude rested a recommendation on the word 'rare' with no measurement, and the project's own data showed the opposite.
+- GEN-614 [Backlog] A guard was designed against the published tool schema, but real payloads were shaped differently and would have slipped through silently.
+- GEN-617 [Backlog] Claude justified a recommendation with a priority (board clutter) that Erez never stated.
+- GEN-624 [Backlog] The defaultMode setting sits as a top-level key in settings.json and may be silently ignored, while sessions run in bypassPermissions.
+- GEN-631 [Backlog] A review finding describing a class of failure was fixed only at the named instances, costing an extra review round.
+- GEN-633 [Backlog] Designs build a new channel to carry information that is already available at the decision point.
+- GEN-637 [Backlog] Designs state guarantees that the layer enforcing them cannot actually evaluate, so they read as true but do nothing.
+- GEN-646 [To Do] Claude recommended removing an existing guard without asking why it was introduced.
+- GEN-652 [To Do] Claude forwarded a refactor recommendation for code that explicitly documented why it is duplicated.
+- GEN-656 [To Do] Fixes and designs repeatedly rest on assumptions about tool or platform behaviour that were never verified, and the escalation has no disposition.
+- GEN-660 [To Do] A feature was implemented on one filing path and declared done although the described condition occurs on another path too.
+- GEN-669 [To Do] Size, effort and latency figures Erez decided on were estimates that missed by large factors.
+- GEN-671 [To Do, maybe-already-done] The directories holding the gate pass files are not protected, and a design relied on a permission prompt that never appears in bypassPermissions.
+- GEN-676 [To Do] Claude reported the wrong Claude Code version by reading a same-named binary on disk instead of the running client.
+- GEN-681 [To Do] A completion report cited a passing test count as evidence for items the suite never covered.
+- GEN-682 [To Do] A proposal claimed to close a recorded harm after tracing only one of the recorded instances.
+- GEN-685 [Blocked, unclear] A why-are-we-failing diagnosis did not re-surface a previously flagged larger issue in the same area.
+- GEN-686 [To Do] A fresh session answered a scope question from skill wording and memory without reading the governing ticket's handoff, and was wrong.
+- GEN-696 [To Do] Claude read a stale Drive Sheets export as live state and overwrote a manual correction.
+- GEN-724 [Backlog] A 'For you' summary sometimes states a count that contradicts its own list (e.g. 'two installs' then three listed).
+- GEN-725 [To Do, unclear] A reasoning-failure write-up drafted for GEN-58 logs the wrong failure and still needs reconciling and filing (Vol.9 rollover).
+- GEN-769 [To Do] Claude repeatedly links a GEN ticket id to the wrong Notion page in chat (8 recorded instances).
+- GEN-776 [To Do] Claude offers to apply a fix from a session opened in a different project's folder than where the fix belongs.
+- GEN-780 [To Do] Claude says something is missing, or writes on that basis, from a read that another session has since made stale.
+- GEN-784 [To Do] Claude states the effort level a turn ran at (and judges needed effort) without reading the session's actual level.
+- GEN-796 [To Do] Claude called cloud admin changes safe from generic platform rules and a live job broke (BigQuery export, Gemini billing).
+- GEN-870 [To Do] Claude drafted a reply on an external case from one indirect signal and missed the case's earlier correspondence in the mailbox and HISTORY.md.
+- GEN-874 [To Do] Claude reports a change as verified when the check read a typed or reconstructed copy rather than the saved file.
+- GEN-893 [Review, maybe-already-done] Claude finds size-limit problems after editing a file instead of designing within the limit while forming the proposal.
+- GEN-901 [To Do] Safety-plan claims about failure detection and undo are written from assumption and approved by Erez before being checked.
+- GEN-906 [To Do] Claude said it could only use the browser for a desktop-app request though PC control was available.
+- GEN-928 [To Do, unclear] The Comet window became unusable (zero size) and Claude wrongly told Erez it was minimized instead of fixing it.
+- GEN-934 [To Do] Claude wrote the wrong weekday next to a date (called Friday 23 Oct a Thursday).
+- GEN-940 [To Do] Claude proposed a new ticket and plan for an incoming notice when existing work already covered it.
+- GEN-942 [To Do] A new hook was designed for a gate that a built-in Claude Code permissions.ask rule already handles.
+- GEN-945 [To Do] Claude spent an hour on local diagnosis of a distinctive tool error that a single public search would have explained.
+- GEN-946 [To Do] Claude proposes plan parts that existing mechanisms already cover and the review panel does not catch it.
+
+## B. Claude does not apply a rule it already has, at the moment it matters (73)
+- GEN-58 [To Do, unclear] Claude's reasoning slips are not caught by an independent peer reviewer (title only; page too large to fetch).
+- GEN-77 [To Do] Claude explains things to Erez in jargon, including plan-mode plans, so he cannot read them.
+- GEN-144 [To Do] Nothing flags repeated identical calls, edit churn, or repeated failures while they happen.
+- GEN-147 [Review, maybe-already-done] Erez sees too much running narration between tool calls.
+- GEN-148 [To Do, maybe-already-done] Several action items are shown in one paragraph, which is hard to follow.
+- GEN-154 [Review, maybe-already-done] Responses show non-actionable information and open topics clutter the chat.
+- GEN-176 [In Progress] Claude slips (unapproved action, questions Erez cannot answer, confident wrong claims) are not caught without Erez noticing.
+- GEN-185 [To Do] Wrong claims Claude states are not re-verified and corrected automatically.
+- GEN-207 [To Do] Claude skipped the required strikethrough/bold redline when working out rule edits, and self-review missed it.
+- GEN-210 [To Do] The same avoidable mistakes recur when Claude authors dev (Jira) tickets, 15 listed.
+- GEN-227 [To Do] Claude keeps layering or patching designs instead of re-deriving the smallest one that meets the goals; ticket asks whether to make 'smallest design' a global rule.
+- GEN-246 [To Do] Wrong reasoning in ordinary everyday responses is not caught by any layer of the QA scheme.
+- GEN-276 [To Do, unclear] /check should also compare proposals against Claude Code docs and best practices (page body is blank).
+- GEN-320 [To Do] /wrap classified a session as global-only and skipped the project HISTORY.md step even though the ticket's parent epic identifies the project; happened twice.
+- GEN-324 [To Do] A ticket in Review has no guaranteed procedure to make the review actually happen.
+- GEN-332 [To Do] Class E over-engineering has recurred about 15 times; Erez must decide whether to sharpen the guarding rule or accept it as residual.
+- GEN-333 [To Do] Independent /check review only fires when Claude remembers to invoke it, so pure-reasoning slips on recommendation turns go unreviewed.
+- GEN-334 [To Do, maybe-already-done] Notion reference notes are injected only at prompt time, so mid-turn Notion work could miss them; GEN-825 covered part of this.
+- GEN-346 [To Do] Reasoning failures signalled by Erez's pushback are logged only if Claude remembers the trigger.
+- GEN-354 [To Do, maybe-already-done] Unclear whether sub-agents receive the always-loaded rules and once-per-session injected notes; docs now answer most of it.
+- GEN-367 [To Do] In a project-scoped session Claude repeatedly offered to build a change belonging to another project.
+- GEN-388 [Blocked] The notion-fetch staleness hook only warns, so Claude can ignore the warning and use stale content.
+- GEN-422 [Blocked] Non-routine proposals can skip the /suggest discipline; only a non-blocking nudge exists and a hard-block Stop hook is deferred.
+- GEN-469 [Review, maybe-already-done] Claude narrates its verification of end-of-turn nudges back to Erez even when nothing needs correcting.
+- GEN-472 [To Do] Claude narrates a clean result instead of staying silent after any end-of-turn nudge, not only the claim-check.
+- GEN-483 [To Do, unclear] Claude can write code before assumptions are confirmed, and it is unclear whether a hook can enforce that.
+- GEN-492 [To Do, unclear] Claude left the primary ticket in Backlog and asked Erez, despite design and investigation counting as substantive work.
+- GEN-507 [To Do] Claude narrates clean self-audits and benign tool output on turns that should be silent.
+- GEN-519 [To Do] Ticket drafts reach Erez with recurring rule violations such as unbackticked tokens, vague phrases and blank Status.
+- GEN-531 [To Do] Claude handed Erez an internal parameter (review-panel setting) to choose and reported the effort level only after acting.
+- GEN-533 [To Do] Reasoning failures were not logged to the failure log at the moment they surfaced, and a 'logged' claim was written before the write happened.
+- GEN-545 [To Do, maybe-already-done] Claude nearly read Erez's '1.' as selecting option 1 when it was a list marker for the opposite choice.
+- GEN-549 [Blocked] Newly filed Team-Tasks tickets arrive without Gain, Urgency and Priority set.
+- GEN-556 [To Do] Claude presents pre-narrowed option menus to Erez dressed up as guiding questions, and sometimes skips guiding questions before designing.
+- GEN-558 [To Do] Claude asks Erez to decide things that are obvious or that it could settle itself, including status changes its own verified work already determined.
+- GEN-560 [null, unclear] Claude read 'bank via wrap' (defer to wrap) as 'run wrap now' and started the wrap procedure.
+- GEN-573 [To Do] Claude proposed filing a follow-up ticket after Erez declined (not deferred) a task.
+- GEN-574 [To Do] Effort tags shown to Erez are wrong (often xhigh for mechanical work) and only get corrected when he questions them.
+- GEN-577 [To Do] Claude re-proposed a workaround Erez had already rejected earlier in the same session.
+- GEN-581 [To Do] A plan nearly put a rule into files that are not loaded at the moment the rule must fire.
+- GEN-585 [To Do] Claude wrote 'I'm proceeding to X now' and then ended the turn without doing X.
+- GEN-590 [Backlog] The prior-art and breadth check was run once and not re-run when the design changed mechanism class mid-conversation, leading to an over-built proposal.
+- GEN-595 [Backlog] Claude proposed deleting a false statement from a published ticket instead of correcting it in place.
+- GEN-599 [Backlog] Claude recommended keeping a fix whose measured failure mode was worse than the problem it solved.
+- GEN-611 [Backlog] Effort tags were carried over from the session's running level or attached to the wrong object instead of derived from the proposed task.
+- GEN-647 [To Do] Newly found standalone defects get bolted onto an unrelated change or patched around locally instead of getting their own ticket and review.
+- GEN-654 [To Do] Replace-based file rewrites silently corrupt output when the inserted text contains dollar sequences.
+- GEN-659 [To Do] A session started on stale context because HISTORY.md was keyword-searched instead of reading the table of contents and newest entries.
+- GEN-693 [Blocked, unclear] Claude offered Erez the option to skip a required vetting panel.
+- GEN-712 [Backlog] Scheduling-tool gotchas (CronCreate session-only, ScheduleWakeup misuse, vanishing tasks) have no injected reference note, so wrong-tool turns recur.
+- GEN-716 [Review, maybe-already-done] Retiring the claim linter left per-answer unverified claims unchecked; a minimal count-claim nudge shipped and awaits one wrap check.
+- GEN-744 [To Do] A data-scope limit Erez set in the main session was not repeated in two sub-agent briefs, and a reviewer read files outside the scope.
+- GEN-747 [To Do] Claude refers to a named person as she/he without the pronoun ever being stated.
+- GEN-762 [To Do] PowerShell splits git commit -m messages containing double quotes, failing the commit.
+- GEN-774 [Backlog, unclear] No injection ref exists for Google Drive connector gotchas (e.g. reversed Hebrew PDF text), so a session misattributed fields.
+- GEN-778 [To Do] No injection ref exists for scheduled-task gotchas (first-run prompt stall, push not delivered, Routines naming), so sessions repeat them.
+- GEN-779 [To Do] Dated follow-ups handed to Erez come with no reminder unless he asks.
+- GEN-781 [To Do] Project session-start steps (git pull, config sync, HISTORY.md read, retry check) are skipped when the first message is a task.
+- GEN-829 [To Do] Claude ran commands with accept-terms flags (winget --accept-source-agreements) without asking Erez.
+- GEN-833 [To Do] Claude proposes recurring automations as PC-bound scheduled tasks without asking where they should run.
+- GEN-841 [To Do] Claude hands Erez actions it could do itself (open an app, delete a backup) and never tests why a step needs him.
+- GEN-842 [To Do] Claude leaves apps and test tabs it opened for checks running on Erez's PC.
+- GEN-853 [To Do] A converged plan not built in its session stays only in the local plans folder and the next session replans from scratch.
+- GEN-858 [Blocked] Claude presents a reworked plan for approval without running the /check panel (5 instances, including partial panels and post-convergence edits).
+- GEN-866 [To Do] A plan's plain-language summary promises 'everything else stays the same' while the plan itself changes behaviour, so Erez approves a change he was told is not happening.
+- GEN-873 [To Do] Claude asks Erez to approve or decide something (text, plan, draft) that was never shown on his screen.
+- GEN-875 [To Do] Claude left a plainly warranted ticket merge/close for a future session instead of asking Erez in the same turn.
+- GEN-878 [To Do] An outward email draft included a commitment (accepting a call) that Erez never asked for.
+- GEN-909 [To Do] Claude recommended /wrap while a session it started was still running.
+- GEN-911 [To Do] After Erez said 'not now', Claude still showed a session card for the same follow-up, which looked like asking again.
+- GEN-912 [To Do] The For-you block lists an open or unchecked item without saying who must act and how.
+- GEN-921 [To Do] Claude proposes a path, agrees at once that a better option exists when Erez challenges it, and the better option was available first.
+- GEN-930 [To Do] Claude drops a review panel's unadopted advisory notes when presenting a converged plan for approval.
+
+## C. Rule files grow, overlap, contradict and go stale (52)
+- GEN-82 [To Do] Loading the two huge analytics event sheets for every feature is slow and costly.
+- GEN-130 [Blocked] Adding a rule gives no warning when it overlaps, contradicts, or embeds time-varying references.
+- GEN-126 [To Do] Several rule clusters in the global CLAUDE.md restate the same idea across multiple rules.
+- GEN-131 [Blocked] The global CLAUDE.md is a flat list of about 70 rules with no sections or IDs.
+- GEN-129 [Blocked] No on-demand audit of config for contradictions, overlap, dangling references, stale and unenforceable rules.
+- GEN-132 [To Do, unclear] The memory store duplicates rules already in the global CLAUDE.md, paying for them twice.
+- GEN-135 [Blocked] The memory-consolidation skill does not check duplication against the global CLAUDE.md.
+- GEN-158 [To Do] Three response-formatting rules (narration, action block, three-bucket) partly overlap.
+- GEN-169 [To Do] The .cursorrules mirror of each CLAUDE.md costs a sync step on every wrap-up and may be dead weight.
+- GEN-171 [To Do] Rules grow in number without being checked for currency or obeyed.
+- GEN-172 [To Do] Existing rules in CLAUDE.md are verbose.
+- GEN-173 [To Do] New or revised rules are not written concisely by default.
+- GEN-270 [To Do] The /check skill itself uses positional cross-references and its rule-check lens does not cover skill edits.
+- GEN-271 [Review, maybe-already-done] CLAUDE.md config-health (drift, overlap, dangling refs) was checked only by hand; an automated pass was built and awaits an organic marker-path auto-fire to confirm.
+- GEN-290 [Review, maybe-already-done] settings.json had dead, duplicate, over-broad and contradictory entries; a settings health scan was built and awaits its first organic weekly nudge.
+- GEN-291 [To Do] A project CLAUDE.md rule can contradict, duplicate or silently shadow a global rule and no check catches it.
+- GEN-299 [Review, maybe-already-done] Settings cleanup re-reviewed entries already judged keep on every run; a keep-list was built and awaits an organic confirming run.
+- GEN-300 [To Do, maybe-already-done] Open decision whether the PowerShell/shell gotcha cluster belongs always-loaded in the global CLAUDE.md or in an on-demand reference.
+- GEN-318 [To Do] The auto-deploy rule says deploy when it is 'established practice for the project' but never defines what qualifies.
+- GEN-330 [To Do, unclear] Optional advisory to cross-reference the reserve-asking rule from the new auto-status rule; Erez declined it.
+- GEN-341 [To Do, maybe-already-done] No reusable test exists for deciding whether a CLAUDE.md rule can leave the always-loaded file; the test is now approved but the ticket's own decision on its home is open.
+- GEN-384 [To Do, unclear] Candidate rule: before designing new enforcement, search for an existing same-shape mechanism and clone it; likely a restatement of an existing rule.
+- GEN-404 [To Do] The staging skill still refers to an outbound-TLS rule as if it were always loaded, but it moved to a shell ref.
+- GEN-429 [To Do] The smallest-design wording in /suggest Check 4 and the /check Holistic lens could drift apart.
+- GEN-448 [To Do] Ticket-formatting rules in the always-loaded project CLAUDE.md cost tokens every turn but are used only when drafting tickets.
+- GEN-455 [To Do, unclear] GEN-58 Class B index is missing a digest line and stale-source failures are filed under Class D.
+- GEN-476 [To Do] The contradiction-tracking rule's wording conflicts with silently absorbing corrections into the For-you block.
+- GEN-477 [To Do] The global block rule has no marker saying two hook texts restate it, so edits to the rule can leave hooks stale.
+- GEN-603 [Backlog] Two inconsistencies remain in the /wrap Step 3b text (an FYI with no fast-path tie-in, and a retire procedure documented where nobody will look).
+- GEN-667 [To Do] Three Notion rules sit in the Invoice Automation CLAUDE.md instead of the shared hook-injected Notion refs file.
+- GEN-674 [In Progress] The always-loaded global CLAUDE.md is too large and slows every session.
+- GEN-700 [To Do] Rule-content edits to hooks/refs/*.md files are not covered by the check-before-present enforcement that covers CLAUDE.md.
+- GEN-709 [To Do] Two non-blocking /check advisories remain on the /vet-rule skill text.
+- GEN-741 [To Do] The ticket-status rule does not say whether an uncommitted 'Erez decides someday' ticket is Backlog or Blocked, so reviewers disagree.
+- GEN-763 [To Do] /vet-code's diagnostic-probe fast-path skips Step 3 but Step 5 still asks to attest the Step 3 secret check.
+- GEN-764 [To Do, maybe-already-done] Documentation project CLAUDE.md holds three uncommitted edits of unknown origin, one deleting the 'non-technical' line.
+- GEN-825 [Review, maybe-already-done] Notion and shell reference notes (22k and 20k chars) were truncated to a 2,000-character preview when injected.
+- GEN-830 [To Do] The global CLAUDE.md says sub-agents cannot run shell commands, but they now can.
+- GEN-837 [To Do] Always-loaded rules files keep growing when a pointer or in-place edit would do (4 instances).
+- GEN-852 [To Do, maybe-already-done] Two small contradictions in the wrap and vet-ticket skills could make an executor skip steps or write directly after a refusal.
+- GEN-862 [To Do] Two global rules both tell Claude to ask which items one short answer covers, so the instruction exists twice and can drift.
+- GEN-869 [To Do] Erez's email conventions (sign-off, Bcc, Hebrew line breaks) apply only in the Memory Islands Dev project, so other projects draft emails without them.
+- GEN-882 [In Progress] Several of our setup files exceed Anthropic's published limits and one hard limit hides injected notes.
+- GEN-888 [To Do] The Invoice Automation CLAUDE.md is 259 lines and about 34.7K characters, over Anthropic's 200-line guidance.
+- GEN-889 [To Do] Reference files over 100 lines lack a table of contents and hook-injected text is written as commands rather than facts.
+- GEN-890 [To Do] Once a size check exists nothing runs it regularly, so files grow back over the limits unnoticed.
+- GEN-891 [To Do] Skills, agents, commands and hook notes can contradict each other or point to deleted files and nothing reports it.
+- GEN-892 [Blocked] When Anthropic changes its published guidelines our checks keep enforcing old numbers.
+- GEN-894 [To Do] An edit can push a hook reference note past the 10,000-character injection cap without any warning.
+- GEN-897 [To Do] Skills and the project rules file contain wrong pointers, stale facts, edit-history text and contradictions found by the prompt audit.
+- GEN-926 [To Do] The size sweep does not measure command files in ~/.claude/commands/.
+- GEN-944 [To Do] The effort-tag rule says a Stop hook injects the model directive, but after-box turns get it from a PostToolUse hook.
+
+## D. Our safety checks guess from command text or cover only some routes (27)
+- GEN-87 [To Do] Auto-approve hook refuses read-only commands that have an env-var, cd, or variable-assignment prefix.
+- GEN-184 [In Progress] A wrong state-changing action can run before anyone stops it.
+- GEN-222 [To Do] The wrap-time auto-approval review re-proposes tools already in the allow-list.
+- GEN-386 [To Do] Hook registrations in project-level .claude/settings.json files can be added or removed with no vetting.
+- GEN-424 [To Do] Security-driving files such as secret-patterns.json and windows-mcp-approval.ps1 can be edited with no vetting.
+- GEN-473 [Backlog, unclear] Notes for building an effort safety-net hook if ever wanted; the effort-tag rule already shipped.
+- GEN-478 [To Do, maybe-already-done] A shell cp onto a gated hook consumed a vetting pass, contradicting the earlier GEN-436 bypass record.
+- GEN-490 [To Do] Per-project CLAUDE.md edits are not covered by the check-before-present gate.
+- GEN-528 [To Do, unclear] The Notion schema guard did not prompt on a write to the inverse-of-parent relation field and silently re-parented a ticket.
+- GEN-542 [To Do] The claim-linter does not catch 'working as designed' and 'goes through X' verdicts asserted without checking recorded intent.
+- GEN-547 [To Do, maybe-already-done] A raw shell copy applied a vetted change without consuming the single-use vetting pass, leaving a valid pass behind.
+- GEN-571 [To Do] update-config.ps1 applies to Drive-path files, or multi-line applies, leave the vetting pass unconsumed until it expires.
+- GEN-572 [To Do] The auto-approve copy/move guard blocks safe, often read-only, commands that merely mention protected paths or copy-like words.
+- GEN-575 [To Do] The copy/move fail-closed guard fires when a copy-word and a protected-path mention appear unrelated in the same command, blocking /wrap and commits.
+- GEN-592 [Backlog] The self-audit detector fires on messages that merely quote or illustrate its own trigger phrases.
+- GEN-635 [Backlog] Ticket-quality gating covers only Notion MCP writes; Jira create/edit and raw REST/curl Notion writes (about 15% of writes) bypass it.
+- GEN-714 [To Do] The config-health settings scan falsely flags 7 of 9 entries as stale and never auto-removes certain ones.
+- GEN-718 [To Do] Plugin-marketplace installs, including mods, can register hooks that run unvetted and could switch off the gate layer.
+- GEN-731 [To Do] The redirect nudge warns that an output file lands in a project root when the command had cd'd into another folder first.
+- GEN-738 [To Do] The copy/move guard blocks harmless install commands (winget, uv, node -e) and gives a misleading refusal message.
+- GEN-756 [To Do] The chain guard misses single-pipe and multi-line mixed-risk shell commands, so a gated write piped with another command can consume a pass.
+- GEN-797 [To Do] Notion markup in a text edit (page tags, synced blocks) can move or create real pages unintentionally.
+- GEN-904 [To Do] Deleting a live hook or script file bypasses the vetting gate.
+- GEN-924 [Review, maybe-already-done] Browser-extension actions in auto mode got no per-site or send/delete approval reaching Erez.
+- GEN-931 [Backlog] Claude's built-in browser pane is not covered by the browser safety gate.
+- GEN-932 [To Do] The PC-control pass-folder guard does not cover the terminal-panel tool.
+- GEN-938 [To Do] A script call wrapped in powershell -File skips the vetting and check-before-present gates for protected files.
+
+## D2. Claude Code's own auto-mode safety reviewer misjudges sanctioned steps (6)
+- GEN-76 [Review, maybe-already-done] Erez is constantly hit with approval prompts for harmless actions.
+- GEN-327 [To Do] The auto-mode classifier denied benign follow-up calls after an unrelated block, citing earlier context.
+- GEN-349 [To Do] Auto-mode classifier false positives on documented routine commands keep needing per-command allow rules; trigger for a systemic fix is now met (4 instances).
+- GEN-363 [To Do] The auto-mode classifier blocked the documented compact-gate marker touch and later a documented wrap step, judging by filename alone.
+- GEN-370 [To Do, maybe-already-done] Sub-agents were observed running under bypassPermissions; the question of why is answered upstream, but whether any guardrail relies on the normal prompt flow is open.
+- GEN-423 [To Do, maybe-already-done] When the auto-mode permission classifier is unavailable, tool calls are hard-denied instead of prompting.
+
+## E. Our safety checks fail silently or let things through when they break (32)
+- GEN-239 [To Do, unclear] update-config.ps1 hangs for minutes when the post-edit Drive sync/git push stalls, holding the global lock until the process is killed.
+- GEN-321 [To Do, unclear] The credential-denial detector hooks can only be verified by hand, and only in a later session.
+- GEN-358 [To Do, unclear] The pre-backup secret scan reads only settings.local.json, not other managed files.
+- GEN-366 [To Do] Transient per-session hook markers orphan on disk when a session ends abnormally.
+- GEN-389 [To Do, maybe-already-done] If the vetting gate wrongly blocks everything, recovery needs a manual step Erez would not know unprompted.
+- GEN-390 [To Do, unclear] Ticket asks that the GEN-389 lock-out problem never recur in any project, present or future (body is blank).
+- GEN-413 [To Do] The backup secret scan misses UTF-32 files and silently skips a permanently locked repo forever.
+- GEN-420 [To Do] If the backup spawner fails to write its own failure record, the failure is completely silent.
+- GEN-435 [Review, maybe-already-done] The vet-code antivirus-survival re-check depended on a future session remembering to do it.
+- GEN-496 [To Do] If vet-code Step 4a never classifies a change as background-launch, the antivirus re-check is silently skipped.
+- GEN-510 [Review, maybe-already-done] The signal-surfacing detector's false-nudge rate can only be judged by observing real sessions.
+- GEN-540 [Review, maybe-already-done] The self-audit-nudge log had no reader, so nobody could tell whether the detector helps or is noisy.
+- GEN-596 [Backlog] When one turn edits several signal-shaped files, the signal-surface hooks name and judge only the last one and leave no trace of the others.
+- GEN-651 [To Do] The new unreadable-command refusal in auto-approve.js logs nothing, so over-blocking of legitimate work is invisible.
+- GEN-680 [To Do] Scheduled one-time tasks vanish from the registry while their SKILL.md folder remains, so verifications silently never run.
+- GEN-690 [To Do] The signal-surface ack scheme has no truthful tag for a mechanism that was built and then reverted, so such rows reappear at every wrap.
+- GEN-704 [To Do, maybe-already-done] The backup sweep's secret scanner flagged ordinary words as Atlassian tokens and quarantined three repos.
+- GEN-707 [To Do] The park-and-return mechanism failed its first live test: the scheduled task vanished and GEN-561 never returned to the board.
+- GEN-710 [To Do, unclear] Two reviewer sub-agents saw an injected instruction in tool output telling them to modify code, cause unknown.
+- GEN-722 [To Do] Data extracted from session transcripts carries live secrets and was committed; only GitHub push protection caught it.
+- GEN-766 [To Do] The staging and vetting gates can crash or skip consuming a pass on malformed or locked pass files, letting a gated call through.
+- GEN-768 [To Do] Nobody has yet seen a real Sonnet 5.5 session apply the per-path model tag correctly in a For-you block.
+- GEN-799 [To Do] The Notion write checker has six known blind spots (unchecked update_content to old volumes, silent skips, no position context).
+- GEN-819 [To Do, unclear] Under heavy PC load end-of-turn hooks can exit before reading input and lose their note (including the For-you reminder).
+- GEN-835 [To Do] The auto-approve hook crashes on deeply nested tool input and a crash lets the call through, skipping all later gates.
+- GEN-846 [Backlog] The ticket-gate readout's alarm bars were set on early traffic and row 7 now over-counts reviewer strictness.
+- GEN-855 [To Do] Unattended watches and checks can go blind and still report all clear (a switch-back watch missed 8 hours of no data).
+- GEN-872 [Backlog] Claude Code 2.1.300 will store full request details in transcripts, which could make the ticket gate and Stop hooks refuse or miss text.
+- GEN-887 [To Do] If a deny-gate hook crashes or times out, the guarded action runs anyway.
+- GEN-902 [To Do, maybe-already-done] On Claude Code 2.1.299 Stop-hook notes were lost when a turn ended on a next-step box question, yet logs recorded them as delivered.
+- GEN-927 [To Do] A project backup that stops running entirely is never reported, only one that keeps failing.
+- GEN-943 [Backlog] A Claude app update could change where the For-you summary lands around the box and nobody would notice.
+
+## F. The same logic or text is kept in two places and drifts apart (21)
+- GEN-13 [Blocked] Invoice script keeps its own copies of helper functions instead of calling the shared library.
+- GEN-191 [To Do] A value like Fix version must be copied by hand into both Jira and Confluence.
+- GEN-475 [To Do] stop-cred-denial-surface.js still teaches the old pre-convention block behaviour in its comment and note text.
+- GEN-505 [To Do] Comments in auto-approve.js say a null resolution fails safe, but it actually falls open.
+- GEN-504 [To Do] auto-approve.js extracts update-config flag values with two hand-rolled regexes that must be kept in sync.
+- GEN-509 [To Do] /vet-code does not say that a bundled skill or CLAUDE.md target needs a check pass, not a vetting pass.
+- GEN-525 [To Do] The vet-code diagnostic-probe fast-path skips writing a vetting record, but the mint step still requires one, so a legitimate fast-pathed probe cannot complete without break-glass.
+- GEN-526 [To Do] vet-code's 'honest ceiling' disclosure is vaguer than the more precise wording in vet-rule.
+- GEN-538 [To Do, maybe-already-done] About 65-85 lines of evidence-check and pass machinery are duplicated between vet-rule and vet-code and kept in sync by hand.
+- GEN-559 [null, maybe-already-done] auto-approve.js carries three near-identical pass-and-record gate families, and a fourth would be added.
+- GEN-563 [To Do] The 'For you' marker regex exists in three variants across Stop hooks and the keep-in-sync note does not list the newest one.
+- GEN-565 [To Do] Vestigial wrapper functions remain in auto-approve.js only because two skills grep for their old names.
+- GEN-570 [To Do] The 'Files synced' header comment in sync.ps1 is out of date with the real file map.
+- GEN-580 [To Do] A header comment in prepend-log.ps1 wrongly says the caller inserts the session marker, which misled one diagnosis.
+- GEN-672 [To Do] The /vet-* skills and their gate hooks disagree on record shape and exemption lists, found only by reviewers.
+- GEN-678 [To Do] Two shipped hooks carry a false comment that PostToolUse fires only in the main session, which has already seeded a bug.
+- GEN-683 [To Do] Three duplicated globalize-regex idioms with dead branches remain in two Stop hooks.
+- GEN-689 [To Do] Five minor matcher and comment issues remain in stop-signal-surface.js.
+- GEN-691 [Backlog] Two stale comments in stop-claim-linter.js and a missing pointer to rig/invariant.js remain.
+- GEN-697 [To Do] Six near-identical inject-refs hooks duplicate the same boilerplate and each adds spawn time to every call.
+- GEN-848 [To Do] Three Notion safety hooks, their matchers and allow entries hardcode the connector id and would go silently off if it rotates.
+
+## G. The review-and-vetting process itself has gaps (29)
+- GEN-229 [To Do, maybe-already-done] A manual rule-check passed a proposed rule that conflicted with the approval-gate rules; Erez caught it.
+- GEN-238 [To Do] The /check panel converged and passed a rule that listed redundant example surfaces and wrongly caught the staging sandboxes.
+- GEN-245 [To Do] Dev-facing content (Jira/Confluence/Slack) has no /check lenses for house style and readability, so Erez keeps retyping the review prompt.
+- GEN-298 [To Do] /check reviewers graded a pre-build design against code that did not yet exist and returned false REVISE verdicts.
+- GEN-335 [To Do] A redundant four-word aside passed a full /check round during a compression task.
+- GEN-376 [Review, maybe-already-done] Hook and script changes need to be vetted before going live; a vetting gate and /vet-code skill were built and await a first real end-to-end run.
+- GEN-387 [To Do] The /code-review half of the /vet-code vetting bar is not mechanically checked, only self-recorded.
+- GEN-397 [To Do] A /check panel can converge on a proposal whose pointer to another skill, step or flow does not exist.
+- GEN-403 [To Do] /check re-review briefs do not say whether the artifact is applied or proposal-only, so reviewers give false findings.
+- GEN-439 [To Do] Code reviewers read the stale installed file instead of the working copy and report false findings.
+- GEN-474 [To Do] The /wrap report-shortening edits and a relayed GEN-380 decision were never verified in a real run or against HISTORY.
+- GEN-499 [To Do] /vet-code skill text has an unsatisfiable timestamp precondition and omits the real transcript location.
+- GEN-517 [To Do] /vet-rule Step 4 cannot prove the /check transcripts belong to this session and this exact text.
+- GEN-546 [To Do] The vet-code pass A (/code-review) cannot be invoked by Claude, so every hook change needs Erez present and unattended vets stall at Step 3.
+- GEN-566 [To Do, maybe-already-done] Guard live-verify used hand-built fixtures, so guards looked verified and then failed on real traffic.
+- GEN-587 [To Do] A gated change split across edits landed half-applied because the first edit consumed the single-use pass.
+- GEN-586 [To Do] The HISTORY appender promises a recovery file on failure paths where none is written or the stated cause is wrong.
+- GEN-607 [To Do] The HISTORY appender has several residual issues: orphan recovery files, wrong exit codes, unbounded messages, and contradictory guidance and tests.
+- GEN-608 [Backlog] Fixes judged trivial skipped re-review, and two of three such fixes introduced material defects.
+- GEN-612 [Backlog] A vet-code approval can cover bytes no reviewer read because the working copy can change mid-flow and only a terminal hash check exists.
+- GEN-626 [Backlog] Repeated new material findings across /check rounds were answered by rewording instead of re-testing the scope, wasting rounds.
+- GEN-630 [Backlog] /vet-code code-review passes are not told where the build deviated from the reviewed design, where defects concentrate.
+- GEN-629 [Backlog] /check stops at its round cap even when each round is still finding a new material defect that would ship inert.
+- GEN-653 [To Do] Expired and consumed single-use pass files pile up in the staging pass directories alongside evidence records.
+- GEN-687 [To Do] /vet-code Step 6 wording is read as same-session-only evidence, causing an unnecessary full re-vet in a new session.
+- GEN-688 [To Do, unclear] Fixture assertions encode a reviewer's side-claim instead of the consumer's own rule, producing false failures.
+- GEN-706 [To Do] Live-verify harnesses produced false failures that looked like mechanism bugs.
+- GEN-730 [To Do] Two record-keeping steps in /vet-code's vetting record (hash refresh after code-review fixes, belowFloorSignoff check) are unspecified or unchecked.
+- GEN-737 [To Do] The locked HISTORY.md appender cannot log the first session of a brand-new project and forces a forbidden hand-edit.
+
+## H. Sessions running at the same time step on each other (12)
+- GEN-152 [To Do] Two sessions can work on the same Notion or Jira item at the same time (page is blank).
+- GEN-218 [Review] Two sessions writing the same project file can lose each other's HISTORY.md entry, and wrap git steps break in a shared tree.
+- GEN-486 [To Do, unclear] Invoice Automation deploy.ps1 has no concurrency-safe git handling, though no collision has been seen.
+- GEN-498 [To Do] A stale working copy could overwrite a hook another session just installed, because /vet-code never re-checks the live file before apply.
+- GEN-539 [To Do] A whole session was run from the wrong project folder and its history entry landed in the wrong project.
+- GEN-579 [To Do] deploy.ps1 stages everything with git add, sweeping unrelated or other sessions' uncommitted files into deploy commits.
+- GEN-615 [In Progress] Two concurrent sessions worked the same ticket, or wrote to its ticket, without knowing about each other, wasting work and voiding reviews.
+- GEN-620 [In Progress] A session can read a file another live session is halfway through rewriting and draw conclusions from a partial state with no warning.
+- GEN-622 [To Do] The sanctioned install channel for hooks/scripts overwrites the live file in place, so an interruption leaves a half-written script.
+- GEN-623 [To Do] The config apply script can silently overwrite another session's concurrent change to settings.json or other locked config, and the verification still passes.
+- GEN-655 [To Do] Installing a reviewed working copy can silently revert a concurrent session's change to the live file, with every gate passing.
+- GEN-813 [To Do] A session's rules-file edit goes unreviewed at its own wrap when another session's wrap ran first.
+
+## I. Ticket and session bookkeeping (47)
+- GEN-100 [To Do, maybe-already-done] No grading system to decide which ticket to work on next (page is blank).
+- GEN-138 [To Do, unclear] No report of token use per session or per task.
+- GEN-143 [To Do, unclear] No measurement of conversation-flow problems such as turns per task, repeats and stalls.
+- GEN-149 [To Do, maybe-already-done] Chat responses need a clear action block that carries all needed context for Erez.
+- GEN-159 [To Do] Nobody has asked Erez whether the new chat-communication rules actually improved things.
+- GEN-167 [To Do, unclear] If more work happens after the wrap-up command, it is not captured (page is blank).
+- GEN-183 [To Do, unclear] Per-model slip evidence may never reach thresholds before the model is replaced.
+- GEN-182 [To Do] No durable scorecard logs and counts Claude slips by class and model.
+- GEN-208 [To Do] Compaction (including new idle compaction) can lose session detail before wrap-up logs it.
+- GEN-209 [To Do, unclear] At wrap-up Claude cannot reliably find its own session transcript, risking the wrong file with concurrent sessions.
+- GEN-272 [To Do, maybe-already-done] Epics, stories and tasks need ticket standards and a review mechanism to stay organised.
+- GEN-296 [To Do, unclear] A /wrap run reported the Improve AI Infra project CLAUDE.md has no project-specific apply-learnings or closing steps; ticket asks what that means.
+- GEN-331 [Blocked] Decide whether to build the GEN-324 Review-status hook gate; design settled, build needs Erez's go-ahead.
+- GEN-345 [To Do] Claude nearly declared a multi-candidate tracker ticket Done when only one part was complete.
+- GEN-359 [Blocked] Add the analytics query-reference pointer to a future dedicated analytics project's CLAUDE.md once that project exists.
+- GEN-361 [To Do] The Team-Tasks 'Reason' field is fully manual and does not populate or clear when a ticket becomes or leaves Blocked.
+- GEN-392 [To Do] Learnings get parked in open tickets, which never change behaviour.
+- GEN-416 [To Do] Tickets for the Cursor and multi-device epics may be missing because the board could only be searched by keyword.
+- GEN-419 [To Do] There is no current map of the project's many files, their location, state and purpose.
+- GEN-437 [To Do, unclear] /wrap does not run a final backup sweep, so the session's own work is not captured offsite.
+- GEN-454 [To Do, unclear] GEN-58 index counts were not incremented for two new write-ups.
+- GEN-467 [Review, maybe-already-done] The For-you block was emitted twice in consecutive messages with no user prompt in between.
+- GEN-523 [In Progress] The priority model has no time dimension, so a cheap but not-yet task derives as High.
+- GEN-588 [Backlog] The Team-Tasks working list has 212 To Do items with 63 at High or Highest, so it cannot answer 'what should I do next'.
+- GEN-589 [Backlog] The board has no state for work waiting on a real-world observation.
+- GEN-604 [Backlog] Team-Tasks tickets with an empty Project field are invisible to board sweeps that filter on Project.
+- GEN-613 [Backlog, unclear] The GEN-508 'airtight' reasoning failure still has to be written to the failure log.
+- GEN-619 [Review, maybe-already-done] Decisions put to Erez were missing effort tags (in blocks, plan approvals and next-step boxes) and shown levels were often guessed.
+- GEN-621 [Backlog, unclear] GEN-152 has an empty body so it is unclear whether it duplicates three newer concurrency tickets.
+- GEN-627 [Backlog] New Team-Tasks tickets are almost never created with the Task template, and the /wrap instruction to apply it is impossible with a body.
+- GEN-634 [Backlog, maybe-already-done] GEN-508's body claims to be a self-contained build spec but describes superseded and falsified approaches.
+- GEN-675 [To Do] There is no stable measure of whether the tooling investment reduces Claude's failure rate.
+- GEN-702 [Review, maybe-already-done] /wrap's automatic ticket capture was blocked by the ticket-quality gate; a fix routing it through /vet-ticket shipped and awaits an end-to-end check.
+- GEN-748 [Review, maybe-already-done] The 'For you' block went missing when work finished inside a hook-triggered follow-up turn.
+- GEN-775 [To Do] /wrap's capture step under-files learnings from avoidable reversals and skipped required steps.
+- GEN-791 [To Do] Nothing says when to write ticket progress, so Claude updates after every small step (many approval cards) or only at wrap (invisible to parallel sessions).
+- GEN-802 [Review, maybe-already-done] Erez was asked to re-approve a ticket filing he had already approved (draft, then summary card).
+- GEN-805 [To Do] Erez's yes to a described ticket write is still followed by a second approval ask, including when the search turns the write into an append.
+- GEN-851 [To Do] An open gap gets written into the ticket being closed instead of an open ticket, so it is lost.
+- GEN-856 [To Do] When a log reaches its rollover point Claude reports it as a later step and Erez must ask for the rollover.
+- GEN-857 [To Do] Automatic readouts in the wrap report show healthy numbers to Erez when nothing is wrong.
+- GEN-871 [In Progress, maybe-already-done] Claude Code ships many releases a week and nobody systematically reviews them against our hooks and open tickets.
+- GEN-895 [To Do] Tickets filed as Blocked 'Ticket Pending' are never moved back to To Do when the ticket they wait on is done.
+- GEN-915 [To Do] Tickets about computer-control tools are split between two epics with no rule for which to use.
+- GEN-922 [To Do] /loghistory tells Erez he can /compact even when the session already auto-compacted.
+- GEN-939 [To Do] A Team-Tasks ticket can be filed with the wrong status, no template or the wrong assignee without any check catching it.
+- GEN-941 [Review, maybe-already-done] The For-you summary appeared twice around the next-step box.
+
+## J. Accounts, browser and PC control (21)
+- GEN-164 [To Do, unclear] Session titles quickly stop matching what the session works on.
+- GEN-206 [To Do] Claude cannot review video files such as .mp4 animatics.
+- GEN-273 [To Do, unclear] Notion insert_content once rendered newlines as a literal 'n' while replace_content worked; unconfirmed single incident.
+- GEN-293 [To Do, unclear] The Notion MCP connector intermittently returned the wrong or stale page and garbled write responses though writes landed.
+- GEN-357 [To Do] The Drive connector returns only one cell of the experiences sheet, so ticket citations to its other tabs cannot be verified.
+- GEN-360 [To Do, maybe-already-done] The Atlassian MCP connector timed out all session while direct REST worked.
+- GEN-417 [To Do, unclear] A sub-agent reported a fake system-reminder inside a WebFetch result; unclear if real injection or misattribution.
+- GEN-854 [Review, maybe-already-done] The Windows-MCP add-on sometimes fails to connect at session start.
+- GEN-859 [In Progress] Each of Erez's two Claude accounts lists only its own sessions in the desktop app.
+- GEN-864 [To Do] Erez's laptop CPU throttles to about 2.5-3.2 GHz under load, slowing work such as the Unity editor.
+- GEN-879 [Review, maybe-already-done] PC control (Windows-MCP add-on) worked only in sessions opened in one folder.
+- GEN-883 [In Progress] Claude's browser tool is intermittently 'not connected', stalling browser work and unattended checks, and Comet blocked clicks.
+- GEN-884 [To Do] Scheduled tasks stored under one Claude account do not fire while the other account is signed in.
+- GEN-908 [Review, maybe-already-done] A short desktop-app setup task stalled because of missed windows, per-action approvals and an approval window on the wrong screen.
+- GEN-913 [To Do] Azure CLI cannot read App Insights from this PC with certificate checks on, and the workaround is blocked by the safety classifier.
+- GEN-914 [To Do] Claude in Chrome steps hang with 'did not respond' and leave tabs stuck open, notably when a page has a Leave-site prompt.
+- GEN-917 [To Do] The approval hook re-reads up to 32 MB of transcript per window and gives unclear wording for a rejected 'Ready?' task block.
+- GEN-920 [In Progress] PC control refuses with USER_CONTROL right after Erez clicks Allow in the approval window.
+- GEN-929 [To Do] Sessions signed in as info@muuula.com lack the connectors available under erez@muuula.com.
+- GEN-933 [To Do] The Windows-MCP add-on gets stuck reporting CONTROL_UNAVAILABLE and PC control fails until restarted.
+- GEN-936 [To Do] Claude cannot read email attachments (images, PDFs) when asked about an email.
+
+## K. Backups, cleanup and files left behind (24)
+- GEN-40 [To Do, maybe-already-done] There is no documented one-time setup for working from a second computer.
+- GEN-84 [To Do, unclear] Config sync reported 'no changes to commit' after a rule was added.
+- GEN-247 [Review, maybe-already-done] GitHub showed a 'Select an account' popup; fix applied, Erez must confirm it no longer appears.
+- GEN-254 [To Do, maybe-already-done] Leaked live credentials (GitHub PAT, Atlassian token, Redis key, Slack, Notion) must be rotated and purged from git history; much may already be done via GEN-638.
+- GEN-259 [To Do] A Slack webhook URL is hardcoded and committed in the Memory Pirates build.yml; the dev team must be alerted.
+- GEN-287 [To Do] New memory files are not synced to Drive or git because sync.ps1 uses a hardcoded per-file list.
+- GEN-356 [To Do] The backup watchdog warns on transient marker files and on orphaned .claude.json temp files.
+- GEN-362 [To Do] Config-health always reports three legitimate tool-folder references as 'unverified'.
+- GEN-373 [In Progress] Sessions leave stray junk files in the home directory and project roots; report-only detection is built and prevention, timer and acting steps remain.
+- GEN-379 [To Do, unclear] The notion-schema-guard read allow-list may go stale if Notion adds new POST-based read endpoints.
+- GEN-382 [In Progress] Backup of everything worked on is not airtight; a file missing from the backup set was only fixed manually. Backup sweep script and surfacer are installed, spawner and trigger wiring remain.
+- GEN-430 [Review, maybe-already-done] Session-start backup flashed a PowerShell window, and the hidden-launch attempt was blocked by Avast.
+- GEN-431 [To Do, unclear] The session-start backup fires far more often than real sessions are started.
+- GEN-460 [In Progress] Every new file or folder under ~/.claude raises a backup-coverage warning that Erez has to resolve by hand.
+- GEN-489 [Blocked] The cleanup sweep only reports junk files, so manual cleanup remains.
+- GEN-487 [none] The cleanup sweep runs only when invoked by hand.
+- GEN-500 [To Do, unclear] A stray notes\x.md appeared in the project, created by an unidentified session with no session id in the edit log.
+- GEN-551 [To Do] Deleting a memory file locally gets it restored from the Drive backup, so retiring a memory silently reverts.
+- GEN-695 [To Do, unclear] The Claude hooks, skills and rules live only in a Drive-synced folder, so web sessions run without them.
+- GEN-703 [Review, maybe-already-done] The automated backup sweep rarely completed because of a 25-second deadline and mislabeled skips as unreachable.
+- GEN-809 [To Do] Abandoned Claude Code temp files (.claude.json.tmp.*) trigger false backup-coverage warnings at wrap.
+- GEN-810 [Blocked] Abandoned Claude Code temp files pile up and are never removed.
+- GEN-860 [In Progress] About 283 old Claude sessions were lost and no restorable backup existed; the automatic copy is installed with follow-ups still open.
+- GEN-923 [To Do] Files Claude downloads or creates on Erez's PC and keeps past the turn are never recorded or deleted later.
+
+## L. Reaching Claude from the cloud, Slack or another machine (11)
+- GEN-51 [Blocked, maybe-already-done] Cursor asks for too many approvals.
+- GEN-52 [Blocked, maybe-already-done] No automated QA scheme for completed requests in Cursor.
+- GEN-85 [To Do, unclear] A Claude session sees only its own project and cannot reuse learnings from other projects.
+- GEN-119 [To Do, unclear] Global Claude rules are not mirrored into Cursor.
+- GEN-146 [To Do, unclear] Unclear how a new project could start with the learnings already gathered (page is blank).
+- GEN-168 [To Do, unclear] A Slack reply cannot be captured to continue the conversation.
+- GEN-175 [To Do, unclear] Scheduled agents cannot both read connected data (Notion/Gmail) and run local actions like clasp.
+- GEN-199 [To Do] Claude can talk to the dev team only while Erez's PC is on and a session is open.
+- GEN-201 [To Do] A running session does not notice a Slack reply and Erez must paste it in.
+- GEN-470 [To Do, maybe-already-done] Unknown whether Claude notices a mid-session model switch, which the effort and model tag depends on.
+- GEN-794 [Backlog] Cloud Claude Code sessions lack Erez's global rules, skills, hooks and PC tools, so they silently skip checks.
+
+## M. Business: invoices (21)
+- GEN-204 [Review] Pasted-image invoices are ignored by default; the new manual button is built but unverified on a real email, and image files may get a wrong .pdf ending.
+- GEN-294 [Review, maybe-already-done] Manual invoice buttons processed the whole email conversation; fixed and deployed, Erez to verify on the next new invoice.
+- GEN-329 [Review, maybe-already-done] Due invoices were filed by a fixed 19th rule instead of the accountant's pay-run cutoff; built and deployed, a date-parse bug fixed, Erez to verify end to end.
+- GEN-464 [Review, maybe-already-done] The invoice finder searched only email subjects, so body-only invoice phrases were missed.
+- GEN-692 [Review, maybe-already-done] Genuine Google/Meta income could be misfiled as expense by the billToIsMuuula guard.
+- GEN-708 [Backlog, maybe-already-done] Corruption in the invoice log's editable columns has no automated recovery, only Sheets version history.
+- GEN-713 [Backlog, unclear] Invoice period labels can use the due month instead of the issue month, and a multi-message thread can use the wrong email date.
+- GEN-717 [Review, maybe-already-done] Invoices stayed in To Pay when a receipt for them existed.
+- GEN-720 [Review, maybe-already-done] Cross-month duplicate invoices could slip past detection; part 2 shipped and awaits a scanned-PDF check.
+- GEN-723 [To Do] A due invoice is filed to To Pay even when its receipt already arrived earlier.
+- GEN-726 [To Do] Auto-charged card invoices (e.g. Adobe) get filed as 'Erez to pay' and each new such vendor needs its own rule.
+- GEN-735 [Review, maybe-already-done] Unity's auto-charged invoices were filed as due, and a failure-wording check false-matched boilerplate on a paid Snowflake invoice.
+- GEN-759 [Review, maybe-already-done] Muuula's own salary slips were filed as an unpaid invoice from vendor 'Mula Games'.
+- GEN-783 [Blocked] Already-paid invoices are sometimes read as due and land in a later month's To Pay folder.
+- GEN-814 [Review, maybe-already-done] A second same-kind document for the same vendor and month got no number.
+- GEN-832 [Review, maybe-already-done] Finding a new invoice's vendor spelling took about 93 seconds and up to 69 AI calls.
+- GEN-836 [Review, maybe-already-done] The saved vendor list does not notice a file added or renamed in an old month.
+- GEN-896 [Review, maybe-already-done] Footer, legal, help and app links in emails are flagged as invoices to download manually.
+- GEN-918 [Review, maybe-already-done] Monthly Google Play payout receipts had to be printed to PDF and filed by hand.
+- GEN-935 [Review, maybe-already-done] Emails that are not bills keep landing on the manual-download worklist.
+- GEN-947 [To Do] The duplicate check misses an already-filed invoice whose file name carries a multi-month period.
+
+## N. Business: documentation, game and dev team (17)
+- GEN-31 [Blocked, unclear] No logic yet to pick a cheaper or stronger model for investigating 'check' replies.
+- GEN-37 [Blocked, unclear] No end-to-end test that a 'check' reply triggers the agent and gets an answer.
+- GEN-33 [Blocked, unclear] Replying 'check' to a summary email cannot automatically trigger an AI investigation.
+- GEN-59 [To Do, unclear] Container epic for PC process improvements; its body is only an inline database of 18 children.
+- GEN-64 [To Do] Confluence docs do not get created or updated automatically when a PR merges.
+- GEN-63 [To Do] Docs show variable names without their actual values.
+- GEN-142 [To Do] Invoice Code.js is one huge file (now 7,833 lines) that is hard to change safely.
+- GEN-174 [To Do, maybe-already-done] Atlassian Forge token renewal ticket is out of date: token was renewed 2026-10-05 and key sheet is being deleted.
+- GEN-211 [To Do] Claude uses 'game' where 'app' is correct in Memory Islands writing.
+- GEN-225 [To Do] The Confluence Glossary is stale (last edited 2022) and cannot be the source of terminology.
+- GEN-241 [To Do] Claude repeatedly mis-posted a data request to the analytics Slack channel (jargon, no ticket link, wrong thread structure).
+- GEN-244 [To Do, unclear] The PlayerInfo tool's Prod environment is not set up because Prod Redis credentials from Kfir are outstanding; status unverified.
+- GEN-263 [To Do, unclear] The Wheels skill-level combo and conversion-value system has no Confluence page and must be documented once MD-3651 is live.
+- GEN-266 [To Do] The Product Slack bot posts only with per-message approval; enabling autonomous posting needs guardrails defined first.
+- GEN-582 [To Do] A one-time verification banner built into shipped code had no retirement condition and would have kept firing after its ticket closed.
+- GEN-793 [Backlog] The Confluence PlayFab add-on's dependencies carry 17 known security warnings.
+- GEN-828 [Backlog] The Windows-MCP add-on is pinned to a reviewed version and must not be upgraded unreviewed.
