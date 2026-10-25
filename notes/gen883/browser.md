@@ -5,7 +5,12 @@ Browser work (Claude in Chrome, tools `mcp__claude-in-chrome__*`, in Erez's Come
 - So each account has its own Comet profile, and each profile's Claude extension is signed in to a different account. Both profiles must stay open; a minimized window keeps the connection, but see "Window not usable". `list_connected_browsers` lists only the browser on the link's account.
 - The link can move to the other account mid-task, when it reconnects. If tabs vanish or a site is suddenly logged out, call `tabs_context_mcp` again: you may now be in the other profile.
 - When a call says "not connected", a "browser-diagnose" paragraph from this notes' hook adds the real reason and the one fix, read from the Claude app's log. Pass that to Erez in one line, not the tool's generic install/sign-in checklist. Restarting an already-open Comet, refreshing a tab or signing in to a website does not fix it.
-- In a scheduled task, follow the task's own steps for a browser that is not connected (its retry count, and its could-not-run or alert step if it has one), and put the fix in its report. Never report a browser step as passed. `node "C:/Users/Erez/.claude/hooks/inject-browser-refs.js" --explain` prints the same diagnosis on demand.
+- `node "C:/Users/Erez/.claude/hooks/inject-browser-refs.js" --explain` prints the same diagnosis on demand.
+
+**Scheduled (unattended) runs.** The task's own browser steps come first; these fill any gap.
+- Not connected: call `tabs_context_mcp` up to 3 times, about 30 s apart. Still not connected means the check did NOT run. Say so in the report with the one-line reason and fix (from the hook or `--explain`). If the task alerts Erez, send one URGENT alert that says "did NOT run" and gives the fix. If the task needs the browser only for an optional step, note it and carry on.
+- Never report a browser step as passed, or skip it silently, when it didn't run.
+- Only browser tools on the global auto-approve list run with nobody there: `tabs_context_mcp`, `list_connected_browsers`, `navigate`, `tabs_create_mcp`, `tabs_close_mcp`, `get_page_text`, `read_page`, `find`. Others (screenshots, clicks, typing, JavaScript) can stop for approval that never comes. Build the check from the listed tools; a step that needs another one is reported as "could not run: needs approval", never as a pass.
 - After a Claude app restart the link connects on the first browser call (within seconds of it).
 - If two browsers are listed, or the wrong one answers, pick with `select_browser`.
 - Sub-agents get neither these notes nor the diagnosis, so keep browser work in the main session.
