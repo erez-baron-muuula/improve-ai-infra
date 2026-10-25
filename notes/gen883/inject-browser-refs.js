@@ -16,9 +16,10 @@
 //    the real reason plus the one fix, ahead of the notes. Root cause (GEN-883, 2026-10-21, from
 //    the app log): the app's browser link is tied to the Claude account the app was on when the
 //    link last connected (a PC sleep/wake, an app restart, or a dropped connection
-//    reconnecting); switching accounts alone does not move it. Each Comet profile's extension is
-//    signed in to one account. The log only EXPLAINS a failure the tool already reported -- this
-//    hook never declares the browser OK.
+//    reconnecting); switching accounts alone does not move it. Each browser profile's extension is
+//    signed in to one account (Chrome since 2026-10-25; Comet 155 blocks the extension's clicks).
+//    The log only EXPLAINS a failure the tool already reported -- this hook never declares the
+//    browser OK.
 //    - Settle: if the link (re)connected or the extension disconnected under 90 s ago, the FIRST
 //      failure after that event gets "wait 20 s, retry once" (not counted); the retry gets the
 //      full diagnosis.
@@ -32,7 +33,7 @@
 //    Throttle markers live in <temp>/claude-browser-hook/ and are pruned after a day.
 //
 // Account labels come from hooks/refs/browser-accounts.json ({ "<first 8 hex of account id>":
-// { "account": "<email>", "profile": "<Comet profile>" } }); an unmapped account is shown by its
+// { "account": "<email>", "profile": "<browser profile>" } }); an unmapped account is shown by its
 // id prefix. A missing/unreadable log gives "reason unknown" with the generic fixes -- never
 // silence.
 //
@@ -58,7 +59,7 @@ const FAILURE_RES = [
 // sign and bold markers). Seen 2026-10-21: "⚠️ **Claude in Chrome is not connected**".
 const RESULT_START_RE = /^[^A-Za-z0-9]*(Claude in Chrome is not connected|Browser extension is not connected)/i;
 const SETTLE_MS = 90 * 1000;  // a link/extension event this recent may still be settling
-const SETUP_UTC = Date.parse('2026-10-21T14:00:00Z'); // two-profile setup; earlier events don't count
+const SETUP_UTC = Date.parse('2026-10-25T15:20:00Z'); // two Chrome profiles set up; earlier events don't count
 const LOG_DIR = path.join(process.env.LOCALAPPDATA || '', 'Claude', 'Logs');
 const LOG_FILES = ['main.log', 'main1.log']; // newest first; main1 is the previous rotation
 const TAIL_READ = 2 * 1024 * 1024;   // try the log's last 2 MB first ...
@@ -210,19 +211,19 @@ function label(labels, acct) {
   return name ? name + ' [account ' + acct + ']' : 'account ' + acct;
 }
 
-// The Comet profile holding that account's extension.
+// The browser profile holding that account's extension.
 function profileLabel(labels, acct) {
-  return labelField(labels, acct, 'profile') || 'the Comet profile whose Claude extension is signed in to ' + label(labels, acct);
+  return labelField(labels, acct, 'profile') || 'the browser profile whose Claude extension is signed in to ' + label(labels, acct);
 }
 
 // The diagnosis. Returns { reason, text, short } -- short is the one-line reminder for repeats.
 function diagnose(state, labels, headOverride) {
-  const head = headOverride || 'browser-diagnose (GEN-883): no Comet browser is answering. ';
+  const head = headOverride || 'browser-diagnose (GEN-883): no browser is answering. ';
   const tail = ' Tell Erez this in one line instead of the tool\'s generic install/sign-in list. In a scheduled task: follow the task\'s own steps for a browser that is not connected (its retry count, and its could-not-run or alert step if it has one) and put this fix in whatever it reports; never report a browser step as passed. If the task treats the browser as optional, just note it.';
   const restart = 'ask Erez first, since it stops every Claude session that is mid-task: fully quit the Claude app from its system-tray icon and reopen it, so the link reconnects on the app\'s current account';
   const openFix = (acct) => 'open ' + profileLabel(labels, acct) + ' (a minimized window is enough for the connection) and check that its Claude extension still shows ' + label(labels, acct) + '; if it shows the other account, sign it in to this one';
   if (!state.readable || !state.linkAcct) {
-    const fix = '(1) open both Comet profiles, each with its Claude extension signed in to a different one of Erez\'s Claude accounts; (2) if that does not help, ' + restart;
+    const fix = '(1) open both Chrome profiles (not Comet), each with its Claude extension signed in to a different one of Erez\'s Claude accounts; (2) if that does not help, ' + restart;
     return {
       reason: 'unknown',
       text: head + 'Reason unknown: the Claude app log (' + path.join(LOG_DIR, 'main.log') + ') could not be read or names no browser link. Fix, in order: ' + fix + '.' + tail,
@@ -247,13 +248,13 @@ function diagnose(state, labels, headOverride) {
   if (state.appAcct && state.appAcct !== state.linkAcct) {
     return {
       reason: 'link-on-other-account',
-      text: head + 'The Claude app is now on ' + label(labels, state.appAcct) + ', but its browser link is still on ' + L + ' (the link follows an account switch only when it next reconnects), and no browser signed in to that account is answering. Restarting an already-open Comet, refreshing a tab or signing in to a website does not fix this (2026-10-21).' + since + ' Fix for Erez: ' + openFix(state.linkAcct) + '. If that profile is open and correct, ' + restart + '.' + tail,
+      text: head + 'The Claude app is now on ' + label(labels, state.appAcct) + ', but its browser link is still on ' + L + ' (the link follows an account switch only when it next reconnects), and no browser signed in to that account is answering. Restarting an open browser, refreshing a tab or signing in to a website does not fix this (2026-10-21).' + since + ' Fix for Erez: ' + openFix(state.linkAcct) + '. If that profile is open and correct, ' + restart + '.' + tail,
       short: 'the link is still on ' + L + ' while the app is on ' + label(labels, state.appAcct) + '; fix: ' + openFix(state.linkAcct) + '.',
     };
   }
   return {
     reason: 'no-browser-on-account',
-    text: head + 'The browser link is on ' + L + (state.appAcct ? ' (the app\'s current account)' : ' (the app\'s current account could not be read from its log)') + ', but no Comet browser signed in to that account is answering.' + since + ' Fix for Erez: ' + openFix(state.linkAcct) + '. If that profile is open and correct, ' + restart + '.' + tail,
+    text: head + 'The browser link is on ' + L + (state.appAcct ? ' (the app\'s current account)' : ' (the app\'s current account could not be read from its log)') + ', but no browser signed in to that account is answering.' + since + ' Fix for Erez: ' + openFix(state.linkAcct) + '. If that profile is open and correct, ' + restart + '.' + tail,
     short: 'no browser on ' + L + '; fix: ' + openFix(state.linkAcct) + '.',
   };
 }

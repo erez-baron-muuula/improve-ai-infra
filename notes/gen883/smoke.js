@@ -35,7 +35,7 @@ t('tab-context listing a "not connected" title -> NO diagnosis', { session_id: '
   const before = evCount();
   const base = Math.max(linkMs, st.lastExtKind === 'left' ? Date.parse(st.lastExt.replace(' ', 'T')) : 0);
   t('event 30 s ago -> wait-and-retry, not counted', { session_id: 's13', tool_name: 'mcp__claude-in-chrome__tabs_context_mcp', tool_response: NC }, o => /may still be settling/.test(o) && evCount() === before, base + 30000);
-  t('retry 55 s after -> full diagnosis + counted', { session_id: 's13', tool_name: 'mcp__claude-in-chrome__tabs_context_mcp', tool_response: NC }, o => DIAG.test(o) && /no Comet browser is answering/.test(o) && evCount() === before + 1, base + 55000);
+  t('retry 55 s after -> full diagnosis + counted', { session_id: 's13', tool_name: 'mcp__claude-in-chrome__tabs_context_mcp', tool_response: NC }, o => DIAG.test(o) && /no browser is answering/.test(o) && !/Comet/.test(o) && evCount() === before + 1, base + 55000);
 }
 t('next window -> diagnosis again', { session_id: 's1', tool_name: 'mcp__claude-in-chrome__tabs_context_mcp', tool_response: NC }, o => DIAG.test(o), Date.now() + 11 * 60000);
 t('page text with phrase -> NO diagnosis', { session_id: 's7', tool_name: 'mcp__claude-in-chrome__get_page_text', tool_response: [{ type: 'text', text: PAGE }] }, o => !DIAG.test(o) && o.startsWith('Browser work'));
