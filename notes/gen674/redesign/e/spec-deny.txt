@@ -1,0 +1,10 @@
+@@@OLD
+ * Denies the AskUserQuestion popup tool outright and redirects the model to
+ * asking inline in the conversation as prose. Once proven live, the resident
+ * rule in the global CLAUDE.md shrinks to a one-line pointer at this file.
+@@@NEW
+ * Denies the AskUserQuestion popup tool outright and redirects the model to
+ * asking inline in the conversation as prose. The resident pointer rule was
+ * dropped from the global CLAUDE.md on 2026-10-21 (GEN-674 headroom step):
+ * this hook's refusal text now carries the whole rule.
+@@@END

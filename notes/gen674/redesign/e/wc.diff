@@ -1,0 +1,604 @@
+### update-config.ps1 (live: G:/My Drive/AI Projects/_Tooling/Claude/update-config.ps1)
+diff --git a/G:/My Drive/AI Projects/_Tooling/Claude/update-config.ps1 "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\update-config.ps1"
+index 33985f0..b51bf2e 100644
+--- a/G:/My Drive/AI Projects/_Tooling/Claude/update-config.ps1	
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\update-config.ps1"	
+@@ -38,8 +38,20 @@
+ #       OWN concurrency lock; treat identically to any other sync failure: nothing
+ #       was pulled/pushed, so the edit was correctly aborted rather than proceeding
+ #       on stale state -- GEN-353)
+ #   5 = pending-sync marker found: a previous edit was written locally but never pushed to Drive
++#   6 = size stop (GEN-674): the write would take the global CLAUDE.md over its line limit without
++#       Erez's approval; nothing was written
++#
++# -SizeApproval "ApproveSizeUpTo=<N>" -SizeOkQuote "<Erez's answer>" (GEN-674): needed only when a
++# text-replace or write-file would take the always-loaded global CLAUDE.md past its line limit
++# (Anthropic's recommended 200 lines; the claude-md-lines entry in Improve AI Infra\notes\
++# anthropic-guidelines.json may lower it, never raise it). The value carries the word ApproveSizeUpTo on
++# purpose: the permissions "ask" rules in ~/.claude/settings.json match that word in the command, so
++# Claude Code shows Erez a prompt before the command runs. Run it directly as its own tool call; a run
++# from another script file is refused, because the prompt rule cannot see inside it. Shrinking or
++# same-size writes never need it. Example:
++#   .\update-config.ps1 -File CLAUDE.md -Op write-file -ContentFile "C:\tmp\new.md" -SizeApproval "ApproveSizeUpTo=203" -SizeOkQuote "yes, 203 is fine"
+ 
+ param(
+     [Parameter(Mandatory = $true)]
+     [string]$File,
+@@ -51,9 +63,13 @@ param(
+     [string]$OldText,
+     [string]$NewText,
+     [string]$Entry,
+     [string]$ContentFile,
+-    [string]$VersionMessage = ""
++    [string]$VersionMessage = "",
++
++    [string]$SizeApproval = "",
++
++    [string]$SizeOkQuote = ""
+ )
+ 
+ $ClaudeBase   = "C:\Users\Erez\.claude"
+ $MemoryBase   = Join-Path $ClaudeBase "projects\C--Users-Erez\memory"
+@@ -61,8 +77,220 @@ $LockFile     = Join-Path $ClaudeBase "claude-config.lock"
+ $PendingSync  = Join-Path $ClaudeBase "claude-config-pending-sync"
+ $SyncScript   = "G:\My Drive\AI Projects\_Tooling\Claude\sync.ps1"
+ $JsonEditor   = "G:\My Drive\AI Projects\_Tooling\Claude\config-json-edit.js"
+ 
++# ---- GEN-674: rules-file size stop ----------------------------------------------------------------
++# The always-loaded global CLAUDE.md may not grow past its line limit unless Erez OKs it in chat and then
++# clicks Yes on the Claude Code prompt that the settings ask rules force for any command holding the word
++# ApproveSizeUpTo. Measured here, on the exact bytes about to be written, so the wording of the command
++# plays no part in the measurement. A target is "the rules file" when its current bytes equal the global
++# CLAUDE.md's (both read after the Drive pull), which also covers every other path to the same file
++# (.\CLAUDE.md, a trailing dot, an 8.3 name, a hard link) and the Drive copy. A guard against mistakes,
++# not a wall against a determined script (the same stance as auto-approve.js's PC-control pass guard).
++$RulesFile      = Join-Path $ClaudeBase "CLAUDE.md"
++$RulesLineCap   = 200
++$UserHome       = Split-Path $ClaudeBase -Parent
++$GuidelinesFile = Join-Path $UserHome "AI Projects\Improve AI Infra\notes\anthropic-guidelines.json"
++$SizeRecordDir  = Join-Path (Join-Path $UserHome ".claude-staging") "rules-size"
++$SizeRecordFile = Join-Path $SizeRecordDir "record.json"
++$script:RulesWrite = $null
++# The script file that ran this one, if any: empty when Claude Code's shell tool ran it directly. Read
++# here at script level, where frame 1 of the call stack is the caller (inside a function it is not).
++$SizeCallerScript = ""
++try {
++    $sizeCallStack = @(Get-PSCallStack)
++    if ($sizeCallStack.Count -gt 1) { $SizeCallerScript = [string]$sizeCallStack[1].ScriptName }
++} catch { }
++
++# UTF-8 text of a byte array with a leading BOM dropped (the same reading as config-health-scan.ps1
++# Read-SizeText).
++function Get-RulesText([byte[]]$Data) {
++    $decoded = [System.Text.Encoding]::UTF8.GetString($Data)
++    if ($decoded.Length -gt 0 -and $decoded[0] -eq [char]0xFEFF) { $decoded = $decoded.Substring(1) }
++    return $decoded
++}
++
++# Same rule as config-health-scan.ps1 Get-LineCount and hooks\sessionstart-backup-surfacer.js
++# rulesFileSizeLine: 0 for empty text, else the number of LF characters, plus one when the text does not
++# end in LF. Keep the three in step.
++function Get-RulesLineCount([string]$Body) {
++    if (-not $Body) { return 0 }
++    $lfCount = $Body.Split([char]10).Length - 1
++    if ($Body[$Body.Length - 1] -ne [char]10) { $lfCount++ }
++    return $lfCount
++}
++
++# The line limit: 200, or the claude-md-lines value in the size-limits file when that is a smaller
++# positive whole number. Any read or parse problem leaves 200, so the file can only lower the limit.
++function Get-RulesLineLimit {
++    $lineLimit = $RulesLineCap
++    try {
++        $limitsJson = [System.IO.File]::ReadAllText($GuidelinesFile, [System.Text.Encoding]::UTF8)
++        if ($limitsJson.Length -gt 0 -and $limitsJson[0] -eq [char]0xFEFF) { $limitsJson = $limitsJson.Substring(1) }
++        foreach ($limitEntry in @(($limitsJson | ConvertFrom-Json).limits)) {
++            if ($limitEntry.id -eq 'claude-md-lines') {
++                $limitValue = $limitEntry.value
++                # Any whole number counts, however JSON wrote it (190, 190.0, 1.9e2), as in the
++                # session-start check's Number.isInteger.
++                if ($limitValue -is [int] -or $limitValue -is [long] -or $limitValue -is [decimal] -or $limitValue -is [double]) {
++                    $limitNumber = [double]$limitValue
++                    if ($limitNumber -eq [Math]::Floor($limitNumber) -and $limitNumber -gt 0 -and $limitNumber -lt $lineLimit) {
++                        $lineLimit = [int]$limitNumber
++                    }
++                }
++            }
++        }
++    } catch { }
++    return $lineLimit
++}
++
++# Lower-case hex SHA-256 of a byte array (the session-start check hashes the file the same way).
++function Get-BytesSha256([byte[]]$Data) {
++    $hasher = [System.Security.Cryptography.SHA256]::Create()
++    try { return ([BitConverter]::ToString($hasher.ComputeHash($Data)) -replace '-', '').ToLowerInvariant() }
++    finally { $hasher.Dispose() }
++}
++
++# Refuse with exit 6. Runs before the pending-sync marker and the write, inside the main try, so the
++# finally below still releases the lock (as exit 5 does).
++function Stop-RulesSize([string]$Why, [string[]]$Guidance) {
++    Write-Output "SIZE STOP (GEN-674): $Why Nothing was written."
++    foreach ($guideLine in $Guidance) { Write-Output $guideLine }
++    # Not Write-Error: under a caller's $ErrorActionPreference = 'Stop' that would throw before the exit.
++    [Console]::Error.WriteLine("SIZE STOP (GEN-674): refused; see the lines above.")
++    exit 6
++}
++
++# Measure a text-replace or write-file before anything is written. Returns when the write may go ahead,
++# leaving $script:RulesWrite set when the target is the rules file; otherwise exits 6.
++function Invoke-RulesSizeStop([string]$TargetAbs, [byte[]]$NewBytes) {
++    $script:RulesWrite = $null
++    # Read both whole (no FileInfo length shortcut: for a symlink it gives the link's own size).
++    $targetBytes = $null
++    $rulesBytes = $null
++    try { $targetBytes = [System.IO.File]::ReadAllBytes($TargetAbs) } catch { }
++    try { $rulesBytes = [System.IO.File]::ReadAllBytes($RulesFile) } catch { }
++    if ($null -eq $targetBytes -or $null -eq $rulesBytes) {
++        $leafName = ([System.IO.Path]::GetFileName($TargetAbs)).TrimEnd('.', ' ')
++        if ($leafName -ieq 'CLAUDE.md') {
++            Stop-RulesSize "could not read the target or the global CLAUDE.md to measure this change." @()
++        }
++        return
++    }
++    $preSha = Get-BytesSha256 $targetBytes
++    if ($targetBytes.Length -ne $rulesBytes.Length -or $preSha -ne (Get-BytesSha256 $rulesBytes)) { return }
++
++    $existingText = Get-RulesText $targetBytes
++    $proposedText = Get-RulesText $NewBytes
++    if ($proposedText -match "`r(?!`n)") {
++        Stop-RulesSize "the new text of the global CLAUDE.md holds a carriage return that is not followed by a line feed, which would make its line count wrong. Use LF (or CRLF) line endings." @()
++    }
++    $existingLines = Get-RulesLineCount $existingText
++    $proposedLines = Get-RulesLineCount $proposedText
++    $lineLimit = Get-RulesLineLimit
++    $approvedCrossing = $false
++    $approvalQuote = ""
++    if ($proposedLines -gt $lineLimit -and $proposedLines -gt $existingLines) {
++        $codePoints = 0
++        foreach ($oneChar in $proposedText.ToCharArray()) { if (-not [char]::IsLowSurrogate($oneChar)) { $codePoints++ } }
++        $what = "this change takes the always-loaded rules file ~/.claude/CLAUDE.md from $existingLines to $proposedLines lines ($codePoints characters); its limit is $lineLimit lines."
++        if (-not $SizeApproval) {
++            Stop-RulesSize $what @(
++                "To go ahead:",
++                "  1. Ask Erez in plain words whether the file may grow to $proposedLines lines, offering a version at or",
++                "     under $lineLimit lines first. A /vet-rule card approval is not this OK. Revised text restarts /check.",
++                "  2. If he says yes, re-run update-config.ps1 directly, as its own tool call (update-global-rule.ps1 has",
++                "     no approval option, and a run from inside another script file is refused), as one single-line command",
++                "     (put multi-line text in a file and use -Op write-file -ContentFile), spelling ApproveSizeUpTo exactly so:",
++                "       & `"$PSCommandPath`" -File `"CLAUDE.md`" -Op $Op -SizeApproval `"ApproveSizeUpTo=$proposedLines`" -SizeOkQuote `"<his answer, word for word, on one line>`" <the same other arguments>",
++                "     Claude Code then shows Erez a permission prompt; he clicks Yes once (not 'don't ask again'). Say in",
++                "     the tool call's description, in plain words, that the rules file grows to $proposedLines lines as he agreed.",
++                "  3. The check pass this run used is spent (a No on the prompt spends the next one too): re-mint it per",
++                "     /vet-rule recovery first."
++            )
++        }
++        # Exact letter case: the settings ask rules are written as ApproveSizeUpTo, and only the PowerShell
++        # rule match is documented as case-insensitive.
++        $approvalMatch = [regex]::Match($SizeApproval, '^\s*ApproveSizeUpTo\s*=\s*(\d{1,6})\s*$')
++        if (-not $approvalMatch.Success) {
++            Stop-RulesSize "$what -SizeApproval must be exactly `"ApproveSizeUpTo=<line count>`"." @()
++        }
++        $approvedLines = [int]$approvalMatch.Groups[1].Value
++        if ($approvedLines -lt $proposedLines) {
++            Stop-RulesSize "$what ApproveSizeUpTo=$approvedLines is below the $proposedLines lines this change makes." @(
++                "Ask Erez about $proposedLines lines and re-run with -SizeApproval `"ApproveSizeUpTo=$proposedLines`"."
++            )
++        }
++        if ($SizeCallerScript) {
++            Stop-RulesSize "$what The approval came from inside another script file ($SizeCallerScript), where Claude Code's prompt rule cannot see it." @(
++                "Run update-config.ps1 directly, as its own tool call."
++            )
++        }
++        $approvalQuote = [string]$SizeOkQuote
++        if (-not $approvalQuote.Trim() -or $approvalQuote -match "[`r`n]" -or $approvalQuote.Length -gt 200) {
++            Stop-RulesSize "$what -SizeOkQuote must hold Erez's answer word for word, on one line, at most 200 characters." @()
++        }
++        $approvedCrossing = $true
++        Write-Output "Size stop: going ahead to $proposedLines lines (limit $lineLimit); Erez's OK as given: `"$approvalQuote`"."
++    }
++    # The approval record follows writes to the real file only, never to a copy that merely matches it.
++    $isCanonical = $false
++    try { $isCanonical = ([System.IO.Path]::GetFullPath($TargetAbs) -ieq [System.IO.Path]::GetFullPath($RulesFile)) } catch { }
++    $script:RulesWrite = @{
++        NewLines  = $proposedLines
++        Limit     = $lineLimit
++        Approved  = $approvedCrossing
++        Quote     = $approvalQuote
++        PreSha    = $preSha
++        NewSha    = (Get-BytesSha256 $NewBytes)
++        Canonical = $isCanonical
++    }
++}
++
++# Keep the approval record in step with a write to the rules file: none is needed at or under the limit;
++# an approved crossing records the new text's hash, Erez's quoted OK and notified=false (the session-start
++# check then tells him once); a later trim or same-size write that stays over the limit carries the record
++# forward only when it covered the text before the write. The session-start check
++# (hooks\sessionstart-backup-surfacer.js) flags an over-limit file whose hash the record lacks.
++function Update-RulesSizeRecord {
++    $written = $script:RulesWrite
++    if ($null -eq $written -or -not $written.Canonical) { return }
++    try {
++        if ($written.NewLines -le $written.Limit) {
++            Remove-Item -LiteralPath $SizeRecordFile -Force -ErrorAction SilentlyContinue
++            return
++        }
++        $approvedOn = $null
++        $recordQuote = ""
++        $recordNotified = $false
++        if ($written.Approved) {
++            $approvedOn = (Get-Date).ToUniversalTime().ToString('o')
++            $recordQuote = [string]$written.Quote
++        } else {
++            try {
++                $oldRecord = [System.IO.File]::ReadAllText($SizeRecordFile, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
++                if ($oldRecord.sha256 -eq $written.PreSha) {
++                    $approvedOn = [string]$oldRecord.approvedOn
++                    $recordQuote = [string]$oldRecord.quote
++                    $recordNotified = ($oldRecord.notified -eq $true)
++                }
++            } catch { }
++        }
++        if ($null -eq $approvedOn) { return }
++        New-Item -ItemType Directory -Force -Path $SizeRecordDir | Out-Null
++        $recordJson = [ordered]@{
++            lines      = [int]$written.NewLines
++            sha256     = [string]$written.NewSha
++            approvedOn = $approvedOn
++            quote      = $recordQuote
++            notified   = $recordNotified
++        } | ConvertTo-Json -Compress
++        [System.IO.File]::WriteAllText($SizeRecordFile, $recordJson, (New-Object System.Text.UTF8Encoding $false))
++    } catch {
++        Write-Output "Note: could not update the rules-file size record ($_); the next session start may flag the file."
++    }
++}
++
+ # Map short logical names to absolute local paths.
+ $ManagedFiles = @{
+     "CLAUDE.md"            = Join-Path $ClaudeBase "CLAUDE.md"
+     "settings.json"        = Join-Path $ClaudeBase "settings.json"
+@@ -169,8 +397,10 @@ try {
+             # Write UTF-8 WITHOUT a BOM (PS 5.1 'Set-Content -Encoding UTF8' prepends a BOM, which corrupts JS/JSON). GEN-214
+             # Resolve to an absolute LiteralPath first: WriteAllText resolves a relative path against .NET's cwd (not $PWD),
+             # and -LiteralPath stops [ ] * ? in the path being treated as wildcards. Existence already checked above.
+             $absPath = (Resolve-Path -LiteralPath $TargetPath).Path
++            # GEN-674 size stop: measured on the exact bytes WriteAllText writes below.
++            Invoke-RulesSizeStop $absPath ((New-Object System.Text.UTF8Encoding $false).GetBytes($newContent))
+             # Marker written before the file write so any interruption or push failure leaves it in place. (GEN-306)
+             [IO.File]::WriteAllText($PendingSync, "$TargetPath`n$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')", (New-Object System.Text.UTF8Encoding $false))
+             [IO.File]::WriteAllText($absPath, $newContent, (New-Object System.Text.UTF8Encoding $false))
+             Write-Output "Applied text-replace to $TargetPath."
+@@ -223,15 +453,21 @@ try {
+                 $stripped = New-Object byte[] ($bytes.Length - 3)
+                 [Array]::Copy($bytes, 3, $stripped, 0, $bytes.Length - 3)
+                 $bytes = $stripped
+             }
++            # GEN-674 size stop: measured on the exact bytes WriteAllBytes writes below.
++            Invoke-RulesSizeStop $dstAbs $bytes
+             # Marker written before the file write so any interruption or push failure leaves it in place. (GEN-306)
+             [IO.File]::WriteAllText($PendingSync, "$TargetPath`n$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')", (New-Object System.Text.UTF8Encoding $false))
+             [IO.File]::WriteAllBytes($dstAbs, $bytes)
+             Write-Output "Overwrote $TargetPath from $ContentFile (BOM stripped if present)."
+         }
+     }
+ 
++    # GEN-674: keep the size approval record in step with what was just written, before the push, so a
++    # push failure cannot leave an approved over-limit file without its record.
++    Update-RulesSizeRecord
++
+     # ---- Step 4: Push back to Drive + git history. ----
+     Write-Output "Pushing to Drive..."
+     $commitMsg = if ($VersionMessage) { $VersionMessage } else { "Config edit ($Op $File) at $(Get-Date -Format 'yyyy-MM-dd HH:mm')" }
+     try {
+
+### auto-approve.js (live: C:/Users/Erez/.claude/hooks/auto-approve.js)
+diff --git a/C:/Users/Erez/.claude/hooks/auto-approve.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\auto-approve.js"
+index 795074a..72d6477 100644
+--- a/C:/Users/Erez/.claude/hooks/auto-approve.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\auto-approve.js"	
+@@ -1085,10 +1085,26 @@ function normPath(p, cwd) {
+ 
+ // True iff `key` (already normalized) is an EXISTING file directly under hooks\ or scripts\ with a
+ // .js/.ps1 extension. Existence is the anchor -- a mis-resolved path won't exist there, so it fails
+ // safe (returns false -> not treated as protected -> normal prompt), never a silent approve.
++// GEN-674: the two Drive scripts that write the locked config files are vetting-locked too. They carry
++// the rules-file size stop, which an ordinary edit could otherwise remove (in auto mode such an edit can
++// pass without Erez). Exact normalized paths, with the same existence anchor as the hooks/scripts dirs.
++// sync.ps1 and config-json-edit.js are not covered (accepted residual, GEN-674 plan). Shell write shapes
++// the destination patterns miss reach them unchecked, as for every hook (GEN-938); the session-start
++// check flags a stop that has gone missing.
++const PROTECTED_DRIVE_SCRIPTS = new Set([
++  'g:\\my drive\\ai projects\\_tooling\\claude\\update-config.ps1',
++  'g:\\my drive\\ai projects\\_tooling\\claude\\update-global-rule.ps1',
++]);
++
+ function isProtectedCodeTarget(key) {
+   if (!key) return false;
++  // A Bash-tool path (/g/My Drive/...) normalizes to \g\my drive\...; read it as g:\my drive\...
++  const driveKey = String(key).replace(/^\\([a-z])\\/, '$1:\\');
++  if (PROTECTED_DRIVE_SCRIPTS.has(driveKey)) {
++    try { return fs.existsSync(driveKey) && fs.statSync(driveKey).isFile(); } catch (e) { return false; }
++  }
+   const inHooks = key.startsWith(HOOKS_DIR + '\\') && key.endsWith('.js');
+   const inScripts = key.startsWith(SCRIPTS_DIR + '\\') && key.endsWith('.ps1');
+   if (!inHooks && !inScripts) return false;
+   // Must not be a nested subdir file masquerading (e.g. hooks\refs\x.js is refs, not a live hook).
+@@ -1114,10 +1130,16 @@ function resolveUpdateConfigFile(command) {
+   // first and captures the next token `-File` as the "filename", resolving to null and failing OPEN.
+   // The anchor assumes flags are WHITESPACE-delimited (the only form update-config.ps1 is ever invoked
+   // in: `& '...ps1' -Flag value`); a `(`/`;`-prefixed flag with no space would be missed, which is
+   // fail-SAFE (null -> no target -> the smuggle-guard/scanChain already blocks chained forms upstream).
+-  const m = command.match(/(?:^|\s)-File\s+(?:"([^"]+)"|'([^']+)'|(\S+))/i);
+-  if (!m) return null;
++  // GEN-674: `powershell.exe -File <the script> ... -File <target>` (the /wrap auto-approval scan's form)
++  // passes the script itself as the interpreter's -File; the target is the next one. Skip a first -File
++  // naming update-config.ps1 or update-global-rule.ps1 when a later -File exists. A lone -File naming the
++  // script is a write to that script and stays the target (vetting-locked since GEN-674).
++  const fileArgs = [...command.matchAll(/(?:^|\s)-File\s+(?:"([^"]+)"|'([^']+)'|(\S+))/gi)];
++  if (!fileArgs.length) return null;
++  let m = fileArgs[0];
++  if (fileArgs.length > 1 && /update-(?:config|global-rule)\.ps1$/i.test((m[1] || m[2] || m[3] || '').trim())) m = fileArgs[1];
+   const raw = (m[1] || m[2] || m[3] || '').trim();
+   if (!raw) return null;
+   if (path.isAbsolute(raw) || raw.includes('\\') || raw.includes('/')) return normPath(raw);
+   // Short logical name: read $ManagedFiles from the live update-config.ps1 to map name -> path.
+@@ -1688,9 +1710,14 @@ function checkDueTargets(tool, ti, command, cwd) {
+       let t;
+       while ((t = re.exec(command)) !== null) {
+         const tok = (t[2] || t[3] || t[4] || t[1] || '');
+         if (!tok) continue;
+-        push(normPath(tok, cwd), false);
++        const k = normPath(tok, cwd);
++        // GEN-674: a direct shell write to the global CLAUDE.md skips update-config.ps1, where its size is
++        // measured; enforceCheckDue refuses it even with a pass. Only the write shapes the patterns above
++        // recognise; any other shape is caught afterwards by the session-start size check.
++        if (k === GLOBAL_CLAUDE_MD && isCheckDueTarget(k)) out.directRulesWrite = true;
++        push(k, false);
+       }
+     }
+   }
+   return out;
+@@ -1723,8 +1750,23 @@ function enforceCheckDue(tool, ti, command, cwd) {
+     return; // any internal error -> fall through to normal handling (prompt)
+   }
+   if (!targets || targets.length === 0) return; // no check-due target -> not our concern
+ 
++  // GEN-674: the global CLAUDE.md is written only through update-config.ps1 / update-global-rule.ps1,
++  // which measure its size on the exact bytes they write. A direct shell write would skip that, so it is
++  // refused here, before any pass is looked up (a pass is never consumed by it).
++  if (targets.directRulesWrite) {
++    process.stderr.write(
++      'Refused (rules-file size stop, GEN-674): this command writes the global CLAUDE.md directly (a ' +
++      'redirect, Set-Content/Add-Content/Out-File/Tee-Object, a copy or move destination, or ' +
++      '[IO.File]::Write*), which skips the size measurement. Write it only through update-config.ps1 ' +
++      '(-Op write-file -ContentFile, or -Op text-replace) or update-global-rule.ps1. If the command only ' +
++      'quotes such a fragment inside replacement text, apply that text with -Op write-file -ContentFile ' +
++      'instead.\n'
++    );
++    process.exit(2);
++  }
++
+   // Shell smuggle-hole guard runs FIRST -- BEFORE the mechanical-approve below -- so a CHAINED command
+   // can never be waved through on the mechanical lane (a "mechanical" head with a smuggled `&& <tail>`
+   // would otherwise ride through sight-unseen; that exact ordering hole was caught by the code-review
+   // panel). CHAINED -> hard-block. GEN-641: MULTILINE/AMBIGUOUS/SCAN-ERROR also hard-block rather
+
+### sessionstart-backup-surfacer.js (live: C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js)
+diff --git a/C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\sessionstart-backup-surfacer.js"
+index 116d932..fe907cf 100644
+--- a/C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\sessionstart-backup-surfacer.js"	
+@@ -147,9 +147,9 @@ process.stdin.on('end', () => {
+   // after the queue read so its own failure can never stop queued records from being shown.
+   // GEN-703: projectBackupStaleLine replaces the per-record 'postponed' lines (see buildMessage); the
+   // slow-copy line was removed because the Drive copy now runs in the background (async hook).
+   const staleLines = [];
+-  for (const check of [projectBackupStaleLine, sessionBackupStaleLine, accountSyncStaleLine]) {
++  for (const check of [projectBackupStaleLine, sessionBackupStaleLine, accountSyncStaleLine, rulesFileSizeLine, sizeStopIntactLine]) {
+     try {
+       const line = check(path.join(os.homedir(), '.claude'), Date.now());
+       if (line) staleLines.push(line);
+     } catch (e) {
+@@ -226,8 +226,29 @@ process.stdin.on('end', () => {
+       }
+     }
+   }
+ 
++  // GEN-674: mark a one-time size notice as shown, only after the message went out (a failure here just
++  // shows it again next session). Re-read the record and change it only if it still covers the same text,
++  // so a crossing recorded by another session in between is not marked shown unseen.
++  if (pendingRulesAck !== null && emittedOk && additionalContext && additionalContext.indexOf(pendingRulesAck.line) !== -1) {
++    try {
++      const rec = JSON.parse(stripBomText(fs.readFileSync(pendingRulesAck.file, 'utf8')));
++      if (rec && rec.sha256 === pendingRulesAck.sha && rec.notified === false) {
++        rec.notified = true;
++        const tmp = pendingRulesAck.file + '.tmp-' + process.pid;
++        fs.writeFileSync(tmp, JSON.stringify(rec), 'utf8');
++        fs.renameSync(tmp, pendingRulesAck.file);
++      }
++    } catch (e) {
++      try {
++        process.stderr.write(`backup-surfacer: could not mark the size notice shown, will show it again (${e && e.message})\n`);
++      } catch (e2) {
++        /* stderr unavailable */
++      }
++    }
++  }
++
+   // Give the stdout write a tick to flush before exit. Piped stdout is
+   // synchronous on Windows/POSIX in modern Node (verified: no truncation up to
+   // 8MB), but exiting on the next tick is belt-and-suspenders and costs nothing.
+   process.exitCode = 0;
+@@ -461,8 +482,129 @@ function accountSyncStaleLine(claudeDir, now) {
+     'Relay this to Erez at the top of your first response. Run log: ~/.claude/account-session-sync/changes.log.'
+   );
+ }
+ 
++// GEN-674: one line when the always-loaded global rules file (~/.claude/CLAUDE.md) is over its line limit
++// and the size approval record does not cover its current text, or, once, when it does and Erez has not
++// yet been told; else null. update-config.ps1 measures every write to that file. After Erez OKs a crossing
++// (in chat, then Yes on the prompt the settings ask rules force), it writes the record ({lines, sha256 of
++// the written bytes, approvedOn, quote: his words as Claude gave them, notified: false}); it carries the
++// record forward on a later trim that stays over the limit, and deletes it once the file is back at or
++// under the limit. So over-limit text that did not arrive through that route (a write the gates did not
++// recognise, a Drive copy pulled in by sync, break-glass) shows up here at every session start until it is
++// fixed, and each approved crossing is shown to Erez once with the quote, so a misread OK can be caught.
++// The line rule and limit mirror update-config.ps1 (Get-RulesLineCount, Get-RulesLineLimit) and
++// config-health-scan.ps1 Get-LineCount: keep the three in step. A read failure on the rules file is
++// reported, not hidden.
++const RULES_LINE_CAP = 200;
++let pendingRulesAck = null;
++const stripBomText = s => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
++function rulesFileSizeLine(claudeDir, now) {
++  const home = path.join(claudeDir, '..');
++  let buf;
++  try {
++    buf = fs.readFileSync(path.join(claudeDir, 'CLAUDE.md'));
++  } catch (e) {
++    return (
++      `RULES-FILE SIZE — could not read ~/.claude/CLAUDE.md to check its size (${(e && (e.code || e.message)) || 'unknown error'}). ` +
++      'Tell Erez in the 📌 For you block of your first reply.'
++    );
++  }
++  const text = stripBomText(buf.toString('utf8'));
++  let lines = 0;
++  if (text.length > 0) {
++    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) lines++;
++    if (text.charCodeAt(text.length - 1) !== 10) lines++;
++  }
++  let limit = RULES_LINE_CAP;
++  try {
++    const g = JSON.parse(stripBomText(fs.readFileSync(path.join(home, 'AI Projects', 'Improve AI Infra', 'notes', 'anthropic-guidelines.json'), 'utf8')));
++    const entry = g && Array.isArray(g.limits) ? g.limits.find(x => x && x.id === 'claude-md-lines') : null;
++    if (entry && Number.isInteger(entry.value) && entry.value > 0 && entry.value < limit) limit = entry.value;
++  } catch (e) {
++    /* unreadable or malformed -> 200 (the file can only lower the limit) */
++  }
++  if (lines <= limit) return null;
++  const sha = require('crypto').createHash('sha256').update(buf).digest('hex');
++  const recordFile = path.join(home, '.claude-staging', 'rules-size', 'record.json');
++  let rec = null;
++  try {
++    rec = JSON.parse(stripBomText(fs.readFileSync(recordFile, 'utf8')));
++  } catch (e) {
++    /* no record */
++  }
++  if (rec && rec.sha256 === sha) {
++    if (rec.notified !== false) return null;
++    const when = clean(String(rec.approvedOn || '').slice(0, 10), 20) || 'an unknown date';
++    const quote = clean(rec.quote, 200) || '(no words recorded)';
++    const line =
++      `RULES-FILE SIZE — your always-loaded rules file ~/.claude/CLAUDE.md is now ${lines} lines, over its ${limit}-line limit. ` +
++      `On ${when} Claude recorded this growth with Erez's OK, quoted as: "${quote}". Tell Erez once, in the 📌 For you block ` +
++      `of your first reply, in plain words with that quote, and ask whether it is what he agreed; if not, offer to bring the ` +
++      `file back to ${limit} lines or fewer.`;
++    // Marked shown after emission, and only if this exact line survived the length trim.
++    pendingRulesAck = { file: recordFile, sha, line };
++    return line;
++  }
++  return (
++    `RULES-FILE SIZE — your always-loaded rules file ~/.claude/CLAUDE.md is ${lines} lines, over its ${limit}-line limit, ` +
++    'with no OK from Erez on record for its current text. Tell Erez in the 📌 For you block of your first reply, ' +
++    `in plain words, and offer to bring it back to ${limit} lines or fewer.`
++  );
++}
++
++// GEN-674: one line when the size stop itself looks removed; else null. It checks that update-config.ps1
++// still measures both of its write paths, that update-global-rule.ps1 still hands its edits to it, and that
++// ~/.claude/settings.json still has the two ask rules that make Claude Code prompt Erez for an approved
++// crossing. A Drive script or settings file that cannot be read is not reported here (Drive may not be
++// mounted yet at session start; other checks report a broken settings file). The two Drive files are read
++// in a child process with a time limit, so a slow or offline Google Drive can never stall this hook (and
++// with it the backup notices it carries). driveDir is for tests.
++const SIZE_STOP_DRIVE_DIR = 'G:\\My Drive\\AI Projects\\_Tooling\\Claude';
++const SIZE_ASK_RULES = ['PowerShell(*ApproveSizeUpTo*)', 'Bash(*ApproveSizeUpTo*)'];
++const DRIVE_READ_TIMEOUT_MS = 10000;
++function readDriveFiles(files) {
++  try {
++    const r = require('child_process').spawnSync(
++      process.execPath,
++      ['-e', 'const fs=require("fs");process.stdout.write(JSON.stringify(process.argv.slice(1).map(f=>{try{return fs.readFileSync(f,"utf8")}catch(e){return null}})))', ...files],
++      { encoding: 'utf8', timeout: DRIVE_READ_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024, windowsHide: true }
++    );
++    if (r.status !== 0 || r.error) return files.map(() => null);
++    const got = JSON.parse(r.stdout);
++    return Array.isArray(got) && got.length === files.length ? got.map(x => (typeof x === 'string' ? x : null)) : files.map(() => null);
++  } catch (e) {
++    return files.map(() => null);
++  }
++}
++function sizeStopIntactLine(claudeDir, now, driveDir) {
++  const dir = driveDir || SIZE_STOP_DRIVE_DIR;
++  const problems = [];
++  const [uc, ugr] = readDriveFiles([path.join(dir, 'update-config.ps1'), path.join(dir, 'update-global-rule.ps1')]);
++  if (uc !== null) {
++    const calls = (uc.match(/^[ \t]*Invoke-RulesSizeStop[ \t]+\$/gm) || []).length;
++    if (!/^function Invoke-RulesSizeStop\b/m.test(uc) || calls < 2) {
++      problems.push('update-config.ps1 no longer measures every write of the rules file');
++    }
++  }
++  if (ugr !== null && !/update-config\.ps1/i.test(ugr)) {
++    problems.push('update-global-rule.ps1 no longer hands its edits to update-config.ps1');
++  }
++  try {
++    const st = JSON.parse(stripBomText(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8')));
++    const ask = st && st.permissions && Array.isArray(st.permissions.ask) ? st.permissions.ask.map(x => String(x).toLowerCase()) : [];
++    const missing = SIZE_ASK_RULES.filter(r => ask.indexOf(r.toLowerCase()) === -1);
++    if (missing.length) problems.push('~/.claude/settings.json lacks the prompt rule ' + missing.join(' and '));
++  } catch (e) {
++    /* unreadable settings: reported elsewhere */
++  }
++  if (!problems.length) return null;
++  return (
++    `RULES-FILE SIZE STOP — the stop that keeps ~/.claude/CLAUDE.md under its line limit looks changed: ${problems.join('; ')}. ` +
++    'Tell Erez in the 📌 For you block of your first reply, in plain words, and offer to restore it (GEN-674).'
++  );
++}
++
+ // Build the operator-facing message. Kinds map to plain-language meaning; the
+ // most severe (a secret that was NOT backed up) is called out first.
+ function buildMessage(allRecs) {
+   // GEN-703: 'postponed' records (a time-limit skip or a run cut off by a session close; GitHub was
+
+### deny-askuserquestion.js (live: C:/Users/Erez/.claude/hooks/deny-askuserquestion.js)
+diff --git a/C:/Users/Erez/.claude/hooks/deny-askuserquestion.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\deny-askuserquestion.js"
+index dd23e8c..f7b1de3 100644
+--- a/C:/Users/Erez/.claude/hooks/deny-askuserquestion.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\deny-askuserquestion.js"	
+@@ -4,10 +4,11 @@
+ /*
+  * deny-askuserquestion.js -- Claude Code PreToolUse hook. (GEN-337)
+  *
+  * Denies the AskUserQuestion popup tool outright and redirects the model to
+- * asking inline in the conversation as prose. Once proven live, the resident
+- * rule in the global CLAUDE.md shrinks to a one-line pointer at this file.
++ * asking inline in the conversation as prose. The resident pointer rule was
++ * dropped from the global CLAUDE.md on 2026-10-21 (GEN-674 headroom step):
++ * this hook's refusal text now carries the whole rule.
+  *
+  * Safety stance (one-directional invariant, same as confirm-send.js): this
+  * hook only ever DENIES its one gated tool or defers. It never returns
+  * "allow" and never silences a prompt another hook would raise. On any
+
+### settings.json (live: C:/Users/Erez/.claude/settings.json)
+diff --git a/C:/Users/Erez/.claude/settings.json "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\settings.json"
+index e5544e0..fa1694c 100644
+--- a/C:/Users/Erez/.claude/settings.json
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen674\\redesign\\e\\wc\\settings.json"	
+@@ -92,8 +92,12 @@
+       "mcp__5aad753a-0c81-4e7f-a4ff-8634e37007b8__search_events",
+       "mcp__claude-in-chrome__navigate",
+       "mcp__claude-in-chrome__tabs_create_mcp",
+       "mcp__claude-in-chrome__tabs_close_mcp"
++    ],
++    "ask": [
++      "PowerShell(*ApproveSizeUpTo*)",
++      "Bash(*ApproveSizeUpTo*)"
+     ]
+   },
+   "model": "opus[1m]",
+   "hooks": {
+

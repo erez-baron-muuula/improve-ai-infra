@@ -1,0 +1,157 @@
+@@@OLD
+  for (const check of [projectBackupStaleLine, sessionBackupStaleLine, accountSyncStaleLine]) {
+@@@NEW
+  for (const check of [projectBackupStaleLine, sessionBackupStaleLine, accountSyncStaleLine, rulesFileSizeLine, sizeStopIntactLine]) {
+@@@END
+@@@OLD
+  // Give the stdout write a tick to flush before exit. Piped stdout is
+@@@NEW
+  // GEN-674: mark a one-time size notice as shown, only after the message went out (a failure here just
+  // shows it again next session). Re-read the record and change it only if it still covers the same text,
+  // so a crossing recorded by another session in between is not marked shown unseen.
+  if (pendingRulesAck !== null && emittedOk && additionalContext && additionalContext.indexOf(pendingRulesAck.line) !== -1) {
+    try {
+      const rec = JSON.parse(stripBomText(fs.readFileSync(pendingRulesAck.file, 'utf8')));
+      if (rec && rec.sha256 === pendingRulesAck.sha && rec.notified === false) {
+        rec.notified = true;
+        const tmp = pendingRulesAck.file + '.tmp-' + process.pid;
+        fs.writeFileSync(tmp, JSON.stringify(rec), 'utf8');
+        fs.renameSync(tmp, pendingRulesAck.file);
+      }
+    } catch (e) {
+      try {
+        process.stderr.write(`backup-surfacer: could not mark the size notice shown, will show it again (${e && e.message})\n`);
+      } catch (e2) {
+        /* stderr unavailable */
+      }
+    }
+  }
+
+  // Give the stdout write a tick to flush before exit. Piped stdout is
+@@@END
+@@@OLD
+// Build the operator-facing message. Kinds map to plain-language meaning; the
+@@@NEW
+// GEN-674: one line when the always-loaded global rules file (~/.claude/CLAUDE.md) is over its line limit
+// and the size approval record does not cover its current text, or, once, when it does and Erez has not
+// yet been told; else null. update-config.ps1 measures every write to that file. After Erez OKs a crossing
+// (in chat, then Yes on the prompt the settings ask rules force), it writes the record ({lines, sha256 of
+// the written bytes, approvedOn, quote: his words as Claude gave them, notified: false}); it carries the
+// record forward on a later trim that stays over the limit, and deletes it once the file is back at or
+// under the limit. So over-limit text that did not arrive through that route (a write the gates did not
+// recognise, a Drive copy pulled in by sync, break-glass) shows up here at every session start until it is
+// fixed, and each approved crossing is shown to Erez once with the quote, so a misread OK can be caught.
+// The line rule and limit mirror update-config.ps1 (Get-RulesLineCount, Get-RulesLineLimit) and
+// config-health-scan.ps1 Get-LineCount: keep the three in step. A read failure on the rules file is
+// reported, not hidden.
+const RULES_LINE_CAP = 200;
+let pendingRulesAck = null;
+const stripBomText = s => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
+function rulesFileSizeLine(claudeDir, now) {
+  const home = path.join(claudeDir, '..');
+  let buf;
+  try {
+    buf = fs.readFileSync(path.join(claudeDir, 'CLAUDE.md'));
+  } catch (e) {
+    return (
+      `RULES-FILE SIZE — could not read ~/.claude/CLAUDE.md to check its size (${(e && (e.code || e.message)) || 'unknown error'}). ` +
+      'Tell Erez in the 📌 For you block of your first reply.'
+    );
+  }
+  const text = stripBomText(buf.toString('utf8'));
+  let lines = 0;
+  if (text.length > 0) {
+    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) lines++;
+    if (text.charCodeAt(text.length - 1) !== 10) lines++;
+  }
+  let limit = RULES_LINE_CAP;
+  try {
+    const g = JSON.parse(stripBomText(fs.readFileSync(path.join(home, 'AI Projects', 'Improve AI Infra', 'notes', 'anthropic-guidelines.json'), 'utf8')));
+    const entry = g && Array.isArray(g.limits) ? g.limits.find(x => x && x.id === 'claude-md-lines') : null;
+    if (entry && Number.isInteger(entry.value) && entry.value > 0 && entry.value < limit) limit = entry.value;
+  } catch (e) {
+    /* unreadable or malformed -> 200 (the file can only lower the limit) */
+  }
+  if (lines <= limit) return null;
+  const sha = require('crypto').createHash('sha256').update(buf).digest('hex');
+  const recordFile = path.join(home, '.claude-staging', 'rules-size', 'record.json');
+  let rec = null;
+  try {
+    rec = JSON.parse(stripBomText(fs.readFileSync(recordFile, 'utf8')));
+  } catch (e) {
+    /* no record */
+  }
+  if (rec && rec.sha256 === sha) {
+    if (rec.notified !== false) return null;
+    const when = clean(String(rec.approvedOn || '').slice(0, 10), 20) || 'an unknown date';
+    const quote = clean(rec.quote, 200) || '(no words recorded)';
+    const line =
+      `RULES-FILE SIZE — your always-loaded rules file ~/.claude/CLAUDE.md is now ${lines} lines, over its ${limit}-line limit. ` +
+      `On ${when} Claude recorded this growth with Erez's OK, quoted as: "${quote}". Tell Erez once, in the 📌 For you block ` +
+      `of your first reply, in plain words with that quote, and ask whether it is what he agreed; if not, offer to bring the ` +
+      `file back to ${limit} lines or fewer.`;
+    // Marked shown after emission, and only if this exact line survived the length trim.
+    pendingRulesAck = { file: recordFile, sha, line };
+    return line;
+  }
+  return (
+    `RULES-FILE SIZE — your always-loaded rules file ~/.claude/CLAUDE.md is ${lines} lines, over its ${limit}-line limit, ` +
+    'with no OK from Erez on record for its current text. Tell Erez in the 📌 For you block of your first reply, ' +
+    `in plain words, and offer to bring it back to ${limit} lines or fewer.`
+  );
+}
+
+// GEN-674: one line when the size stop itself looks removed; else null. It checks that update-config.ps1
+// still measures both of its write paths, that update-global-rule.ps1 still hands its edits to it, and that
+// ~/.claude/settings.json still has the two ask rules that make Claude Code prompt Erez for an approved
+// crossing. A Drive script or settings file that cannot be read is not reported here (Drive may not be
+// mounted yet at session start; other checks report a broken settings file). The two Drive files are read
+// in a child process with a time limit, so a slow or offline Google Drive can never stall this hook (and
+// with it the backup notices it carries). driveDir is for tests.
+const SIZE_STOP_DRIVE_DIR = 'G:\\My Drive\\AI Projects\\_Tooling\\Claude';
+const SIZE_ASK_RULES = ['PowerShell(*ApproveSizeUpTo*)', 'Bash(*ApproveSizeUpTo*)'];
+const DRIVE_READ_TIMEOUT_MS = 10000;
+function readDriveFiles(files) {
+  try {
+    const r = require('child_process').spawnSync(
+      process.execPath,
+      ['-e', 'const fs=require("fs");process.stdout.write(JSON.stringify(process.argv.slice(1).map(f=>{try{return fs.readFileSync(f,"utf8")}catch(e){return null}})))', ...files],
+      { encoding: 'utf8', timeout: DRIVE_READ_TIMEOUT_MS, maxBuffer: 8 * 1024 * 1024, windowsHide: true }
+    );
+    if (r.status !== 0 || r.error) return files.map(() => null);
+    const got = JSON.parse(r.stdout);
+    return Array.isArray(got) && got.length === files.length ? got.map(x => (typeof x === 'string' ? x : null)) : files.map(() => null);
+  } catch (e) {
+    return files.map(() => null);
+  }
+}
+function sizeStopIntactLine(claudeDir, now, driveDir) {
+  const dir = driveDir || SIZE_STOP_DRIVE_DIR;
+  const problems = [];
+  const [uc, ugr] = readDriveFiles([path.join(dir, 'update-config.ps1'), path.join(dir, 'update-global-rule.ps1')]);
+  if (uc !== null) {
+    const calls = (uc.match(/^[ \t]*Invoke-RulesSizeStop[ \t]+\$/gm) || []).length;
+    if (!/^function Invoke-RulesSizeStop\b/m.test(uc) || calls < 2) {
+      problems.push('update-config.ps1 no longer measures every write of the rules file');
+    }
+  }
+  if (ugr !== null && !/update-config\.ps1/i.test(ugr)) {
+    problems.push('update-global-rule.ps1 no longer hands its edits to update-config.ps1');
+  }
+  try {
+    const st = JSON.parse(stripBomText(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8')));
+    const ask = st && st.permissions && Array.isArray(st.permissions.ask) ? st.permissions.ask.map(x => String(x).toLowerCase()) : [];
+    const missing = SIZE_ASK_RULES.filter(r => ask.indexOf(r.toLowerCase()) === -1);
+    if (missing.length) problems.push('~/.claude/settings.json lacks the prompt rule ' + missing.join(' and '));
+  } catch (e) {
+    /* unreadable settings: reported elsewhere */
+  }
+  if (!problems.length) return null;
+  return (
+    `RULES-FILE SIZE STOP — the stop that keeps ~/.claude/CLAUDE.md under its line limit looks changed: ${problems.join('; ')}. ` +
+    'Tell Erez in the 📌 For you block of your first reply, in plain words, and offer to restore it (GEN-674).'
+  );
+}
+
+// Build the operator-facing message. Kinds map to plain-language meaning; the
+@@@END
