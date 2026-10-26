@@ -1,5 +1,10 @@
 # GEN-460 build — handoff (2026-10-25, session 05ba3467)
 
+> **DONE 2026-10-26 (session 43d37205): installed and verified live.** Erez answered "drop it" to
+> the retire add-on question; it was removed. Design re-check converged; three code-review rounds;
+> both files installed byte-identical; first real sync done (config-history commit `0fc9f7d`).
+> Everything below is the 2026-10-25 state, kept for history. Do not resume from it.
+
 Plan: `C:\Users\Erez\.claude\plans\come-up-with-a-vivid-dewdrop.md` (approved by Erez 2026-10-25).
 Nothing is installed. Live files are unchanged by this work.
 
