@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-26 (2) — GEN-871 supervised release review passed; digest GEN-959 created; GEN-871 in Review with a weekly check <!-- toc-session:7f014f94-60c7-4666-9708-67cdc65da65d -->
+- 2026-10-26 (2) — GEN-871 supervised release review passed; digest GEN-959 created; GEN-871 in Review with a weekly check; GEN-960 filed <!-- toc-session:7f014f94-60c7-4666-9708-67cdc65da65d -->
 - 2026-10-26: GEN-460 backup triage now live after 3 review rounds; retire add-on dropped; GEN-356/809 Done; GEN-956 filed <!-- toc-session:43d37205-1644-4451-9241-0a81787787ea -->
 - 2026-10-25 (4) — Approval pop-ups: plan approved; permission-mode setting fixed; planning-mode fix built but not yet live; GEN-946/951/952/953 filed <!-- toc-session:f9a3d27b-2297-43fc-8134-be504e0921d1 -->
 - 2026-10-25 (4): GEN-460 backup triage plan converged and built with tests passing; held before going live on an open retire add-on decision <!-- toc-session:05ba3467-0278-4a1b-a49d-9b7877e548e2 -->
@@ -292,7 +292,8 @@ Session 7f014f94. Erez asked what effort a supervised release-review run needs (
 Unresolved items filed: none new; merged into GEN-769 (wrong links, 9th/10th), GEN-934 (weekday, 2nd instance), GEN-855 (check folding a crash into "did not run") — each reviewer PASS, 1 round.
 Release review: last run 2026-10-26 (2.1.300 → 2.1.310): 1 new ticket(s), 1 note(s) added, 0 moved Blocked → To Do, 1 waiting for your yes/no as of that run in GEN-959, 0 not filed
 Reversals judged non-learning: review-round revisions of the GEN-349 note and GEN-959 section (drafts fixed before any write; the gate working as designed).
-Follow-up for Erez: delete `gen871-first-unattended-run-check` from the Scheduled list.
+After the first wrap: Erez deleted `gen871-first-unattended-run-check` (confirmed gone from the schedule; its folder remains). The wrap's three signal-check flags (yesterday's session 1b56e4d7, scratchpad `causemap/out2,3,4.jsonl`, one-off cause-map data) were retired with `false-detect:` acks at Erez's request ("Add one “false alarm” note per file ..."), and on his ask "file a ticket to make sure you handle such cases automatically yourself next time" filed GEN-960 "Obvious false alarms from the signal check are cleared by Claude, not brought to Erez" (To Do, High; create and body each reviewer PASS, 1 round).
+Signal-surface FYI: 3 false-detect retirements in 90 days (today's three) — detector-retune bar reached; expected from today's cleanup, adjustment tracked on GEN-960.
 
 ---
 
