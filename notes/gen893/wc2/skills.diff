@@ -1,0 +1,133 @@
+diff --git a/wc2/baseline/suggest/SKILL.md b/wc2/suggest/SKILL.md
+index fab1898..0dffd5d 100644
+--- a/wc2/baseline/suggest/SKILL.md
++++ b/wc2/suggest/SKILL.md
+@@ -93,17 +93,20 @@ output is a signal" — cited here, not restated: form the proposal with the sur
+ designed, not deferred as a residual under check 8.
+ 
+ **4b — Stay within size limits (GATED).**
+-*Applies when* the proposal creates or grows a file that has a limit in
+-`C:/Users/Erez/AI Projects/Improve AI Infra/notes/anthropic-guidelines.json`
+-(its `limits` and `houseRules`; each entry's `appliesTo` names the files). Measure the file now
+-and as proposed (`LC_ALL=C.UTF-8 wc -l -m -c`; tokens = characters / `charsPerToken`), and design it to stay
+-within every limit. A change that would cross a `recommended` limit, or grow a file already over
+-one, goes to Erez as an explicit question in plain words, with the net-shrinking version offered
+-first. Never present a change that crosses a `hard` limit or grows a file already over one;
+-redesign it. In the proposal handed to `/check`, carry one line per applicable limit, with units:
+-`size: <file> <now> → <proposed> / <limit> <unit>`, or `size: skipped (<reason>)`, an
+-unreadable thresholds file being one reason. Tell Erez the sizes only when one is within 10% of a
+-limit or crosses it. Owned here.
++*Applies when* the proposal creates or grows a file with a limit in
++`C:/Users/Erez/AI Projects/Improve AI Infra/notes/anthropic-guidelines.json` (each entry's
++`appliesTo` names the files; project `CLAUDE.md` files and `hooks/refs` notes count, though
++`/vet-rule` does not gate them). Save the whole proposed file (never a snippet) as a draft and
++measure it with the size checker, which covers descriptions and refs too:
++`powershell -NoProfile -File "C:/Users/Erez/.claude/skills/config-health/config-health-scan.ps1" -Action size-check -Target "<draft>" -AsIfPath "<real path>"`.
++Design within every limit. Crossing a `recommended` limit, or growing a file already over one,
++goes to Erez as a plain-words question, offering first a version that ends smaller than today;
++with his explicit OK the crossing is not a departure from this check. Never present a change
++that crosses a `hard` or `house` (our own cap) limit or grows a file already over one; redesign
++it. The proposal handed to `/check` carries the checker's `sizeLines` unchanged (one per
++applicable limit, now → proposed), or `size: skipped (<reason>)`, a checker error being one.
++Tell Erez sizes only near (within 10%) or over a limit; a `/vet-rule` card always shows them.
++Owned here.
+ 
+ **5 — Present at least one real alternative, with trade-offs (ALWAYS — the branch varies).**
+ This check always runs once you've narrowed (it's how the result reaches Erez); the gate
+diff --git a/wc2/baseline/vet-rule/SKILL.md b/wc2/vet-rule/SKILL.md
+index 2ab8667..fc624df 100644
+--- a/wc2/baseline/vet-rule/SKILL.md
++++ b/wc2/vet-rule/SKILL.md
+@@ -21,8 +21,8 @@ record, mint, apply, recovery and break-glass mechanics live in
+ `C:/Users/Erez/.claude/skills/vet-code/gate-mechanics.md`, shared with `/vet-code`: use its
+ **`/vet-rule` column** (`~/.claude-staging/check-passes/`, kinds `check-record` and `check`).
+ Rationale and honest limits: `C:/Users/Erez/.claude/skills/vet-rule/background.md`. When editing this
+-skill, keep this file at 12,000 characters or fewer and under 500 lines (`wc -m -l`); put new detail
+-in a reference file.
++skill, keep this file at 12,000 characters or fewer and under 500 lines (size checker, `/suggest`
++4b); put new detail in a reference file.
+ 
+ ---
+ 
+@@ -80,8 +80,8 @@ minted. Tell Erez plainly; do not degrade to a lighter review.
+ ## Step 1 — Run /check on the EXACT proposed text (to convergence)
+ 
+ Run `/check` on the concrete, final proposed text of the edit — not a paraphrase, not the design idea,
+-the literal words that will land in the file, with each target's `size:` lines (`/suggest` check
+-4b) in the artifact. Iterate to convergence (or escalate per `/check`'s own
++the literal words that will land in the file, with each target's `size:` lines from the size
++checker (`/suggest` check 4b) in the artifact. Iterate to convergence (or escalate per `/check`'s own
+ rules). This produces `check-reviewer` sub-agent transcripts in THIS session — the evidence Step 4
+ verifies. If `/check` escalates rather than converging, STOP and surface the standoff to Erez; do not
+ mint on an unconverged panel.
+@@ -108,10 +108,12 @@ invalidates the record (Step 4's hash check will fail) and requires re-running `
+ ## Step 3 — Show Erez + approve
+ 
+ Show Erez the change and ATTEST the `/check` ran, with its result: converged (in how many rounds) or
+-escalated, the material findings and how each resolved, and any advisory notes. Always include
+-each target's size in plain words; check 4b governs every target, and one that breaks it goes back to
+-Step 1. Get his explicit approval to apply. (This is the normal check-before-present presentation —
+-the panel's converged result, per the standing rule — now backed by a recorded, verifiable panel.)
++escalated, the material findings and how each resolved, and any advisory notes. Sizes: run the size
++checker on each target's whole proposed file (for a `CLAUDE.md` text-replace, the full live file
++with the replacement applied, never the `OldText`/`NewText` alone; again after any revision) and
++paste its `sizeLines` verbatim, every line for every target, plus one plain sentence per target ("well within all
++limits", "at 95% of its hard cap"); a summary alone is not a size line. A target that breaks
++check 4b goes back to Step 1. Get his explicit approval to apply.
+ 
+ ## Step 4 — Evidence precondition, then mint
+ 
+@@ -149,12 +151,10 @@ NEW gated file (a new skill/command, or a new rule file), OR to install this gat
+ the first time:
+ 1. Run Steps 1–3 exactly as for a modification (run `/check` on the new file's full text, record it,
+    show Erez, get approval), then STOP before Step 4's mint: a new file needs no check pass, because
+-   the gate anchors on on-disk existence and cannot fire on a file that does not exist yet. The review
+-   requirement is identical; only the enforcement can't fire.
++   the gate anchors on on-disk existence and cannot fire on a file that does not exist yet.
+ 2. The create write itself needs no pass and no break-glass: because the gate cannot fire on a
+    not-yet-existing file, the write falls through to a normal permission prompt — the same as
+-   `/vet-code`'s Scope for a brand-new hook. (Break-glass is for recovering a wedged session, not for
+-   ordinary new-file creation.) Every subsequent edit to that file is gated normally.
++   `/vet-code`'s Scope for a brand-new hook. Every subsequent edit to that file is gated normally.
+ 
+ ## Step 8 — Recovery (failure / expiry)
+ 
+diff --git a/wc2/baseline/vet-code/SKILL.md b/wc2/vet-code/SKILL.md
+index c3899b4..9b92333 100644
+--- a/wc2/baseline/vet-code/SKILL.md
++++ b/wc2/vet-code/SKILL.md
+@@ -13,7 +13,7 @@ single-use **vetting pass** exists; this skill is the only sanctioned way to min
+ this step, read `<file>`", open that file first on every run, even after a compaction.
+ `gate-mechanics.md` in this folder is shared with `/vet-rule` (use its `/vet-code` column): changing
+ it changes both gates. History: `background.md` in this folder. Editing this skill: keep this file
+-at 12,000 characters or fewer and under 500 lines (`wc -m -l`); new detail goes in a reference file.
++at 12,000 characters or fewer and under 500 lines (size checker, `/suggest` 4b); new detail goes in a reference file.
+ 
+ ---
+ 
+diff --git a/wc2/baseline/vet-ticket/SKILL.md b/wc2/vet-ticket/SKILL.md
+index 745c25a..792fe46 100644
+--- a/wc2/baseline/vet-ticket/SKILL.md
++++ b/wc2/vet-ticket/SKILL.md
+@@ -14,7 +14,7 @@ pass to skip the review.
+ **How to use this runbook.** Each step lists what must not be skipped; where it says "Before doing
+ this step, read `<file>`", open that file first on every run, even after a compaction. Rationale,
+ relationships and the honest ceiling: `background.md` in this folder. Editing this skill: keep this
+-file at 12,000 characters or fewer and under 500 lines (`wc -m -l`); new detail goes in a reference
++file at 12,000 characters or fewer and under 500 lines (size checker, `/suggest` 4b); new detail goes in a reference
+ file.
+ 
+ ---
+diff --git a/wc2/baseline/check/SKILL.md b/wc2/check/SKILL.md
+index 4b560c4..c4f9bd3 100644
+--- a/wc2/baseline/check/SKILL.md
++++ b/wc2/check/SKILL.md
+@@ -74,7 +74,7 @@ ADVISORY (non-blocking): (optional notes, including "verify before relying" grou
+ ### Lens task templates
+ 
+ - **Pre-mortem:** "Run a pre-mortem. List concrete failure modes across correctness, cost, time/effort, maintenance, edge cases, and assumptions/dependencies. For each: is it handled? Surface unstated assumptions; flag any claim asserted from memory rather than verified. State honest residual risks. Check that each proposed fix does not spawn a new problem. If the proposal builds a signal-producing mechanism for a later decision, confirm its surfacing path (per `/suggest` check 4a) is designed in, not deferred to a residual." (+ the premise-challenge paragraph above.)
+-- **Holistic:** "Restate the goals. Is there a solution delivering ALL of them with minimum effort/complexity and maximum accuracy? Search wider — include unconventional, indirect, or 'hacky' mechanisms. Is each part of the proposal actually needed (smallest design that still meets every goal)? If it creates or grows a size-limited file, does it carry `size:` lines and follow check 4b of `C:/Users/Erez/.claude/skills/suggest/SKILL.md`? A departure from 4b is MATERIAL. Is anything a goal requires missing? If the proposal builds a signal-producing mechanism for a later decision, confirm its surfacing path (per `/suggest` check 4a) is designed in, not deferred. Conclude 'nothing better' only after a genuine from-scratch pass."
++- **Holistic:** "Restate the goals. Is there a solution delivering ALL of them with minimum effort/complexity and maximum accuracy? Search wider — include unconventional, indirect, or 'hacky' mechanisms. Is each part of the proposal actually needed (smallest design that still meets every goal)? If it creates or grows a size-limited file, does it carry the size checker's `size:` lines and follow check 4b of `C:/Users/Erez/.claude/skills/suggest/SKILL.md`? A departure from 4b is MATERIAL. Is anything a goal requires missing? If the proposal builds a signal-producing mechanism for a later decision, confirm its surfacing path (per `/suggest` check 4a) is designed in, not deferred. Conclude 'nothing better' only after a genuine from-scratch pass."
+ - **Soundness + grounding:** "Check that each claim/mechanism logically holds and the proposal is internally consistent. Then a grounding pass: for every LOAD-BEARING claim, is it cheaply checkable (then it should be checked), actually FALSE (this BLOCKS — material), or unverified-but-load-bearing (flag as 'verify before relying' — ADVISORY, non-blocking)?"
+ - **Rule-check (only for a rule / `CLAUDE.md` edit):** "FIRST read the live rules file the rule targets (global: `C:\Users\Erez\.claude\CLAUDE.md`; or the project `CLAUDE.md`). THEN check the proposed rule for: conciseness; clarity (no fuzzy/undefined terms, no double readings); accuracy; generality (not over-fit to its triggering example; an example earns its place only when removing it would change the behavior the rule produces — i.e. the wording would otherwise be genuinely ambiguous, or it shows a literal form the prose cannot reproduce; flag any example that is decorative, could instead be stated as a qualifier in prose, or uses the real-world event that prompted the rule); non-redundant (NAME the existing rules you compared against); non-conflicting (NAME any rule it could conflict with); clears-the-bar (changes future behavior, will recur, not already covered, timeless, not a fact that belongs in HISTORY/memory); effective (would actually produce the intended behavior); positively phrased (states the behavior to take, not only what to avoid, where that keeps the meaning without materially adding length — unless a genuine prohibition [safety, scope limits, hard constraints], which stays an explicit negative); cross-references (a rule that refers to another rule names it by a distinctive quoted phrase from it, such as its opening words, or a whole section by its heading — never by position, which breaks silently when rules are reordered or merged); right home (correct file and section — and the right *kind*: a skill if it would only fire when the user invokes a named task; a hook if it fires automatically on a system event (tool call, file op) needing no judgment; otherwise a rule); and load tier (for any rule/text destined for an always-loaded file [global or project `CLAUDE.md`, read every session regardless of relevance, so each addition carries a standing per-session cost]: the test is NOT 'does it apply at some decision point' [almost everything does] but whether a reliable prior signal — a specific named context, tool, or task — becomes active before the decision and would cue Claude to look the rule up on demand; if such a signal exists, the rule can live in a separate reference file or skill reached by a one-line always-loaded pointer [propose that, to cut per-session cost]; if there is no such signal [Claude would act wrongly with no cue to check], keep it always-loaded; reliability wins ties — a pointer can't guard a 'forgot-to-check' failure, so keep it always-loaded when in doubt)."
+ 
