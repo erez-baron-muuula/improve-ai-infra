@@ -45,7 +45,7 @@
     },
     {
       "id": "skill-description-listing",
-      "appliesTo": "A skill's description plus when_to_use (not checked for skills with disable-model-invocation: true, whose description is not loaded)",
+      "appliesTo": "A skill's description plus when_to_use, and each command file's in ~/.claude/commands/ (not checked when disable-model-invocation: true, whose description is not loaded; commands are covered by inference: the skills doc gives command files the same frontmatter fields, GEN-926)",
       "measure": "characters",
       "value": 1536,
       "kind": "hard",
@@ -55,7 +55,7 @@
     },
     {
       "id": "skill-description-portable",
-      "appliesTo": "A skill's description field",
+      "appliesTo": "A skill's or command file's description field",
       "measure": "characters",
       "value": 1024,
       "kind": "recommended",

@@ -1,0 +1,240 @@
+diff --git a/wc/config-health-scan.live-baseline.ps1 b/wc/config-health-scan.ps1
+index 013d544..88c863c 100644
+--- a/wc/config-health-scan.live-baseline.ps1
++++ b/wc/config-health-scan.ps1
+@@ -23,7 +23,13 @@
+ #                               limits in -GuidelinesFile; one finding per breach / near-limit / note
+ #   -Action size-check       -> (GEN-886) measure ONE file (-Target) against the limits that apply to
+ #                               -AsIfPath (default: -Target), so a draft kept elsewhere is measured
+-#                               as if it were the real file
++#                               as if it were the real file. (GEN-893) Its sizeLines output gives
++#                               one "size:" line per applicable limit, near a limit or not; with an
++#                               -AsIfPath that exists, each line reads <now> -> <proposed>.
++#
++# Command files (GEN-926): ~/.claude/commands/*.md (-CommandsDir) are measured like a skill's
++# description (listing cap and portable note); the docs give commands the same frontmatter fields
++# as skills, but do not name commands under the cap, so that coverage is inferred.
+ #
+ # Size limits (GEN-886): every number comes from the thresholds file (-GuidelinesFile), never from
+ # this script. Characters are Unicode code points (as Node's [...text].length), except the skill
+@@ -55,6 +61,7 @@ param(
+     [string]$AsIfPath,
+ 
+     [string]$SkillsDir    = 'C:\Users\Erez\.claude\skills',
++    [string]$CommandsDir  = 'C:\Users\Erez\.claude\commands',
+     [string]$AgentsDir    = 'C:\Users\Erez\.claude\agents',
+     [string]$HooksDir     = 'C:\Users\Erez\.claude\hooks',
+     [string]$SettingsJson = 'C:\Users\Erez\.claude\settings.json',
+@@ -888,6 +895,7 @@ function Read-SizeLimits {
+     return [pscustomobject]@{
+         limits = $limits; charsPerToken = $cpt; nearLimitRatio = $ratio; unhandled = $unhandled; file = $GuidelinesFile
+         skipped = (New-Object System.Collections.ArrayList); errors = (New-Object System.Collections.ArrayList)
++        measurements = (New-Object System.Collections.ArrayList)
+     }
+ }
+ 
+@@ -1051,13 +1059,30 @@ function Get-SizeClass([string]$path) {
+     if ($p.StartsWith($projs + '\') -and $p.Substring($projs.Length + 1) -match '^[^\\]+\\memory\\memory\.md$') {
+         return [pscustomobject]@{ class = 'memory-md' }
+     }
++    if ($CommandsDir) {
++        $cmds = Get-NormPath $CommandsDir
++        if ($p.StartsWith($cmds + '\') -and $p.Substring($cmds.Length + 1) -notmatch '\\' -and $leaf.EndsWith('.md')) {
++            return [pscustomobject]@{ class = 'command' }
++        }
++    }
+     if ($leaf -eq 'claude.md' -or $leaf -eq 'claude.local.md') { return [pscustomobject]@{ class = 'claude-md' } }
+     return $null
+ }
+ 
++# GEN-893: every measured value, near a limit or not, kept apart from the findings so the
++# findings output (sweep, size-check, scan) is unchanged. size-check turns these into sizeLines.
++function Add-SizeMeasure($ctx, $lim, [string]$measure, $value, $limitValue, [string]$extra) {
++    if ($null -eq $ctx.measurements) { return }
++    [void]$ctx.measurements.Add([pscustomobject]@{
++        key = ('{0}|{1}' -f $lim.id, $measure); limitId = $lim.id; kind = $lim.kind; reportAs = $lim.reportAs
++        measure = $measure; value = $value; limit = $limitValue; extra = $extra
++    })
++}
++
+ # One finding when value is over the limit (breach, or note for a reportAs:note limit) or over
+ # nearLimitRatio x limit (near); $null otherwise. key = path|limit id|measure.
+ function New-SizeFinding($ctx, [string]$asIf, $lim, [string]$measure, $value, $limitValue, [string]$detail) {
++    if ($lim.id -ne 'reference-file-toc') { Add-SizeMeasure $ctx $lim $measure $value $limitValue '' }
+     if ($value -gt $limitValue) {
+         $sev = if ($lim.reportAs -eq 'note') { 'note' } else { 'breach' }
+     } elseif ($lim.id -ne 'reference-file-toc' -and $value -gt ($ctx.nearLimitRatio * $limitValue)) {
+@@ -1072,7 +1097,8 @@ function New-SizeFinding($ctx, [string]$asIf, $lim, [string]$measure, $value, $l
+     }
+ }
+ 
+-function New-SizeNote([string]$asIf, $lim, [string]$measure, [string]$text) {
++function New-SizeNote($ctx, [string]$asIf, $lim, [string]$measure, [string]$text) {
++    Add-SizeMeasure $ctx $lim $measure $null $null $text
+     return [pscustomobject]@{
+         key = ('{0}|{1}|{2}' -f (Get-NormPath $asIf), $lim.id, $measure); file = $asIf; limitId = $lim.id; kind = $lim.kind
+         severity = 'note'; measure = $measure; value = $null; limit = $null
+@@ -1103,9 +1129,10 @@ function Measure-SizeFile($ctx, [string]$contentPath, [string]$asIf, $cls) {
+     } elseif ($cls.class -eq 'skill-ref') {
+         $lim = $L['reference-file-toc']
+         $n = Get-LineCount $text
++        $head = @(($text -split '\r?\n') | Select-Object -First $lim.tocWindowLines)
++        $hasToc = @($head | Where-Object { $_ -match '(?i)^\s*(#{1,6}\s.*\bcontents\b|\*\*.*\bcontents\b.*\*\*)' }).Count -gt 0
++        Add-SizeMeasure $ctx $lim 'lines' $n $lim.value ('contents heading: ' + $(if ($hasToc) { 'yes' } else { 'no' }))
+         if ($n -gt $lim.value) {
+-            $head = @(($text -split '\r?\n') | Select-Object -First $lim.tocWindowLines)
+-            $hasToc = @($head | Where-Object { $_ -match '(?i)^\s*(#{1,6}\s.*\bcontents\b|\*\*.*\bcontents\b.*\*\*)' }).Count -gt 0
+             if (-not $hasToc) {
+                 $f = New-SizeFinding $ctx $asIf $lim 'lines' $n $lim.value ('; no table of contents in the first {0} lines' -f $lim.tocWindowLines)
+                 if ($f) { $out += $f }
+@@ -1122,29 +1149,46 @@ function Measure-SizeFile($ctx, [string]$contentPath, [string]$asIf, $cls) {
+         $lim = $L['skill-md-lines']
+         $f = New-SizeFinding $ctx $asIf $lim 'body lines' (Get-LineCount $sp.body) $lim.value ''
+         if ($f) { $out += $f }
+-        $fmr = Read-SizeFrontmatter $sp.frontmatter
+-        if ($fmr.noModelInvocation) {
+-            [void]$ctx.skipped.Add(('{0}: description checks skipped (disable-model-invocation: the description is not loaded)' -f $asIf))
+-        } elseif ($fmr.status -eq 'invalid') {
+-            $out += New-SizeNote $asIf $L['skill-description-listing'] 'readable' ('description not readable as YAML ({0}); per the skills doc the skill then loads with no frontmatter fields, so this scan cannot measure its description' -f $fmr.reason)
+-        } elseif ($fmr.status -ne 'ok') {
+-            $out += New-SizeNote $asIf $L['skill-description-listing'] 'readable' ('description in a form this scan does not read ({0}); check it by hand' -f $fmr.reason)
+-        } else {
+-            $desc = if ($null -ne $fmr.description) { $fmr.description } else { '' }
+-            $listing = Get-CodePointCount $desc
+-            if ($fmr.whenToUse) { $listing += 1 + (Get-CodePointCount $fmr.whenToUse) }
+-            $lim = $L['skill-description-listing']
+-            $f = New-SizeFinding $ctx $asIf $lim 'characters' $listing $lim.value '; description + when_to_use'
+-            if ($f) { $out += $f }
+-            $lim = $L['skill-description-portable']
+-            $f = New-SizeFinding $ctx $asIf $lim 'characters' (Get-CodePointCount $desc) $lim.value '; description'
+-            if ($f) { $out += $f }
+-        }
++        $out += @(Measure-SizeDescription $ctx $asIf $sp.frontmatter $false)
+         $lim = $L['gate-skill-runbook']
+         if ($lim.skills -contains $cls.skillName) {
+             $f = New-SizeFinding $ctx $asIf $lim 'characters' (Get-CodePointCount $text) $lim.value '; whole file'
+             if ($f) { $out += $f }
+         }
++    } elseif ($cls.class -eq 'command') {
++        $out += @(Measure-SizeDescription $ctx $asIf (Split-SizeFrontmatter $text).frontmatter $true)
++    }
++    return $out
++}
++
++# A skill's or command's description against the listing cap and the portable note.
++# $isCommand: a command with no frontmatter or no description gets its own note (the listing then
++# uses other text, which this scan does not measure); a skill keeps the GEN-886 behaviour.
++function Measure-SizeDescription($ctx, [string]$asIf, $fm, [bool]$isCommand) {
++    $out = @()
++    $L = $ctx.limits
++    $fmr = Read-SizeFrontmatter $fm
++    $noDesc = 'description not in frontmatter; the listing uses other text, which this scan does not measure'
++    if ($fmr.noModelInvocation) {
++        [void]$ctx.skipped.Add(('{0}: description checks skipped (disable-model-invocation: the description is not loaded)' -f $asIf))
++    } elseif ($isCommand -and $null -eq $fm) {
++        $out += New-SizeNote $ctx $asIf $L['skill-description-listing'] 'readable' $noDesc
++    } elseif ($fmr.status -eq 'invalid') {
++        $out += New-SizeNote $ctx $asIf $L['skill-description-listing'] 'readable' ('description not readable as YAML ({0}); per the skills doc the skill then loads with no frontmatter fields, so this scan cannot measure its description' -f $fmr.reason)
++    } elseif ($fmr.status -ne 'ok') {
++        $out += New-SizeNote $ctx $asIf $L['skill-description-listing'] 'readable' ('description in a form this scan does not read ({0}); check it by hand' -f $fmr.reason)
++    } elseif ($isCommand -and $null -eq $fmr.description) {
++        $out += New-SizeNote $ctx $asIf $L['skill-description-listing'] 'readable' $noDesc
++    } else {
++        $desc = if ($null -ne $fmr.description) { $fmr.description } else { '' }
++        $listing = Get-CodePointCount $desc
++        if ($fmr.whenToUse) { $listing += 1 + (Get-CodePointCount $fmr.whenToUse) }
++        $lim = $L['skill-description-listing']
++        $f = New-SizeFinding $ctx $asIf $lim 'characters' $listing $lim.value '; description + when_to_use'
++        if ($f) { $out += $f }
++        $lim = $L['skill-description-portable']
++        $f = New-SizeFinding $ctx $asIf $lim 'characters' (Get-CodePointCount $desc) $lim.value '; description'
++        if ($f) { $out += $f }
+     }
+     return $out
+ }
+@@ -1190,11 +1234,70 @@ function Invoke-SizeCheck {
+     $asIf = if ($AsIfPath) { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($AsIfPath) } else { $tgt }
+     $r = Invoke-SizeCheckCore $tgt $asIf
+     $cls = if ($r.cls) { $r.cls.class } else { $null }
+-    $res = New-SizeResult 'size-check' $r.ctx $r.findings $(if ($cls) { 1 } else { 0 }) ([ordered]@{ target = $tgt; asIfPath = $asIf; class = $cls })
++    # "now" = the real file at -AsIfPath, measured on its own, when it exists and is not the draft.
++    $nowState = 'same'
++    $now = @{}
++    if ($cls -and (Get-NormPath $asIf) -ne (Get-NormPath $tgt)) {
++        if (Test-Path -LiteralPath $asIf -PathType Leaf) {
++            $nowState = 'existing'
++            $r0 = Invoke-SizeCheckCore $asIf $asIf
++            foreach ($m in @($r0.ctx.measurements)) { $now[$m.key] = $m }
++        } else {
++            $nowState = 'new'
++        }
++    }
++    $sizeLines = @(Format-SizeLines $asIf $cls $r.ctx $nowState $now)
++    $res = New-SizeResult 'size-check' $r.ctx $r.findings $(if ($cls) { 1 } else { 0 }) ([ordered]@{ target = $tgt; asIfPath = $asIf; class = $cls; sizeLines = $sizeLines })
+     if (-not $cls) { $res.lines = @(('No size limits apply to {0}' -f $asIf)) + @($res.lines) }
+     return $res
+ }
+ 
++# GEN-893: one "size:" line per applicable limit, in /suggest check 4b's form:
++#   size: <file> <now> -> <proposed> / <limit> <unit> (<kind>[, note]; <limit id>[; extra])
++# <now> is "new" for a file that does not exist yet; with no separate real file (-AsIfPath not
++# given, or the same file), the line shows one value and no arrow.
++function Format-SizeLines([string]$asIf, $cls, $ctx, [string]$nowState, $now) {
++    if (-not $cls) { return @(('size: skipped (no size limits apply to {0})' -f $asIf)) }
++    $arrow = ' ' + [string][char]0x2192 + ' '
++    $out = @()
++    foreach ($m in @($ctx.measurements)) {
++        $tag = $m.kind
++        if ($m.reportAs -eq 'note') { $tag += ', note' }
++        $tag += '; ' + $m.limitId
++        if ($null -eq $m.value) {
++            $out += ('size: {0} {1} not measured: {2} ({3})' -f $asIf, $m.measure, $m.extra, $tag)
++            continue
++        }
++        if ($m.extra) { $tag += '; ' + $m.extra }
++        $val = Format-SizeNum $m.value
++        if ($nowState -eq 'new') {
++            $val = 'new' + $arrow + $val
++        } elseif ($nowState -eq 'existing') {
++            $n = $now[$m.key]
++            $nv = if ($n -and $null -ne $n.value) { Format-SizeNum $n.value } else { 'not measured' }
++            $val = $nv + $arrow + $val
++        }
++        $out += ('size: {0} {1} / {2} {3} ({4})' -f $asIf, $val, (Format-SizeNum $m.limit), $m.measure, $tag)
++    }
++    # A limit the real file was measured on but the draft was not (e.g. the draft drops its
++    # description): show the old value so the change is not hidden.
++    if ($nowState -eq 'existing') {
++        $seen = @{}
++        foreach ($m in @($ctx.measurements)) { $seen[$m.key] = $true }
++        foreach ($k in @($now.Keys | Sort-Object)) {
++            $n = $now[$k]
++            if ($seen.ContainsKey($k) -or $null -eq $n.value) { continue }
++            $tag = $n.kind
++            if ($n.reportAs -eq 'note') { $tag += ', note' }
++            $tag += '; ' + $n.limitId
++            $out += ('size: {0} {1}{2}not measured / {3} {4} ({5})' -f $asIf, (Format-SizeNum $n.value), $arrow, (Format-SizeNum $n.limit), $n.measure, $tag)
++        }
++    }
++    foreach ($s in @($ctx.skipped)) { $out += ('size: skipped ({0})' -f $s) }
++    if ($out.Count -eq 0) { $out += ('size: skipped (no limit measured for {0})' -f $asIf) }
++    return $out
++}
++
+ # Working folders Claude has run in, read from the newest top-level session log of each
+ # ~/.claude/projects/<dir> (regex on the first 50 lines; some lines are megabytes, too big for
+ # ConvertFrom-Json). Worktrees and folders that no longer exist are skipped.
+@@ -1302,6 +1405,13 @@ function Invoke-SizeSweep {
+         [void]$ctx.errors.Add("hook refs folder not found: $refsDir")
+     }
+ 
++    # Command files (GEN-926). A missing commands folder is not an error: there may be none.
++    if ($CommandsDir -and (Test-Path -LiteralPath $CommandsDir -PathType Container)) {
++        foreach ($f in @(Get-ChildItem -LiteralPath $CommandsDir -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq '.md' })) {
++            Add-SizeTarget $ctx $targets $f.FullName $null
++        }
++    }
++
+     # MEMORY.md files.
+     if (Test-Path -LiteralPath $ClaudeProjectsDir -PathType Container) {
+         foreach ($d in @(Get-ChildItem -LiteralPath $ClaudeProjectsDir -Directory -ErrorAction SilentlyContinue)) {
