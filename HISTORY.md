@@ -34,7 +34,7 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
-- 2026-10-26 (3) — GEN-953 step 1: plans now open in plain words; check vetted, live-tested, note on GEN-953; GEN-87 gained the Bash date finding <!-- toc-session:533e6e9e-c993-4ca7-93ca-dfd9facdfd16 -->
+- 2026-10-26 (3) — GEN-953 step 1: plans now open in plain words; check vetted, live-tested; GEN-963 filed (wrap reports failures plainly); GEN-87 gained the Bash date finding <!-- toc-session:533e6e9e-c993-4ca7-93ca-dfd9facdfd16 -->
 - 2026-10-26 — GEN-952: planning-mode pop-ups stopped by a new PermissionRequest hook after the first attempt proved inert; docs-first lesson added to /suggest and /check; GEN-953 moved to In Progress, GEN-962 filed <!-- toc-session:4ef27b5e-24b1-456a-a2fc-dc035aa90b06 -->
 - 2026-10-26 (2) — GEN-871 supervised release review passed; digest GEN-959 created; GEN-871 in Review with a weekly check; GEN-960 filed <!-- toc-session:7f014f94-60c7-4666-9708-67cdc65da65d -->
 - 2026-10-26: GEN-460 backup triage now live after 3 review rounds; retire add-on dropped; GEN-356/809 Done; GEN-956 filed <!-- toc-session:43d37205-1644-4451-9241-0a81787787ea -->
@@ -290,8 +290,11 @@ Erez: "what's left on 953?" → four steps listed; then "Start GEN-953 step 1: p
 - **Tickets.** GEN-953 install note appended (vet-ticket, reviewer PASS, 1 round); status stays In Progress (steps 2–4 remain). Commit 26c1179. Memory `gen953-step1-plainbox.md` added.
 - **Open for Erez.** After a few planning sessions, say whether plans now open with a section he can act on alone.
 
-Unresolved items filed: none new; merged into GEN-87 (Bash `date` treated as unrecognized by the chain guard; reviewer PASS, 1 round).
-Reversals judged non-learning: none (no Erez pushback this session).
+- **After the first wrap.** The config sync's upload of the settings backup history to GitHub had failed (git exit 128) and the wrap reported it softly (⚠, "retries automatically"). Erez: "did something fail?", then "Why didn't you clearly say that it the upload failed?". A plain `git push` of `~/.claude-git-history` then succeeded (the script's certificate-check-off form was refused by the auto-mode classifier). On Erez's "so file it as a ticket": filed GEN-963 "Wrap-up reports a failed step plainly as failed, after trying the quick fix" (GEN-86, To Do, High; create and body each reviewer PASS, 1 round). Logged on GEN-58 as Class J new element [relayed tool reassurance as status] (Vol. 11, J now 19x).
+
+Unresolved items filed: GEN-963 (filed in-session at Erez's request); merged into GEN-87 (Bash `date` treated as unrecognized by the chain guard; reviewer PASS, 1 round).
+Search-first reminder: 2 this session (1 before the summary, 1 after it), 30 lifetime. After-summary reminders: a search followed 22 of 23 times, named an existing ticket 20 times, repeated the summary 0 times. Before-summary reminders: a search followed 2 of 7 times.
+Reversals judged non-learning: none (Erez's one pushback, on the softened failure report, became GEN-963 and a GEN-58 entry).
 Signal-surface FYI: 3 false-detect retirements in 90 days (detector-retune bar; adjustment tracked on GEN-960).
 Release review: last run 2026-10-26 (2.1.300 → 2.1.310): 1 new ticket(s), 1 note(s) added, 0 moved Blocked → To Do, 1 waiting for your yes/no as of that run in GEN-959, 0 not filed
 
