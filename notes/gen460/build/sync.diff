@@ -1,16 +1,19 @@
-diff --git a/G:/My Drive/AI Projects/_Tooling/Claude/sync.ps1 b/sync.ps1
-index 1c9d7ef..182205e 100644
+diff --git a/G:/My Drive/AI Projects/_Tooling/Claude/sync.ps1 b/sync.working.ps1
+index 1c9d7ef..7b2abff 100644
 --- a/G:/My Drive/AI Projects/_Tooling/Claude/sync.ps1	
-+++ b/sync.ps1
-@@ -11,40 +11,13 @@
++++ b/sync.working.ps1
+@@ -11,40 +11,16 @@
  #   - settings.json
  #   - settings.local.json
  #   - memory\   (entire folder -- memory index + all memory files; GEN-140)
 -#   - hooks\auto-approve.js  (GEN-76 auto-approval PreToolUse hook)
 +#   - hooks\*.js, hooks\*.ps1  (every hook's code, found on EITHER side -- this PC or Drive -- so a
 +#     new hook needs no edit here and a To-Claude pull restores every hook; GEN-460. What each hook
-+#     does is in its own header comment and its settings.json registration. A hook removed on
-+#     purpose is kept out of the backup by a 'retired' decision -- see "Backup triage" below.)
++#     does is in its own header comment and its settings.json registration. A hook deleted on
++#     this PC but still on Drive is pulled back by the next To-Claude sync (inert unless
++#     settings.json registers it); to remove a hook for good, delete it on every PC and on Drive.
++#     update-config.ps1 runs a To-Claude before every config edit, so a hook deleted only here comes
++#     back silently at the next edit, and a PC that still has it pushes it back to Drive.)
  #   - hooks\secret-patterns.json  (shared secret-scan patterns; GEN-233)
 -#   - hooks\sessionstart-loggate.js  (compact-gate SessionStart hook)
 -#   - hooks\precompact-loggate.js    (compact-gate PreCompact hook)
@@ -49,7 +52,7 @@ index 1c9d7ef..182205e 100644
  #   - skills\   (entire folder -- /check and any future skills; GEN-223)
  #   - agents\   (entire folder -- check-reviewer and any future agents; GEN-232)
  #   - commands\ (entire folder -- /loghistory and any future slash commands)
-@@ -118,74 +91,88 @@
+@@ -118,74 +94,86 @@
  # A second sync run that cannot acquire the lock within its retry budget gives up
  # with a DISTINCT exit code (6) rather than silently succeeding -- see Exit codes.
  #
@@ -67,16 +70,14 @@ index 1c9d7ef..182205e 100644
 +# All triage output goes to the WARNING stream, because update-config.ps1 runs this script with
 +# | Out-Null, which discards normal output but not warnings.
 +#
-+#   .\sync.ps1 -TriageDecide '<path under .claude>' -As skip|backup|retired -Reason '<why>'
++#   .\sync.ps1 -TriageDecide '<path under .claude>' -As skip|backup -Reason '<why>'
 +#       records one decision (no sync). 'backup' is for one plainly named file shared across PCs,
 +#       stored on Drive and in git under triage-backup\; it is refused for credential-like or
 +#       ignore-listed names, files over 1 MB, or content that matches hooks\secret-patterns.json.
-+#       'retired' is only for a hook's code that is no longer on this PC and that settings.json no
-+#       longer mentions (it stops the hook being pulled back). A file beside the .claude folder is
++#       Hook code takes no decision (it is always backed up). A file beside the .claude folder is
 +#       named '..\.claude<rest>' and can only be skipped.
 +#   Every push re-checks hook code and Claude-chosen backups: a file over 1 MB or matching a secret
-+#   pattern is left out of that push with a warning. A hook deleted on this PC is not pulled back by
-+#   To-Claude; it raises a NEEDED warning instead (retire it, or ask Erez).
++#   pattern is left out of that push with a warning.
 +#   .\sync.ps1 -CoverageOnly    runs the triage and prints the backup set; changes no file (it does
 +#                               take the sync lock, so it waits while another sync runs).
 +#   -RootOverride <dir>         tests only: <dir>\claude, <dir>\drive and <dir>\git replace the real paths.
@@ -108,7 +109,7 @@ index 1c9d7ef..182205e 100644
 +    [string]$TriageDecide,
 +
 +    [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
-+    [ValidateSet("skip", "backup", "retired")]
++    [ValidateSet("skip", "backup")]
 +    [string]$As,
 +
 +    [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
@@ -184,33 +185,7 @@ index 1c9d7ef..182205e 100644
  )
  
  # Whole-folder syncs -- every file under these dirs is backed up, so new skills/agents are
-@@ -331,7 +318,7 @@ function Save-Baseline {
- function Get-AllManagedFiles {
-     $all = @()
-     foreach ($pair in $FileMap) {
--        $all += [PSCustomObject]@{ Claude = $pair.Claude; Drive = $pair.Drive; Git = $pair.Git }
-+        $all += [PSCustomObject]@{ Claude = $pair.Claude; Drive = $pair.Drive; Git = $pair.Git; HookCode = [bool]$pair.HookCode }
-     }
-     foreach ($pair in $DirMap) {
-         if (Test-Path -LiteralPath $pair.Claude) {
-@@ -390,6 +377,16 @@ function Invoke-NonDestructivePull {
-             continue
-         }
- 
-+        if ($null -eq $localHash -and $e.HookCode -and $null -ne $baselineHash -and $driveHash -eq $baselineHash) {
-+            # GEN-460: hook code this PC already had (it has a baseline entry) and that is unchanged on
-+            # Drive since, but is now missing here -- deleted on this PC. Don't silently bring it back.
-+            $rel = "hooks\" + (Split-Path $e.Claude -Leaf)
-+            Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' was deleted on this PC but is still on Drive, so it was not pulled back. " +
-+                "Claude: if it was removed on purpose, keep it out with: " + (Get-TriageCommandText -RelPath $rel -Choices 'retired') +
-+                " -- if not, ask Erez whether to restore it.")
-+            continue
-+        }
-+
-         if ($null -eq $localHash) {
-             # File doesn't exist locally yet -- safe to bring it down.
-             Copy-Item -LiteralPath $e.Drive -Destination $e.Claude -Force
-@@ -513,6 +510,311 @@ function Repair-StaleIndexLock {
+@@ -513,6 +501,300 @@ function Repair-StaleIndexLock {
      }
  }
  
@@ -237,8 +212,9 @@ index 1c9d7ef..182205e 100644
 +# ---- Backup triage decisions (GEN-460) -------------------------------------
 +# backup-triage.json remembers how each path outside the fixed backup set was sorted, so each one is
 +# decided -- and reported -- once. It is shared across PCs but deliberately NOT in $FileMap: every run
-+# merges the local and Drive copies (a skip/retired beats a backup for the same path; otherwise the
-+# newer date wins) and writes the merged result locally, and From-Claude also writes it to Drive, so
++# merges the local and Drive copies (rules in Merge-TriageMaps: two of Claude's decisions -> the newer
++# wins; otherwise keep-out beats backup unless Claude's backup is newer than a rule skip; same kind ->
++# newer wins) and writes the merged result locally, and From-Claude also writes it to Drive, so
 +# neither PC's decisions are lost and the hash-based pull never reports it as a conflict.
 +
 +function ConvertTo-TriageKey {
@@ -270,7 +246,7 @@ index 1c9d7ef..182205e 100644
 +            $obj = $raw | ConvertFrom-Json
 +            if ($null -eq $obj -or $null -eq $obj.PSObject.Properties['decisions']) { throw "no 'decisions' list" }
 +            foreach ($d in @($obj.decisions)) {
-+                if ($null -eq $d -or -not $d.path -or @('skip', 'backup', 'retired') -notcontains [string]$d.decision) { throw "malformed entry" }
++                if ($null -eq $d -or -not $d.path -or @('skip', 'backup') -notcontains [string]$d.decision) { throw "malformed entry" }
 +                $key = ConvertTo-TriageKey ([string]$d.path)
 +                # A path that normalizes to nothing, or carries a drive/stream colon, is never one this
 +                # script wrote; reject the file rather than let a later path call throw mid-sync.
@@ -355,7 +331,7 @@ index 1c9d7ef..182205e 100644
 +        }
 +    }
 +    $doc = [PSCustomObject][ordered]@{
-+        note      = "Backup-triage decisions for sync.ps1 (GEN-460). Change with: sync.ps1 -TriageDecide '<path>' -As skip|backup|retired -Reason '<why>'"
++        note      = "Backup-triage decisions for sync.ps1 (GEN-460). Change with: sync.ps1 -TriageDecide '<path>' -As skip|backup -Reason '<why>'"
 +        decisions = $list
 +    }
 +    return ($doc | ConvertTo-Json -Depth 5)
@@ -472,21 +448,9 @@ index 1c9d7ef..182205e 100644
 +        }
 +        $isHookCode = ($rel -match '^hooks\\[^\\]+$') -and (Test-IsHookCodeName (Split-Path $rel -Leaf))
 +
-+        if ($Decision -eq 'retired') {
-+            if (-not $isHookCode) { return (& $refuse "'retired' is only for a hook's code (hooks\<name>.js or .ps1).") }
-+            if (Test-Path -LiteralPath $full) { return (& $refuse "'$rel' is still on this PC; delete it first (hook code on this PC is always backed up).") }
-+            if (-not (Test-Path -LiteralPath (Join-Path $DriveBase $rel) -PathType Leaf)) { return (& $refuse "'$rel' is not on Drive either, so there is nothing to keep from coming back.") }
-+            # A hook settings.json still registers is live: retiring it would stop it reaching a fresh PC
-+            # while settings.json there still tries to run it (e.g. a safety gate silently missing).
-+            $settingsPath = Join-Path $ClaudeBase 'settings.json'
-+            $leafName = Split-Path $rel -Leaf
-+            $settingsText = $null
-+            try { if (Test-Path -LiteralPath $settingsPath) { $settingsText = [IO.File]::ReadAllText($settingsPath, [Text.Encoding]::UTF8) } } catch { return (& $refuse "settings.json could not be read to check that '$leafName' is no longer registered.") }
-+            if ($settingsText -and $settingsText.IndexOf($leafName, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-+                return (& $refuse "settings.json still mentions '$leafName', so the hook looks registered; unregister it first.")
-+            }
++        if ($isHookCode) {
++            return (& $refuse "hook code (hooks\<name>.js or .ps1) is always backed up and takes no decision; to remove a hook for good, delete it on every PC and on Drive. A scratch script kept out of the backup belongs outside hooks\ or is named tmp_*.")
 +        } else {
-+            if ($isHookCode) { return (& $refuse "hook code is always backed up; to stop a removed hook coming back, delete it here and use -As retired.") }
 +            if (-not (Test-Path -LiteralPath $full)) { return (& $refuse "'$rel' does not exist under $ClaudeBase.") }
 +            if ($Decision -eq 'skip') {
 +                if ($rel.Contains('\') -and -not ($rel -match '^hooks\\[^\\]+$')) {
@@ -522,7 +486,7 @@ index 1c9d7ef..182205e 100644
  # ==============================================================================
  # Main
  # ==============================================================================
-@@ -561,90 +863,218 @@ if ($Direction -eq "From-Claude") {
+@@ -561,90 +843,216 @@ if ($Direction -eq "From-Claude") {
      }
  }
  
@@ -700,7 +664,8 @@ index 1c9d7ef..182205e 100644
 +
 +# Why a file that is about to be PUSHED must be left out this run (over 1 MB, unreadable, or holding
 +# a value that matches a secret pattern), or $null. Run on From-Claude for every file the rules or
-+# Claude's decisions added -- the fixed list and whole-folder backups keep their own GEN-233 scan.
++# Claude's decisions added. (Not run on the fixed list or whole-folder backups; of those, only
++# settings.local.json is secret-scanned, by the GEN-233 boundary scan.)
 +function Get-PushRefusal {
 +    param([string]$Path)
 +    try {
@@ -716,10 +681,9 @@ index 1c9d7ef..182205e 100644
 +$checkPushes = ($Direction -eq 'From-Claude' -or $CoverageOnly)
 +
 +# Rule 1: every hook's code on EITHER side is in the backup set (so a To-Claude pull restores a
-+# hook added on another PC). The exceptions: a 'retired' hook that is no longer on this PC (keeps
-+# a deliberately removed hook from being pulled back), and, when pushing, a hook file that is over
-+# 1 MB or matches a secret pattern (left out of this push with a warning, like any other file
-+# added without a person looking at it).
++# hook added on another PC). The one exception: when pushing, a hook file that is over 1 MB or
++# matches a secret pattern is left out of this push with a warning, like any other file added
++# without a person looking at it.
 +$hookCodeNames = [ordered]@{}
 +foreach ($hd in @((Join-Path $ClaudeBase 'hooks'), (Join-Path $DriveBase 'hooks'))) {
 +    if (-not (Test-Path -LiteralPath $hd)) { continue }
@@ -732,9 +696,7 @@ index 1c9d7ef..182205e 100644
 +foreach ($name in $hookCodeNames.Values) {
 +    $rel = "hooks\" + $name
 +    $claudePath = Join-Path $ClaudeBase $rel
-+    $d = $Triage[(ConvertTo-TriageKey $rel)]
 +    $isLocal = Test-Path -LiteralPath $claudePath -PathType Leaf
-+    if ($d -and [string]$d.decision -eq 'retired' -and -not $isLocal) { continue }
 +    if ($checkPushes -and $isLocal) {
 +        $why = Get-PushRefusal -Path $claudePath
 +        if ($why) {
@@ -757,7 +719,7 @@ index 1c9d7ef..182205e 100644
 +    if ($StaticBackupFiles -contains $claudePath) { continue }
 +    $refusal = Get-BackupRefusal -Rel $rel
 +    if ($refusal) {
-+        Write-Warning "BACKUP-TRIAGE: ignored the 'backup' decision for '$rel' in $TriageFileName -- $refusal. Record it as skip with: $(Get-TriageCommandText -RelPath $rel -Choices 'skip')"
++        Write-Warning "BACKUP-TRIAGE: ignored the 'backup' decision for '$rel' in $TriageFileName -- $refusal. Delete that entry from $TriageFileName both here and on Drive (or, if the file exists here and is not hook code, record it as skip with: $(Get-TriageCommandText -RelPath $rel -Choices 'skip'))."
 +        continue
 +    }
 +    if ($checkPushes) {
@@ -784,7 +746,7 @@ index 1c9d7ef..182205e 100644
  }
  
  $copied = 0
-@@ -656,27 +1086,42 @@ if ($Direction -eq "To-Claude") {
+@@ -656,6 +1064,7 @@ if ($Direction -eq "To-Claude") {
      $Baseline = Load-Baseline -Path $BaselineFile
      Invoke-NonDestructivePull -Baseline $Baseline -Discard:$DiscardLocal.IsPresent
      Save-Baseline -Path $BaselineFile -Baseline $Baseline
@@ -792,10 +754,7 @@ index 1c9d7ef..182205e 100644
      $copied = $Baseline.Count
  } else {
      # From-Claude (local -> Drive) stays a straightforward overwrite: this machine's
-     # local state is always the source of truth when pushing. Cross-machine
-     # divergence on the Drive side is out of scope here (GEN-287).
-+    $Baseline = Load-Baseline -Path $BaselineFile
-     foreach ($pair in $FileMap) {
+@@ -665,18 +1074,26 @@ if ($Direction -eq "To-Claude") {
          $src = $pair.Claude
          $dst = $pair.Drive
  
@@ -804,15 +763,10 @@ index 1c9d7ef..182205e 100644
 +        # -LiteralPath (GEN-460): rule-built entries carry real file names, which may hold [ ] -- a
 +        # -Path test/copy would treat those as wildcards and could copy a DIFFERENT file.
 +        if (-not (Test-Path -LiteralPath $src)) {
-+            if ($pair.HookCode -and $null -ne $Baseline[$src]) {
-+                # This PC had the hook (baseline entry) and it is gone: deleted here.
-+                $rel = "hooks\" + (Split-Path $src -Leaf)
-+                Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' was deleted on this PC but is still on Drive. Claude: if it was removed on purpose, " +
-+                    "keep it from being pulled back with: " + (Get-TriageCommandText -RelPath $rel -Choices 'retired') +
-+                    " -- if not, ask Erez whether to restore it.")
-+            } elseif ($pair.HookCode) {
-+                # Never on this PC: a hook added on another PC. The next To-Claude sync brings it here.
-+                Write-Output "Hook on Drive only (added on another PC; the next To-Claude sync brings it here): $src"
++            if ($pair.HookCode) {
++                # On Drive but not here: added on another PC, or deleted on this one. Either way the next
++                # To-Claude sync brings it here; removing a hook for good means deleting it on every PC and on Drive.
++                Write-Output "Hook on Drive only (the next To-Claude sync brings it here; to remove it for good, delete it on every PC and on Drive): $src"
 +            } else {
 +                Write-Warning "Source not found, skipping: $src"
 +            }
@@ -831,13 +785,7 @@ index 1c9d7ef..182205e 100644
          Write-Output "Copied: $src  ->  $dst"
          $copied++
      }
-@@ -698,12 +1143,12 @@ if ($Direction -eq "To-Claude") {
- 
-     # Refresh the baseline for every file we just pushed, so a subsequent To-Claude
-     # pull on this machine correctly sees them as "unedited since last sync".
--    $Baseline = Load-Baseline -Path $BaselineFile
-     foreach ($e in (Get-AllManagedFiles)) {
-         $h = Get-FileHashSafe -Path $e.Claude
+@@ -704,6 +1121,7 @@ if ($Direction -eq "To-Claude") {
          if ($null -ne $h) { $Baseline[$e.Claude] = $h }
      }
      Save-Baseline -Path $BaselineFile -Baseline $Baseline
@@ -845,7 +793,7 @@ index 1c9d7ef..182205e 100644
  }
  
  Write-Output ""
-@@ -736,12 +1181,15 @@ if ($Direction -eq "From-Claude") {
+@@ -736,12 +1154,15 @@ if ($Direction -eq "From-Claude") {
  
          # Mirror the synced files into the git folder.
          foreach ($pair in $FileMap) {

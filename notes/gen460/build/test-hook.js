@@ -8,7 +8,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const WC = path.resolve(__dirname, '..', 'gen460', 'auto-approve.js');
+const WC = path.resolve(__dirname, 'auto-approve.working.js');
 const REAL = path.join(os.homedir(), '.claude');
 
 function makeFixture(tag, gateSource) {
@@ -57,7 +57,6 @@ function check(name, ok, detail) { results.push([name, !!ok, detail || '']); }
   const good = [
     S + " -TriageDecide 'spares' -As skip -Reason 'empty folder made by the Claude app'",
     S + " -TriageDecide 'notes.md' -As backup -Reason 'shared notes file'",
-    S + " -TriageDecide 'hooks\\old-hook.js' -As retired -Reason 'removed on purpose 2026-10-25'",
     S + " -TriageDecide '..\\.claude.json.tmp.1.ab' -As skip -Reason 'app temp save'",
     '& "G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync.ps1" -TriageDecide "state" -As skip -Reason "app cache (MCP discovery)"',
   ];
@@ -66,6 +65,7 @@ function check(name, ok, detail) { results.push([name, !!ok, detail || '']); }
     S + " -TriageDecide 'x' -As skip -Reason 'r' -RootOverride 'C:\\tmp'",
     S + " -TriageDecide 'C:\\Windows\\x' -As skip -Reason 'r'",
     S + " -TriageDecide 'x' -As delete -Reason 'r'",
+    S + " -TriageDecide 'hooks\\old-hook.js' -As retired -Reason 'removed on purpose 2026-10-25'",
     S + " -TriageDecide 'x' -As skip",
     S + " -As skip -TriageDecide 'x' -Reason 'r'",
     '& "G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync.ps1" -TriageDecide "x" -As skip -Reason "$(Remove-Item C:\\x)"',

@@ -510,7 +510,7 @@ function isSafeSyncFromClaude(command) {
 function isSafeSyncTriageDecide(command) {
   if (typeof command !== 'string') return false;
   if (/[^\x20-\x7E]/.test(command)) return false;
-  const re = /^&\s+(['"])G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync\.ps1\1\s+-TriageDecide\s+(['"])[^'"`$%:]{1,200}\2\s+-As\s+(?:skip|backup|retired)\s+-Reason\s+(['"])[^'"`$%]{1,300}\3\s*$/i;
+  const re = /^&\s+(['"])G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync\.ps1\1\s+-TriageDecide\s+(['"])[^'"`$%:]{1,200}\2\s+-As\s+(?:skip|backup)\s+-Reason\s+(['"])[^'"`$%]{1,300}\3\s*$/i;
   return re.test(command.trim());
 }
 
