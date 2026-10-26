@@ -1,0 +1,193 @@
+// ---------------------------------------------------------------- pop-up text (GEN-953)
+// Erez reads this at the top of the pop-up, above Claude's raw request. It names, in plain words, what
+// kind of change the gate itself sees, the site, Claude's own summary (marked as Claude's), and for any
+// change "Undo is not guaranteed" plus a caution. Labels only: nothing here changes a decision.
+
+// A database command, worst kind first (the first match is shown).
+const SQL_KINDS = [
+  [/\b(drop|undrop|truncate)\s+[\w`"\[]|\bdelete\s+(from\s+)?[\w`"\[.]|\b(remove|rm)\s+@/i, 'deletes data or database objects'],
+  [/\b(grant|revoke)\s+\w|\b(create|alter)\s+(or\s+replace\s+)?(user|role|share)\b/i, 'changes who has access'],
+  [/\bcopy\s+into\s+(@|'|"?(s3|gcs|azure)\b)/i, 'copies data to or from storage outside the database, which can send data out'],
+  [/\bcreate\s+or\s+replace\b|\balter\s+(table|schema|database|warehouse|task|integration|pipe|stream|view|account)\b/i, 'replaces or changes live tables, views or code'],
+  [/\b(call|execute|exec)\s+[\w`"\[.(]|\bsystem\$\w+\s*\(/i, 'runs a saved database program, which can change anything'],
+  [/\b(insert|merge|upsert|put)\s+[\w`"\[(@]|\bcopy\s+(?!into\s+(@|'|"?(s3|gcs|azure)\b))[\w`"\[(@]|\bupdate\s+[\w`"\[\].-]+(\s+(as\s+)?\w+)?\s+set\b/i, 'adds or changes data'],
+  [/\bcreate\s+\w/i, 'creates a new database object']
+];
+// The text a database command is read from: typed text whole; in a script only its quoted texts
+// (JavaScript has its own "delete" and "update"). Comments and SQL string values are set aside, so a
+// read query that searches for 'create or replace%' is not labelled as one.
+// Read four ways, and the worst kind wins: a comment marker inside a string value ('--') must not hide
+// a later statement, nor a quote inside a comment, nor a backslash-escaped quote ('a\'b') in dialects
+// that allow one.
+// One pass, no regex backtracking: each quoted value becomes '' ('' inside is a quote; with bs, a
+// backslash escapes the next character). A value left open is kept as it is, so a stray apostrophe
+// cannot hide the statements after it.
+function blankQuoted(t, bs) {
+  let out = '', i = 0;
+  while (i < t.length) {
+    const q = t.indexOf("'", i);
+    if (q < 0) { out += t.slice(i); break; }
+    let j = q + 1, closed = false;
+    while (j < t.length) {
+      const ch = t[j];
+      if (bs && ch === '\\') { j += 2; continue; }
+      if (ch === "'") { if (t[j + 1] === "'") { j += 2; continue; } closed = true; break; }
+      j++;
+    }
+    if (!closed) { out += t.slice(i); break; }
+    out += t.slice(i, q) + "''";
+    i = j + 1;
+  }
+  return out;
+}
+const blankSqlStrings = t => blankQuoted(t, false);
+const blankSqlStringsBs = t => blankQuoted(t, true);
+function sqlKind(texts) {
+  const src = (texts || []).map(x => x.kind === 'script' ? quotedTexts(x.text).join('\n') : String(x.text)).join('\n');
+  // (Also read with comments kept: MySQL runs "1--1" and "/*! ... */" as code, as typedWrite assumes.)
+  const reads = [blankSqlStrings, blankSqlStringsBs].flatMap(b => [b(stripSqlComments(src)), stripSqlComments(b(src)), b(src)]);
+  // Every kind found is named, worst first: one command can delete AND change access.
+  let found = SQL_KINDS.filter(([re]) => reads.some(t => re.test(t))).map(([, label]) => label);
+  // ("creates a new database object" only when nothing stronger is named: CREATE OR REPLACE and
+  // CREATE USER also match it.)
+  if (found.length > 1) found = found.filter(l => l !== SQL_KINDS[SQL_KINDS.length - 1][1]);
+  return found.length ? andJoin(found) : null;
+}
+
+// What the gate sees a page script do, in the order shown. These are added to the general "can change
+// the page or send data", never instead of it: a script can do more than any pattern names.
+const SCRIPT_KINDS = [
+  [/\beval\s*\(|\bFunction\s*\(|\bimport\s*\(|setTimeout\s*\(\s*['"`]|setInterval\s*\(\s*['"`]|\\u(?!00a0)[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}|\batob\s*\(|\bReflect\.|\bProxy\b|\bwith\s*\(|\[\s*['"`][^'"`]*['"`]\s*\+|\[\s*[a-zA-Z_$][\w$]*\s*\]\s*\(/, 'runs code that is hidden or hard to read'],
+  [/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|postMessage|navigator\.(share|credentials)|(\$|jQuery)\s*\.\s*(ajax|post|get|getJSON)\s*\(|\.(src|href|action)\s*=[^=]/, 'sends data from the page to a server'],
+  [/\.click\s*\(|\.submit\s*\(|requestSubmit|dispatchEvent|\bdispatch\s*\(|new\s+\w*Event\b|\.reset\s*\(/, 'clicks, submits or presses things on the page'],
+  [/\blocation\s*=[^=]|\blocation\.(href|host|hostname|pathname|search|hash|port|protocol)\s*=[^=]|\blocation\.(assign|replace)\s*\(|\bwindow\s*\.\s*open\s*\(|(?<![\w$.])open\s*\(|history\.(push|replace)State|history\.(back|forward|go)\s*\(|navigation\.navigate/, 'moves the page to another address'],
+  [/(local|session)Storage\.(setItem|removeItem|clear)|document\.cookie\s*=|indexedDB|caches\.|navigator\.(clipboard|serviceWorker)/, "changes the site's data saved on this computer"],
+  [/\.(value|checked|selected|innerHTML|outerHTML|innerText|textContent|src|href|action)\s*\+?=[^=]|insertAdjacent|\.(append|prepend|appendChild|insertBefore|replaceChild|replaceWith|remove|removeChild|setAttribute|removeAttribute)\s*\(|execCommand|document\.write|\.(setValue|executeEdits|applyEdits|pushEditOperations|replaceRange|replaceSelection|insertText|setRangeText|setContent|setData)\s*\(/, 'changes what is on the page or in a form']
+];
+function scriptKinds(texts) {
+  const src = (texts || []).filter(x => x.kind === 'script').map(x => String(x.text)).join('\n');
+  return SCRIPT_KINDS.filter(([re]) => re.test(src)).map(([, label]) => label);
+}
+
+// The danger Claude's own summary names, worst first (the first match is shown).
+const WORD_KINDS = [
+  [/\b(delet|remov|trash|erase|wipe|discard|purg|terminat)|מחק|מוחק|מחיקה|נמחק|הסר|מסיר|הסרה/i, 'delete or remove something'],
+  [/\b(pays?\b|paying|paid|payment|buy|bought|purchas|charg(e|es|ed|ing)\b|billing|places? (an? |the |your )?order|(changes?|switch(es)?) (the |your )?(plan|tier)\b|subscri|upgrad|downgrad)|קנה|קונה|רכוש|רכישה|שלם|משלם|תשלום/i, 'spend money or change a plan'],
+  [/\b(send|sent|resend|post(s|ed|ing)?\b|submit|repl(y|ies|ied|ying)\b|forward(s|ed|ing)?\b|e-?mails?\b|messages?\b|publish|invit|comments? (on|to)\b)|שלח|שולח|שליחה|נשלח|תשלח|פרסם|מפרסם|פרסום/i, 'send, post or publish something'],
+  [/\b(shar(e|es|ed|ing)|anyone|everyone|public(ly)?|visibility|restricted|can (view|edit|comment)|view[- ]only|viewers?|commenters?)\b|שתף|משתף|שיתוף/i, 'share something or change who can see it'],
+  [/\b(grant|allow|roles?\b|permissions?|access\b|owners?\b|ownership|admins?\b|members?\b|credentials?|passwords?|tokens?\b|api keys?|authori[sz]|revok)|הרשאה|הענק|מעניק/i, 'change who has access'],
+  [/\bupload|העלה|מעלה|העלאה/i, 'upload a file'],
+  [/\b(accept|agree|confirm|approv|signs?\b|signed\b)|אשר|מאשר|אישור|הסכם|מסכים/i, 'accept, confirm or approve something'],
+  [/\b(archiv|cancel|transfer|disabl|deactivat|suspend|reset|block(s|ed|ing)?\b|sav(e|es|ed|ing)\b|merg|install|unsubscrib|leave(s)?\b|wipe|commit)|בטל|מבטל|ביטול|חסום|חוסם/i, 'save, cancel, archive or otherwise change something']
+];
+// (A summary that calls itself read-only gets no danger label from its other words, e.g. "Runs the
+// read-only grants snapshot query"; it still asks, with the general sentence.)
+function wordKind(summary) {
+  if (/\bread-only\b/i.test(String(summary))) return null;
+  for (const [re, label] of WORD_KINDS) if (re.test(String(summary))) return label;
+  return null;
+}
+
+const andJoin = a => a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+// Causes that are a change (the pop-up then adds the undo note and the caution).
+const CHANGE_CAUSES = new Set(['high-stakes', 'word', 'typed-write', 'risky-script', 'script-helper', 'helper-args', 'follow-up',
+  'typed-enter', 'always-file_upload', 'always-upload_image', 'always-shortcuts_execute', 'always-gif-drop',
+  // actions the check cannot classify may change something too
+  'no-state', 'non-web-tab', 'unreadable-batch', 'unreadable-url', 'non-web-url']);
+const isChangeCause = c => CHANGE_CAUSES.has(c) || c.startsWith('unknown-tool:') || c.startsWith('deny-loop-');
+
+function plainReason(res) {
+  const highOpts = { adminConsolesHighStakes: ADMIN_CONSOLES_HIGH_STAKES };
+  const notes = Array.isArray(res.notes) ? res.notes : [];
+  // Sites the decision noted (as the old text used them), and with them the sites of asked interactions.
+  const noteSites = [...new Set(notes.filter(x => !x.startsWith('"')))];
+  const sites = [...new Set(noteSites.concat(Array.isArray(res.where) ? res.where : []))];
+  const quotes = notes.filter(x => x.startsWith('"')).map(x => x.replace(/^"|"$/g, ''));
+  const texts = Array.isArray(res.texts) ? res.texts : [];
+  const hosts = Array.isArray(res.hosts) ? res.hosts : [];
+  const parts = [], named = new Set();
+  let change = false;
+  // A text longer than the part the check reads: never name a milder kind than "can change anything".
+  // (A batch's texts together count too: they are read as one.)
+  const cut = texts.some(x => x && x.cut) || texts.reduce((n, x) => n + String((x && x.text) || '').length, 0) > TEXT_CAP;
+  // Plain clicks with no danger word: Claude's own words first, then why it asks.
+  const claimFirst = res.causes.includes('word') && !quotes.some(q => wordKind(q)) &&
+    res.causes.every(x => x === 'word' || x === 'new-site');
+  // (Claude's words keep their own quote marks: a " inside one becomes ', so it cannot close the quote
+  // and continue as if it were the check's own text.)
+  // Every summary that names a danger (to the check's own word lists) is shown; plain ones fill up to 6.
+  const dangerous = q => wordHit(String(q)) || !!wordKind(q);
+  const claimList = list => {
+    const d = list.filter(dangerous), p = list.filter(q => !dangerous(q));
+    const shown = d.concat(p.slice(0, Math.max(0, 6 - d.length)));
+    return shown.map(q => '"' + String(q).replace(/\s+/g, ' ').replace(/["“”＂″‶«»„‟〝〞]/g, "'").trim() + '"').join('; ') +
+      (list.length > shown.length ? ' and ' + (list.length - shown.length) + ' more plain ones' : '');
+  };
+  for (const c of res.causes) {
+    if (isChangeCause(c)) change = true;
+    if (c === 'new-site') {
+      for (const h of hosts.filter(x => !x.startsWith('helper:'))) {
+        parts.push('First action on ' + h + ' this session. If you allow it, Claude can look around there without asking again; anything that may change, send or delete something still asks.');
+        named.add(h);
+      }
+    } else if (c === 'high-stakes') {
+      for (const h of noteSites.filter(x => isHigh(x, highOpts))) {
+        parts.push(h + ' is a sensitive site (mail, chat, payments or tickets), so every click and keystroke there asks.');
+        named.add(h);
+      }
+    } else if (c === 'word') {
+      const kinds = [...new Set(quotes.map(wordKind).filter(Boolean))];
+      if (kinds.length === 1) parts.push('This may ' + kinds[0] + '.');
+      else if (kinds.length) parts.push('This may: ' + kinds.join('; ') + '.');
+      else if (claimFirst) {
+        const claims = Array.isArray(res.claims) && res.claims.length ? res.claims : quotes;
+        parts.push('Claude says: ' + claimList(claims) + '. The check cannot confirm this only looks at the page.');
+      }
+      // The general sentence only when no more specific reason is on the pop-up.
+      else if (!res.causes.some(x => x !== 'word' && isChangeCause(x))) parts.push('The check cannot confirm this only looks at the page.');
+    } else if (c === 'typed-write') {
+      const k = cut ? null : sqlKind(texts);
+      const typedHere = texts.some(x => x.kind === 'typed'), scriptHere = texts.some(x => x.kind === 'script');
+      parts.push((typedHere && scriptHere ? 'Typing or a page script runs' : typedHere ? 'Typing' : 'The script runs') + ' a database command that ' +
+        (cut ? 'is too long for the check to read in full, so it can change anything' : k || 'the check cannot confirm only reads data') + '.');
+    } else if (c === 'risky-script') {
+      const k = scriptKinds(texts);
+      parts.push('A page script that can change the page or send data' + (k.length ? '; the check sees that it ' + andJoin(k) : '') +
+        (cut ? ', and more the check could not read' : '') + '.');
+    } else if (c === 'script-helper') {
+      const names = hosts.filter(h => h.startsWith('helper:')).map(h => h.slice(h.lastIndexOf(':') + 1));
+      parts.push('A page script reuses code an earlier script left on the page' + (names.length ? ' (' + names.join(', ') + ')' : '') +
+        ', which can change the page or send data. If you allow it, later uses of it this session go ahead unless they carry a database change or a risky step.');
+    } else if (c === 'helper-args') {
+      // (with typed-write the next sentence names the command's kind)
+      const k = res.causes.includes('typed-write') || cut ? null : sqlKind(texts);
+      parts.push('The script hands that code something other than a look-only database query' + (k ? ': a command that ' + k : '') + '.');
+    } else if (c === 'follow-up') {
+      for (const h of noteSites.filter(x => !isHigh(x, highOpts))) {
+        parts.push('This comes right after a click on a role, permission, owner or billing control on ' + h + ', and is often the click that applies it.');
+        named.add(h);
+      }
+    } else if (c === 'typed-enter') {
+      parts.push('Typing that ends in Enter, which can submit a form.');
+    } else if (c === 'deny-loop-no-summary') {
+      parts.push('Claude did not say what this action does, so the check could not look at it.');
+    } else if (c.startsWith('deny-loop-')) {
+      parts.push('Claude could not confirm which page this tab is on.');
+    } else if (ASK_TEXT[c]) {
+      parts.push(ASK_TEXT[c]().replace(/\bgate\b/g, 'check'));
+    } else {
+      parts.push('A browser action the check cannot classify (' + String(c).replace(/[^\w:.-]/g, '').slice(0, 60) + ').');
+    }
+  }
+  let s = [...new Set(parts)].join(' ');
+  const unnamed = sites.filter(h => !named.has(h));
+  if (unnamed.length) s += ' Site: ' + unnamed.join(', ') + '.';
+  const claims = Array.isArray(res.claims) && res.claims.length ? res.claims : quotes;
+  if (claims.length && !claimFirst) s += ' Claude says: ' + claimList(claims) + '.';
+  if (change) s += ' Undo is not guaranteed. Allow only if this matches what Claude told you it would do.';
+  return s + ' (browser safety check)';
+}
+
+function reasonFor(res) {
+  try { return plainReason(res); } catch (e) { return legacyReasonFor(res); }
+}
