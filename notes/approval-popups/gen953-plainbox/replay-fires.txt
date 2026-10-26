@@ -1,0 +1,48 @@
+NONE  825-come-up-with-graceful-mist.md  ::  # GEN-825 — Make sessions see the full Notion and shell reference notes | ## Context | ## Approach — split by trigger, wording kept
+NONE  a-new-model-just-synchronous-petal.md  ::  # Minimum model by kind of work (prompted by the Sonnet 5.5 launch) | ## Context | ## The proposed minimums
+NONE  come-up-with-a-binary-swing.md  ::  # AN-1415 — stop the daily false "Log Validation" alerts | ## Context | ## What I found (read-only, this session)
+NONE  come-up-with-a-bright-shannon.md  ::  # GEN-919: file AdSense/AdMob payout receipts with the same button (revised after /check round 1) | ## Context | ## Verified facts (2026-10-
+LOWER come-up-with-a-cuddly-fox.md  ::  # GEN-815: hold the email instead of deciding on a half-done check | ## Context | ## In plain terms (for Erez)
+NONE  come-up-with-a-distributed-lark.md  ::  # GEN-845: Keep the four gate skills' critical steps available after compaction | ## Context | ## Goals
+NONE  come-up-with-a-majestic-token.md  ::  # GEN-893 (+ same-file fixes): consider size limits while forming a proposal | ## Context | ## What gets combined, and what stays out
+NONE  come-up-with-a-purrfect-sun.md  ::  # Plan — GEN-758: How much of Vs Bonny mode is finished, and what is left | ## Context | ## Facts found while planning (14 Oct 2026, read-on
+NONE  come-up-with-a-sleepy-rainbow.md  ::  # GEN-836 — Keep the saved vendor list current when an old month changes | ## Context | ## Changes (all in `Code.js`)
+LOWER come-up-with-a-snappy-owl.md  ::  # Plan: GEN-828 — keep the PC-control add-on on a version we have checked | ## Context | ## Other GEN-59 tickets in To Do / Backlog — none b
+LOWER create-an-automation-that-quirky-hearth.md  ::  # Google payout receipt — add-on button + Chrome helper (plan) | ## Context | ## How it works for Erez
+NONE  cuddly-prancing-quiche.md  ::  # Opus 4.8 → Opus 5.5: what needs changing | ## Context | ## What I verified works already (no change)
+NONE  deep-painting-coral.md  ::  # GEN-850: Test that a crashing Windows-MCP approval hook still blocks the action | ## Context | ## Already checked (read-only, this session
+NONE  devise-a-plan-for-encapsulated-toucan.md  ::  # Plan: GEN-638 (rotate exposed credentials) + the tickets that make it stick | ## Context | ## Bundle
+LOWER devise-a-plan-for-virtual-mitten.md  ::  # GEN-752 — Make the invoice script's run logs readable from Claude Code again | ## Context | ## Proven this session (live, read-only)
+NONE  do-gen-851-starry-alpaca.md  ::  # GEN-851 — Never let an open gap end up only in a closed ticket | ## Context | ### What exists today
+NONE  do-the-cleanup-now-replicated-book.md  ::  # Retire the replaced Google Ads export app (Azure cleanup) | ## Context | ## Steps (execution session)
+NONE  first-make-sure-the-mutable-wilkinson.md  ::  # GEN-831 plan — does Avast's secure-traffic checking break developer tools, and what should Erez do about it? | ## Context | ## Steps (noth
+LOWER go-over-all-backlog-to-delightful-sunrise.md  ::  # Plan — what to work on next under Invoice automation (GEN-21) | ## Context | # Part 1 — In plain terms
+NONE  great-show-me-a-wondrous-pebble.md  ::  # GEN-854 — Stop the Windows-MCP add-on from timing out at session start | ## Context | ## Plan
+NONE  i-got-an-email-wild-crescent.md  ::  # Stop footer / legal / help links from being flagged as "invoice link requires manual download" | ## Context | **Root cause (verified in co
+NONE  i-got-some-perks-twinkling-mist.md  ::  # Perks tracking — so Claude suggests a perk when it applies | ## Context | ## Recommended approach
+NONE  i-just-got-an-indexed-dragonfly.md  ::  # Stop quotes / offers being filed as bills (Salesforce renewal case) | ## Context | ## Approach (recommended)
+NONE  i-ve-set-this-step-sparkling-seal.md  ::  # Plan — Claude Code "what's new" review, and turning it into a standing system | ## Context | ## Approach — two phases, one shared procedur
+NONE  i-want-to-work-graceful-rivest.md  ::  # GEN-820 — Let a receipt move a paid invoice out of To Pay when only a numbered or different-type file shares its name | ## Context | ## De
+NONE  i-want-to-work-playful-pearl.md  ::  # GEN-823 — File an income receipt read from an email's text instead of erroring | ## Context | ## Bundling decision
+NONE  i-want-to-work-sequential-lightning.md  ::  # GEN-847 — Stop a receipt marking the wrong bill as paid when a vendor has same-amount bills | ## Context | ## Approach
+LOWER i-want-to-work-tidy-stallman.md  ::  # GEN-460 + GEN-570 — root-cause design ("ours by location") | ## Context | ## Proposed design (one `/vet-code` change to `sync.ps1`)
+NONE  instead-of-giving-me-cuddly-hickey.md  ::  # MD-3654 — next live switch (AdmobSSV) on 14 Oct, watched while Erez is present | ## Context | ## Steps
+NONE  investigate-why-this-invoice-steady-newell.md  ::  # Israel Electric home bill wrongly filed to "To Pay October 2026" | ## Context | ## Plan
+NONE  investigate-why-we-having-parsed-meerkat.md  ::  # Fix the near-daily "backup" warnings at session start | ## Context (what we found) | ## Recommended approach
+NONE  is-there-another-option-merry-lake.md  ::  # Arthur (Bynet): access to fix things, without full control (GEN-732) | ## Context | ### Decision Erez must make first (it decides whether 
+NONE  let-s-plan-the-main-elegant-lecun.md  ::  # Main game server .NET 10 switch: date and prep (MD-3654) | ## Context | ## Proposed date: Tuesday 27 Oct, start about 10:00 Israel time
+NONE  let-s-tackle-908-should-unified-hinton.md  ::  # GEN-908 — Let Claude finish a desktop-app setup step without stalling (converged: /check 3 rounds, pre-mortem + holistic + soundness all P
+NONE  not-sure-if-that-s-logical-candy.md  ::  # GEN-606 step C, redesigned: search the board before a ticket proposal reaches Erez's screen | ## Context | ## Recommended approach: "hold 
+NONE  pasted-content-id-0576-project-improve-binary-pascal.md  ::  # GEN-860 session plan — pick up cloud leftovers, settle 3 decisions, Drive backup | ## Context | ## Step 0 — cloud leftovers
+LOWER peppy-popping-ember.md  ::  # GEN-860: close the backup gap, build the automatic session backup, then steps 2 and 3 | ## Context | ## Findings from planning (read-only)
+NONE  propose-a-plan-for-declarative-puppy.md  ::  # Plan — GEN-739: Give Claude cloud sessions the Memory Islands project notes | ## DECISION (2026-09-27): Erez chose (b) — a rented cloud co
+LOWER propose-a-plan-for-groovy-stream.md  ::  # Plan — GEN-732: Take full control of every Memory Islands account, key and machine | ## Context | ## The approach, in plain terms
+NONE  propose-an-holistic-solution-gleaming-cherny.md  ::  # Stop surprise PC-control pop-ups — proposal (revision 2) | ## Context | ## Recommended approach
+NONE  revise-the-design-to-purrfect-anchor.md  ::  # GEN-716 Phase 1 — grounding flag, MINIMAL loop (Option 1, round-3-converged) | ## Context | ## The design (minimal loop)
+NONE  snoopy-discovering-boot.md  ::  # GEN-882 — what's next | ## Context | ## Recommendation: GEN-674 next
+NONE  suggest-how-to-tackle-bright-harbor.md  ::  # GEN-727 — Stop loose receipt wording from marking an unpaid bill as paid | ## Why this matters | ## Part 1 — Documents that look like rece
+NONE  the-two-adobe-invoices-modular-meadow.md  ::  # Plan — Stop auto-charged card subscriptions being labeled "Erez to pay by card" | ## Context | ## Chosen approach (reviewed via /check)
+NONE  transient-swinging-wreath.md  ::  # Mark invoices "paid" when they state "issued from receipt" (Goldhaber 4004651 follow-up) | ## Context | ## Change — Code.js, `buildMetadat
+NONE  we-need-to-account-swirling-steele.md  ::  # Unity: file auto-charged invoices as paid, catch failed payments | ## Context | ## Plan
+NONE  yes-start-on-the-snug-duckling.md  ::  # GEN-860: fix the "transcripts disappeared" notice at the root | ## Context | ## Decision (mine; tell Erez)
+NONE  you-mean-yakir-needs-jazzy-grove.md  ::  # Plan: move the Tableau site to Erez | ## Context | ## Verified: Yakir can hand his seat over

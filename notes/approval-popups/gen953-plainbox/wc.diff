@@ -1,0 +1,157 @@
+diff --git a/live-baseline.js b/wc/pretooluse-effort-tag-gate.js
+index b6c1e06..3fe5f57 100644
+--- a/live-baseline.js
++++ b/wc/pretooluse-effort-tag-gate.js
+@@ -16,6 +16,12 @@
+  *     now", "No, leave it") and app-action buttons (commit/PR/merge -- their
+  *     labels are the app's) are exempt.
+  *   - Plan approval: the plan text needs a line like "Effort to execute: xhigh".
++ *   - Plan approval (GEN-953): the plan opens with a plain-words section for
++ *     Erez -- its first section heading after the title names it ("In plain
++ *     words (for Erez)", "In plain terms", "How it works for Erez"). Only the
++ *     heading (or a whole-line bold label like "**In plain words**") is
++ *     checked; the five things it must say are in the refusal.
++ *     A plan missing both gets ONE refusal naming both fixes.
+  * A miss is blocked ONCE with the effort guide in the reason, so the level is
+  * picked from notes/effort-model-reference.md while the box/plan is written.
+  * Design: scratchpad gen619-design.md, /check-converged 2026-10-18.
+@@ -122,6 +128,21 @@ const LEVEL_WORD_RE = /\b(?:low|medium|high|xhigh|max)\b/i;
+ const PLAN_EFFORT_LINE_RE = /\beffort(?![-\w])[^\n]{0,80}?\b(?:low|medium|high|xhigh|max)\b/i;
+ const PLAN_EFFORT_HEADING_RE = /^\s*#{1,6}\s[^\n]*\beffort(?![-\w])/i;
+ 
++// GEN-953: the heading of a plan's plain-words section. Real forms: "In plain
++// words (for Erez)", "In plain terms", "Context (plain language)", "How it
++// works for Erez". "for Erez's OK" / "for Erez to confirm" are not it.
++const PLAIN_HEADING_RE = /\bplain(?:ly)?\b|\bfor Erez\b(?!['\u2019]s\b|\s+to\b)/i;
++const MD_HEADING_RE = /^ {0,3}(#{1,6})[ \t]+([\s\S]+)$/;
++// A whole-line bold pseudo-heading counts only when it is itself plain, so
++// "**Tickets**" or "**Effort to execute: xhigh**" above the section is ignored.
++const BOLD_LINE_RE = /^\s*\*\*(.+?)\*\*:?\s*$/;
++const FENCE_RE = /^ {0,3}(`{3,}|~{3,})([\s\S]*)$/;
++const PLAIN_LINE_MAX = 300;
++const PLAIN_ASK = 'Put a first section right under the title, headed "## In plain words (for Erez)" (or ' +
++  'move your existing plain-words section there), that ' +
++  'tells Erez in plain, non-technical words: what changes for him, who is affected, whether it can be ' +
++  'undone, what he must do, and your recommendation. Technical detail goes below it.';
++
+ // A For-you block HEADER: the pin at the start of a line (after optional
+ // whitespace, a quote marker, a heading mark, emphasis or a rule -- real blocks
+ // use "<pin> **For you**" and "## <pin> For you", pin = U+1F4CC), optional
+@@ -284,6 +305,36 @@ function planHasEffort(planText) {
+   return false;
+ }
+ 
++// true = the first section of the plan (after a "# " title) is a plain-words
++// section. Lines inside code fences are ignored. No section at all -> false.
++function planOpensPlain(planText) {
++  // Split on \n only (a stray \r is harmless below); /\r*\n/ is quadratic on a long \r run.
++  const lines = String(planText).split('\n');
++  let fence = null;
++  let titleSeen = false;
++  for (let i = 0; i < lines.length; i++) {
++    // A fence per CommonMark: a backtick fence's info string has no backtick
++    // (so "```x```" is inline code), and a closing fence has no info string.
++    const f = FENCE_RE.exec(lines[i]);
++    if (f && !(f[1][0] === '`' && f[2].indexOf('`') !== -1)) {
++      if (fence === null) fence = f[1];
++      else if (f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null;
++      continue;
++    }
++    if (fence !== null) continue;
++    const h = MD_HEADING_RE.exec(lines[i]);
++    if (h) {
++      const plain = PLAIN_HEADING_RE.test(h[2]);
++      if (h[1].length === 1 && !titleSeen && !plain) { titleSeen = true; continue; }
++      return plain;
++    }
++    // A label is short; the cap bounds the lazy match on a long line.
++    const b = lines[i].length <= PLAIN_LINE_MAX ? BOLD_LINE_RE.exec(lines[i]) : null;
++    if (b && PLAIN_HEADING_RE.test(b[1])) return true;
++  }
++  return false;
++}
++
+ function readPlanText(toolInput) {
+   const ti = toolInput || {};
+   if (typeof ti.plan === 'string' && ti.plan) return ti.plan;
+@@ -352,10 +403,17 @@ function boxReason(untagged, guide) {
+     'goes in the For-you block, not the box. Pick the level from this guide, not intuition: ' + guide;
+ }
+ 
+-function planReason(guide) {
+-  return 'Effort-level check (GEN-619): this plan goes to Erez for approval without the effort level needed to ' +
+-    'carry it out. Add a line "Effort to execute: <level>" to the plan file (model per the global tag rule), ' +
+-    'then call ExitPlanMode again. Pick the level from this guide, not intuition: ' + guide;
++function planReason(missing, guide) {
++  const noPlain = missing.indexOf('plain') !== -1;
++  const noEffort = missing.indexOf('effort') !== -1;
++  const what = noPlain && noEffort ? 'does not open in plain words and has no effort level for carrying it out'
++    : noPlain ? 'does not open in plain words' : 'has no effort level for carrying it out';
++  const fixes = [];
++  if (noPlain) fixes.push(PLAIN_ASK);
++  if (noEffort) fixes.push('Add a line "Effort to execute: <level>" to the plan file (model per the global tag rule).');
++  return 'Plan check (GEN-619/GEN-953): this plan goes to Erez for approval but ' + what + '. ' +
++    fixes.join(' ') + ' Then call ExitPlanMode again.' +
++    (noEffort ? ' Pick the level from this guide, not intuition: ' + guide : '');
+ }
+ 
+ function decide(input) {
+@@ -369,6 +427,7 @@ function decide(input) {
+   let missing;
+   let reason;
+   let untagged = [];
++  const planMissing = [];
+   if (tool === BOX_TOOL) {
+     const r = boxUntagged(input.tool_input, shared.tagRe);
+     if (!r.applies) { log(Object.assign({ outcome: 'no-ask' }, base)); return; }
+@@ -380,11 +439,14 @@ function decide(input) {
+     let text = null;
+     try { text = readPlanText(input.tool_input); } catch (e) { text = null; }
+     if (text === null) { log(Object.assign({ outcome: 'plan-unavailable' }, base)); return; }
+-    missing = !planHasEffort(text);
+-    reason = () => planReason(shared.guide());
++    if (!planHasEffort(text)) planMissing.push('effort');
++    if (!planOpensPlain(text)) planMissing.push('plain');
++    missing = planMissing.length > 0;
++    reason = () => planReason(planMissing, planMissing.indexOf('effort') !== -1 ? shared.guide() : '');
+   }
+ 
+   const short = untagged.map((l) => l.slice(0, 40));
++  const why = tool === PLAN_TOOL ? { missing: planMissing } : {};
+   if (!missing) {
+     clearBlock(file);
+     log(Object.assign({ outcome: 'tagged' }, base));
+@@ -394,7 +456,7 @@ function decide(input) {
+     // Let the retry through, and clear the state so a LATER separate box is
+     // gated again (the call is shown now and the turn moves on -- no loop).
+     clearBlock(file);
+-    log(Object.assign({ outcome: 'passed-after-deny', untagged: short }, base));
++    log(Object.assign({ outcome: 'passed-after-deny', untagged: short }, why, base));
+     return;
+   }
+   // Build the reason BEFORE recording state, so a failure building it can never
+@@ -404,7 +466,7 @@ function decide(input) {
+     log(Object.assign({ outcome: 'error', detail: 'state-write-failed', untagged: short }, base));
+     return;
+   }
+-  log(Object.assign({ outcome: 'blocked', untagged: short }, base));
++  log(Object.assign({ outcome: 'blocked', untagged: short }, why, base));
+   block(text);
+ }
+ 
+@@ -494,6 +556,8 @@ if (require.main === module) runHook();
+ module.exports = {
+   boxUntagged: boxUntagged,
+   planHasEffort: planHasEffort,
++  planOpensPlain: planOpensPlain,
++  planReason: planReason,
+   readPlanText: readPlanText,
+   turnBlockStatus: turnBlockStatus,
+   isTurnStart: isTurnStart,
+@@ -505,5 +569,6 @@ module.exports = {
+   NO_WORK_TAG_RE: NO_WORK_TAG_RE,
+   PLAN_EFFORT_LINE_RE: PLAN_EFFORT_LINE_RE,
+   PLAN_EFFORT_HEADING_RE: PLAN_EFFORT_HEADING_RE,
++  PLAIN_HEADING_RE: PLAIN_HEADING_RE,
+   EFFORT_ONLY_TAG_RE_COPY: EFFORT_ONLY_TAG_RE_COPY
+ };

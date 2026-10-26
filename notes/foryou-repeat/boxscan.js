@@ -154,4 +154,4 @@ for (const [cohort, label] of [['all', 'ALL sessions'], ['newRule', 'NEW-RULE se
 const by = {};
 for (const r of gateRows) by[r.outcome] = (by[r.outcome] || 0) + 1;
 console.log('gate log since ' + since + ': ' + JSON.stringify(by));
-for (const r of gateRows) if (r.outcome === 'blocked') console.log('REFUSED ' + r.ts + ' ' + r.tool + ' untagged=' + JSON.stringify(r.untagged || []) + (r.block ? ' block=' + r.block : '') + ((r.tool === 'mcp__ccd_turn__wrap_up' && !(r.untagged || []).length) ? ' <- WRONG (no untagged button)' : ''));
+for (const r of gateRows) if (r.outcome === 'blocked') console.log('REFUSED ' + r.ts + ' ' + r.tool + ' untagged=' + JSON.stringify(r.untagged || []) + (r.missing ? ' missing=' + JSON.stringify(r.missing) : '') + (r.block ? ' block=' + r.block : '') + ((r.tool === 'mcp__ccd_turn__wrap_up' && !(r.untagged || []).length) ? ' <- WRONG (no untagged button)' : ''));

@@ -1,0 +1,52 @@
+come-up-with-a-atomic-sphinx.md  ::  # Plan: one summary per turn, after the question box (GEN-941, with GEN-619 and GEN-873) | ## In plain words | ## Context
+come-up-with-a-curious-finch.md  ::  # Let Claude control the PC from any folder, any session, either login | ## Context (plain terms) | ## The plan (plain terms)
+come-up-with-a-functional-teacup.md  ::  # GEN-666 — make hand-filing refuse to skip its safety checks | ## In plain terms (for Erez) | **Your choice (one):**
+come-up-with-a-greedy-wombat.md  ::  # Plan: PC control that notices when it is stuck (GEN-920 + GEN-933), plus GEN-932 and GEN-917 | ## In plain terms (for Erez) | **What we'd 
+come-up-with-a-majestic-lemon.md  ::  # Plan: tighten the PC-control safety checks — GEN-885 + GEN-903, finished by GEN-905 | ## Context (plain terms) | ## What Erez does
+come-up-with-a-rippling-nebula.md  ::  # Plan: GEN-674 bundle, shrinking the always-loaded global rules file | ## In plain words (for Erez) | **Steps and effort:**
+come-up-with-a-swirling-trinket.md  ::  # Finish the browser fix (GEN-883), together with GEN-928 and GEN-914 | ## In plain words | ### The work, in order
+come-up-with-a-vivid-dewdrop.md  ::  # Plan: automatic backup triage (GEN-460) + two related warning tickets | ## In plain terms (for Erez) | **Effort to execute: xhigh.**
+come-up-with-a-wondrous-papert.md  ::  # Plan: GEN-865 (hand-placed documents with duplicate tags), bundled with GEN-849 | ## In plain terms | **Left out, and why:**
+come-up-with-an-federated-kay.md  ::  # Plan — reliable browser work: GEN-883 (+ GEN-742, GEN-928, GEN-914) | ## In plain words | ## Evidence
+continue-here-come-up-mossy-backus.md  ::  # Plan: GEN-893 size-line fix, bundled with GEN-926 | ## In plain terms | ## Context
+devise-a-plan-for-binary-harp.md  ::  # Plan: GEN-761 + GEN-721 (one small code-hygiene pass on Code.js) | ## In plain terms | ## Context
+devise-a-plan-for-fluffy-brooks.md  ::  # Plan — GEN-760 (document the admin recovery-notice email) | ## In plain terms | ## Context
+devise-a-plan-for-kind-clock.md  ::  # Plan — GEN-757: daily run must finish even when one document is slow | ## In plain terms | ## Context
+devise-a-plan-for-scalable-wilkes.md  ::  # Plan: GEN-748 + GEN-684 + GEN-619 (one vetting cycle on the For-you hook) | ## In plain terms | ## Context
+devise-a-plan-for-streamed-castle.md  ::  # Plan: stop salary slips being filed as unpaid invoices (GEN-759), bundled with GEN-711 | ## In plain terms | **The fix, in two layers.**
+gen-674-redesign-the-rules-file-sharded-hanrahan.md  ::  # GEN-674: rules-file size stop, redesigned | ## In plain words (for Erez) | **Options I did not pick:**
+i-want-the-move-scalable-bentley.md  ::  # Plan — Seamless switching between erez@muuula.com and info@muuula.com (GEN-859) | ## In plain terms | ## Context
+i-want-to-make-vast-axolotl.md  ::  # Plan — keep our Claude setup within Anthropic's published guidelines | ## In plain terms (for Erez) | **What we'll do.**
+i-want-to-tackle-parallel-storm.md  ::  # Plan — GEN-876 + GEN-877 together | ## In plain terms (for Erez) | ## Context
+i-want-to-work-abstract-micali.md  ::  # Plan — GEN-783: measure, then (if it pays off) add a "paid per the email" safety net | ## In plain terms | ## Context
+i-want-to-work-ancient-barto.md  ::  # GEN-661 + GEN-699 (with GEN-663) — plan | ## In plain terms | **Answer: yes, add one — [GEN-699](https://app.notion.com/p/3be6e495d07c81b3
+i-want-to-work-clever-wirth.md  ::  # Plan — GEN-692 check + GEN-801 (Gemini billing lapse → hold, not flag) | ## In plain terms (for Erez) | ## Context
+i-want-to-work-dazzling-map.md  ::  # Plan — GEN-817: reuse a vendor's existing name spelling | ## In plain terms | **What will change.**
+i-want-to-work-deep-nebula.md  ::  # Plan: GEN-636 (+ GEN-834): make the ticket gate's warning signs reach Erez | ## In plain terms | **What you'd see afterwards:**
+i-want-to-work-delightful-creek.md  ::  # Plan — GEN-453 (+ GEN-593): automatic check on every Notion page-text edit | ## In plain terms | ## Context
+i-want-to-work-iterative-puppy.md  ::  # GEN-861 — Stop a new same-amount bill being filed as already paid because a look-alike sits in To Pay | ## In plain terms | ## Context
+i-want-to-work-iterative-wilkinson.md  ::  # Plan — GEN-816 (+ close GEN-803) | ## In plain terms | ## Context
+i-want-to-work-precious-stroustrup.md  ::  # Plan — GEN-818: stop false "file already exists" blocks on sheet overrides | ## In plain terms | ## Context
+i-want-to-work-rippling-torvalds.md  ::  # Plan: GEN-786 (duplicate-check edge cases) + GEN-785 (catch-up guidance) | ## In plain terms | **What will change:**
+i-want-to-work-scalable-ullman.md  ::  # GEN-812 (+ GEN-798) — reviewers deliver their verdict line on the first reply | ## In plain terms (for Erez) | ## Context
+i-want-to-work-shimmying-river.md  ::  # Plan: GEN-606 + GEN-802 — search the board before proposing a ticket, review it before Erez sees it, ask him once | ## In plain terms (for
+i-want-to-work-sparkling-eich.md  ::  # GEN-657 — keep the REST-write script byte-identical through git checkout | ## In plain terms | ## Context
+i-want-to-work-spicy-unicorn.md  ::  # GEN-821: keep a renamed Google Doc's name from ending in ".pdf" | ## In plain terms | ## Context
+i-want-to-work-vivid-yeti.md  ::  # Plan — GEN-811 plus GEN-807: two wording fixes to the Invoice Automation rules file | ## In plain terms | ## Execution steps (technical)
+i-want-to-work-zany-sphinx.md  ::  # Plan — GEN-832 (faster vendor-spelling lookup) bundled with GEN-826 (hold on AI outage during that lookup) | ## In plain terms (for Erez) 
+i-want-you-to-serene-nest.md  ::  # Fewer, clearer approval pop-ups — proposal | ## In plain words (for Erez) | **What changes for you, in 5 steps:**
+investigate-why-did-it-wild-nautilus.md  ::  # Azure "could not extract: amount" flag — root cause and fix (rev 2, converged) | ## In plain terms | ## Context
+let-s-tackle-gen-705-serialized-penguin.md  ::  # GEN-705 (+ GEN-527, + GEN-470 ride-along) — one model list, read live; make the /vet-code model checks real | ## In plain terms (reviewed 
+let-s-work-on-gen-breezy-alpaca.md  ::  # Plan — GEN-899 (+ GEN-900, + GEN-896's missing check) | ## In plain terms | ## Context
+no-propose-a-plan-zazzy-pancake.md  ::  # Plan — accurate "what's already on file" picture + consistent numbering (Invoice Automation) | ## In plain terms (for Erez) | **The fix.**
+pick-up-gen-638-https-app-notion-com-p-3-tingly-rainbow.md  ::  # GEN-638 step 3 — end-of-session key-leak tripwire | ## In plain terms (what approving this means for you) | ## Context
+propose-a-plan-for-memoized-wave.md  ::  # Plan — GEN-743 (+ GEN-645 bundled, GEN-670 verify-and-close) | ## In plain terms | ## Why this restart, and how the testing is done
+propose-a-plan-for-misty-hamming.md  ::  # GEN-804: Bring the Invoice Automation rules file back under its length limit | ## In plain terms | **The plan.**
+propose-a-plan-for-steady-turing.md  ::  # GEN-740 — let the ticket gate read reviewer verdicts delivered through the sub-agent hand-back | ## In plain terms | ## Context
+propose-a-solution-for-swift-graham.md  ::  # Plan — GEN-773 (do-not-pay check on unreadable PDFs) + GEN-772 (credit-bill amounts, option A) | ## In plain terms | ## Context
+propose-a-solution-for-vectorized-dahl.md  ::  # Plan — GEN-728 (+ GEN-720 part 2, for new invoices) | **Tickets** | ## Context (plain language)
+sessions-stopped-telling-me-wise-bubble.md  ::  # Effort level on every decision — holistic fix (GEN-619) | ## In plain terms (for Erez) | **The fix, in four parts:**
+suggest-how-to-tackle-iterative-karp.md  ::  # GEN-771 — Stop personal bills from new accounts being filed as Muuula expenses | ## In plain terms | ## Steps (after Erez approves)
+the-most-recent-email-cozy-brook.md  ::  # Stop emails that aren't bills from landing on your to-do list | ## In plain words (for Erez) | **The fix, in two parts.**
+tingly-orbiting-gizmo.md  ::  # GEN-638 step 2 — stop Claude sessions reading the key sheet | ## In plain terms (what approving this means for you) | ## Context
+yes-rippling-sloth.md  ::  # GEN-638 step 2 — redesign of the held Atlassian write path | ## In plain terms (what approving this means for you) | ## Context
