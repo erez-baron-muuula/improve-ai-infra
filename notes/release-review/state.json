@@ -1,8 +1,8 @@
 {
-  "lastReviewedVersion": "2.1.300",
-  "helpCenterLastSeen": "2026-10-07",
-  "digestTicket": null,
-  "supervisedPassedUtc": null,
+  "lastReviewedVersion": "2.1.310",
+  "helpCenterLastSeen": "2026-10-21",
+  "digestTicket": "GEN-959",
+  "supervisedPassedUtc": "2026-10-26T09:45:15Z",
   "installedUtc": "2026-10-15T07:47:25Z",
-  "lastRunUtc": null
+  "lastRunUtc": "2026-10-26T09:45:08.499Z"
 }

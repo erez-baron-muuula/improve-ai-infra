@@ -24,3 +24,12 @@
 {"ts":"2026-10-15T09:41:00Z","run":"phase1","key":"dead-allow-rules","versions":["2.1.275","2.1.277"],"target":"GEN-290","kind":"ticket","status":"appended","ticket":"GEN-290","docs":null}
 {"ts":"2026-10-15T09:41:00Z","run":"phase1","key":"remote-mcp-stale-connection","versions":["2.1.273","2.1.283"],"target":"GEN-360","kind":"ticket","status":"appended","ticket":"GEN-360","docs":null}
 {"ts":"2026-10-15T09:41:00Z","run":"phase1","key":"desktop-sessions-kept-memory-cleanup","versions":["2.1.248","2.1.228"],"target":"GEN-860","kind":"ticket","status":"appended","ticket":"GEN-860","docs":null}
+{"ts":"2026-10-26T09:33:39Z","run":"202610260909","key":"digest-ticket","versions":[],"target":"new","kind":"digest","status":"pending","change":"create: Decide on Claude Code release-review findings"}
+{"ts":"2026-10-26T09:34:30Z","run":"202610260909","key":"digest-ticket","versions":[],"target":"new","kind":"digest","status":"filed","ticket":"GEN-959","docs":null}
+{"ts":"2026-10-26T09:37:30Z","run":"202610260909","key":"auto-mode-setup","versions":["2.1.304"],"target":"GEN-349","kind":"ticket","status":"pending","change":"append dated release-review note on /auto-mode-setup"}
+{"ts":"2026-10-26T09:38:00Z","run":"202610260909","key":"auto-mode-setup","versions":["2.1.304"],"target":"GEN-349","kind":"ticket","status":"appended","ticket":"GEN-349","docs":"https://code.claude.com/docs/en/auto-mode-config"}
+{"ts":"2026-10-26T09:44:10Z","run":"202610260909","key":"digest-section","versions":[],"target":"GEN-959","kind":"digest","status":"pending","change":"append body and Run 2026-10-26 section"}
+{"ts":"2026-10-26T09:44:40Z","run":"202610260909","key":"digest-section","versions":[],"target":"GEN-959","kind":"digest","status":"appended","ticket":"GEN-959","docs":null}
+{"ts":"2026-10-26T09:45:00Z","run":"202610260909","key":"server-classifier-compacts-long-conversation","versions":["2.1.302"],"target":"GEN-423","kind":"ticket","status":"unverified","ticket":null,"docs":"https://code.claude.com/docs/en/errors"}
+{"ts":"2026-10-26T09:45:00Z","run":"202610260909","key":"grep-glob-error-on-search-failure","versions":["2.1.301"],"target":"GEN-297","kind":"ticket","status":"unverified","ticket":null,"docs":null}
+{"ts":"2026-10-26T09:45:00Z","run":"202610260909","key":"gen892-blocker-supervised-run","versions":[],"target":"GEN-892","kind":"proposal","status":"proposed","ticket":"GEN-959","docs":null}
