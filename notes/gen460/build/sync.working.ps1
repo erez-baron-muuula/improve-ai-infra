@@ -13,8 +13,11 @@
 #   - memory\   (entire folder -- memory index + all memory files; GEN-140)
 #   - hooks\*.js, hooks\*.ps1  (every hook's code, found on EITHER side -- this PC or Drive -- so a
 #     new hook needs no edit here and a To-Claude pull restores every hook; GEN-460. What each hook
-#     does is in its own header comment and its settings.json registration. A hook removed on
-#     purpose is kept out of the backup by a 'retired' decision -- see "Backup triage" below.)
+#     does is in its own header comment and its settings.json registration. A hook deleted on
+#     this PC but still on Drive is pulled back by the next To-Claude sync (inert unless
+#     settings.json registers it); to remove a hook for good, delete it on every PC and on Drive.
+#     update-config.ps1 runs a To-Claude before every config edit, so a hook deleted only here comes
+#     back silently at the next edit, and a PC that still has it pushes it back to Drive.)
 #   - hooks\secret-patterns.json  (shared secret-scan patterns; GEN-233)
 #   - backup-triage.json  (GEN-460 backup-triage decisions; merged across PCs, not hash-synced --
 #     see "Backup triage" below)
@@ -105,17 +108,18 @@
 # All triage output goes to the WARNING stream, because update-config.ps1 runs this script with
 # | Out-Null, which discards normal output but not warnings.
 #
-#   .\sync.ps1 -TriageDecide '<path under .claude>' -As skip|backup|retired -Reason '<why>'
+#   .\sync.ps1 -TriageDecide '<path under .claude>' -As skip|backup -Reason '<why>'
 #       records one decision (no sync). 'backup' is for one plainly named file shared across PCs,
 #       stored on Drive and in git under triage-backup\; it is refused for credential-like or
-#       ignore-listed names, files over 1 MB, or content that matches hooks\secret-patterns.json.
-#       'retired' is only for a hook's code that is no longer on this PC and that nothing here still
-#       mentions (settings files, other hooks); it stops the hook being pulled back on every PC until
-#       it is lifted on purpose with -As backup on that hook. A file beside the .claude folder is
+#       ignore-listed names, on/off or state switches (a marker extension such as .off, or an empty
+#       file), files over 1 MB, or content that matches hooks\secret-patterns.json. Recording a 'skip'
+#       runs without a permission prompt (auto-approve.js); a 'backup' keeps the normal prompt. Like
+#       hook code, a backed-up file deleted here is pulled back by To-Claude; to drop it for good,
+#       record it as skip and delete its triage-backup\ copy on Drive.
+#       Hook code takes no decision (it is always backed up). A file beside the .claude folder is
 #       named '..\.claude<rest>' and can only be skipped.
 #   Every push re-checks hook code and Claude-chosen backups: a file over 1 MB or matching a secret
-#   pattern is left out of that push with a warning. A hook deleted on this PC is not pulled back by
-#   To-Claude; it raises a NEEDED warning instead (retire it, or ask Erez).
+#   pattern is left out of that push with a warning.
 #   .\sync.ps1 -CoverageOnly    runs the triage and prints the backup set; changes no file (it does
 #                               take the sync lock, so it waits while another sync runs).
 #   -RootOverride <dir>         tests only: <dir>\claude, <dir>\drive and <dir>\git replace the real paths.
@@ -145,7 +149,7 @@ param(
     [string]$TriageDecide,
 
     [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
-    [ValidateSet("skip", "backup", "retired")]
+    [ValidateSet("skip", "backup")]
     [string]$As,
 
     [Parameter(Mandatory = $true, ParameterSetName = 'Triage')]
@@ -319,7 +323,7 @@ function Save-Baseline {
 function Get-AllManagedFiles {
     $all = @()
     foreach ($pair in $FileMap) {
-        $all += [PSCustomObject]@{ Claude = $pair.Claude; Drive = $pair.Drive; Git = $pair.Git; HookCode = [bool]$pair.HookCode }
+        $all += [PSCustomObject]@{ Claude = $pair.Claude; Drive = $pair.Drive; Git = $pair.Git }
     }
     foreach ($pair in $DirMap) {
         if (Test-Path -LiteralPath $pair.Claude) {
@@ -375,16 +379,6 @@ function Invoke-NonDestructivePull {
         if ($Discard) {
             Copy-Item -LiteralPath $e.Drive -Destination $e.Claude -Force
             $Baseline[$e.Claude] = $driveHash
-            continue
-        }
-
-        if ($null -eq $localHash -and $e.HookCode -and $null -ne $baselineHash -and $driveHash -eq $baselineHash) {
-            # GEN-460: hook code this PC already had (it has a baseline entry) and that is unchanged on
-            # Drive since, but is now missing here -- deleted on this PC. Don't silently bring it back.
-            $rel = "hooks\" + (Split-Path $e.Claude -Leaf)
-            Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' was deleted on this PC but is still on Drive, so it was not pulled back. " +
-                "Claude: if it was removed on purpose, keep it out with: " + (Get-TriageCommandText -RelPath $rel -Choices 'retired') +
-                " -- if not, ask Erez whether to restore it.")
             continue
         }
 
@@ -568,11 +562,14 @@ function Read-TriageFile {
             $obj = $raw | ConvertFrom-Json
             if ($null -eq $obj -or $null -eq $obj.PSObject.Properties['decisions']) { throw "no 'decisions' list" }
             foreach ($d in @($obj.decisions)) {
-                if ($null -eq $d -or -not $d.path -or @('skip', 'backup', 'retired') -notcontains [string]$d.decision) { throw "malformed entry" }
+                if ($null -eq $d -or -not $d.path -or @('skip', 'backup') -notcontains [string]$d.decision) { throw "malformed entry" }
                 $key = ConvertTo-TriageKey ([string]$d.path)
                 # A path that normalizes to nothing, or carries a drive/stream colon, is never one this
                 # script wrote; reject the file rather than let a later path call throw mid-sync.
                 if (-not $key -or $key.Contains(':')) { throw "entry with an unusable path" }
+                # PowerShell 7's ConvertFrom-Json turns ISO dates into DateTime; keep the ISO string form
+                # the newest-wins comparisons in Merge-TriageMaps rely on.
+                if ($d.date -is [datetime]) { $d.date = $d.date.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') }
                 $result.Map[$key] = $d
             }
         }
@@ -630,12 +627,30 @@ function Get-BackupRefusal {
         return "the name must be plain letters, digits, dot, dash, underscore or space, not ending in a dot or space"
     }
     if ($Rel -match '^hooks\\' -and (Test-IsHookCodeName $leaf)) { return "hook code is backed up automatically" }
+    if ($Rel -ieq $TriageFileName) { return "the decisions file is synced by its own merge" }
     foreach ($pat in @('.credentials*', '*credential*', '*token*', '*secret*', '*password*', '*.key', '*.pem', '*.pfx', '*.p12')) {
         if ($leaf -like $pat) { return "its name looks like a credential file ($pat)" }
     }
     if (Test-MatchesAnyPattern $leaf $BackupIgnorePatterns) { return "its name is on the per-machine ignore list" }
+    # On/off and state switches must never spread to other PCs: a pulled-back switch would silently turn
+    # a guard off (or a lock open) on every PC.
+    # Our switches are named with a marker extension (<hook>.off) or as a dotfile with no extension
+    # (.config-unlock, .skip-loggate); real shared config always has an extension.
+    $dot = $leaf.LastIndexOf('.')
+    if ($dot -gt 0 -and $MarkerExts -contains $leaf.Substring($dot + 1).ToLowerInvariant()) { return "its extension marks an on/off or state switch, which is per-machine" }
+    if ($dot -eq 0) { return "a dotfile with no extension is a marker or switch, which is per-machine" }
     $full = Join-Path $ClaudeBase $Rel
-    if ((Test-Path -LiteralPath $full -PathType Leaf) -and (Get-Item -LiteralPath $full).Length -gt 1MB) { return "it is over 1 MB" }
+    if (Test-Path -LiteralPath $full -PathType Container) { return "it is a folder, and only a single file can be backed up this way" }
+    if (Test-Path -LiteralPath $full -PathType Leaf) {
+        $len = (Get-Item -LiteralPath $full).Length
+        if ($len -eq 0) { return "it is empty, which makes it a marker or switch, not shared config" }
+        if ($len -gt 1MB) { return "it is over 1 MB" }
+    }
+    # The Drive copy is what To-Claude would pull onto this PC: hold it to the same switch test.
+    $driveCopy = Join-Path $DriveBase "triage-backup\$Rel"
+    if ((Test-Path -LiteralPath $driveCopy -PathType Leaf) -and (Get-Item -LiteralPath $driveCopy).Length -eq 0) {
+        return "its Drive copy is empty, which makes it a marker or switch, not shared config"
+    }
     return $null
 }
 
@@ -653,7 +668,7 @@ function ConvertTo-TriageJson {
         }
     }
     $doc = [PSCustomObject][ordered]@{
-        note      = "Backup-triage decisions for sync.ps1 (GEN-460). Change with: sync.ps1 -TriageDecide '<path>' -As skip|backup|retired -Reason '<why>'"
+        note      = "Backup-triage decisions for sync.ps1 (GEN-460). Change with: sync.ps1 -TriageDecide '<path>' -As skip|backup -Reason '<why>'"
         decisions = $list
     }
     return ($doc | ConvertTo-Json -Depth 5)
@@ -761,6 +776,9 @@ function Invoke-TriageDecide {
     } else {
         foreach ($seg in $rel.Split('\')) {
             if ($seg -eq '' -or $seg -eq '.' -or $seg -eq '..') { return (& $refuse "'$RawPath' has an empty, '.' or '..' part.") }
+            # Windows strips a trailing dot or space on open, so the check below would find a file whose
+            # real name differs from the key recorded, and the coverage check would never match it.
+            if ($seg -match '[. ]$') { return (& $refuse "'$RawPath' has a part ending in a dot or space; use the file's real name.") }
         }
         $full = Join-Path $ClaudeBase $rel
         if ($key -eq (ConvertTo-TriageKey $TriageFileName)) { return (& $refuse "the decisions file itself is backed up already.") }
@@ -770,39 +788,8 @@ function Invoke-TriageDecide {
         }
         $isHookCode = ($rel -match '^hooks\\[^\\]+$') -and (Test-IsHookCodeName (Split-Path $rel -Leaf))
 
-        if ($Decision -eq 'retired') {
-            if (-not $isHookCode) { return (& $refuse "'retired' is only for a hook's code (hooks\<name>.js or .ps1).") }
-            if (Test-Path -LiteralPath $full) { return (& $refuse "'$rel' is still on this PC; delete it first (hook code on this PC is always backed up).") }
-            if (-not (Test-Path -LiteralPath (Join-Path $DriveBase $rel) -PathType Leaf)) { return (& $refuse "'$rel' is not on Drive either, so there is nothing to keep from coming back.") }
-            # A hook that settings.json registers, or that another hook starts (e.g. a .ps1 run by a .js
-            # hook), is live: retiring it would stop it reaching a fresh PC while something there still
-            # tries to run it (e.g. a safety gate silently missing).
-            $leafName = Split-Path $rel -Leaf
-            $usedBy = @()
-            $mentionSources = @((Join-Path $ClaudeBase 'settings.json'), (Join-Path $ClaudeBase 'settings.local.json'))
-            $localHooksDir = Join-Path $ClaudeBase 'hooks'
-            if (Test-Path -LiteralPath $localHooksDir) {
-                $mentionSources += @(Get-ChildItem -LiteralPath $localHooksDir -File -Force | Where-Object { Test-IsHookCodeName $_.Name } | ForEach-Object { $_.FullName })
-            }
-            foreach ($src in $mentionSources) {
-                if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { continue }
-                try { $srcText = [IO.File]::ReadAllText($src, [Text.Encoding]::UTF8) } catch { return (& $refuse "'$src' could not be read to check that '$leafName' is no longer used.") }
-                # Whole-name match: 'guard.js' must not match inside 'notion-guard.js' or 'myguard.json'.
-                $namePattern = '(?<![A-Za-z0-9._-])' + [regex]::Escape($leafName) + '(?![A-Za-z0-9_-])'
-                if ([regex]::IsMatch($srcText, $namePattern, [Text.RegularExpressions.RegexOptions]::IgnoreCase)) { $usedBy += (Split-Path $src -Leaf) }
-            }
-            if ($usedBy.Count -gt 0) {
-                return (& $refuse "'$leafName' is still mentioned by $($usedBy -join ', '), so the hook looks in use; remove those references first.")
-            }
-        } elseif ($isHookCode) {
-            # For hook code the only other decision is lifting a retirement ('backup' = "treat as normal
-            # hook code again"), recorded explicitly so the newest-wins merge spreads it to every PC.
-            if ($Decision -ne 'backup' -or -not ($prior -and [string]$prior.decision -eq 'retired')) {
-                return (& $refuse "hook code is always backed up; to stop a removed hook coming back, delete it here and use -As retired (and -As backup only lifts an existing retirement).")
-            }
-            if (-not (Test-Path -LiteralPath $full -PathType Leaf) -and -not (Test-Path -LiteralPath (Join-Path $DriveBase $rel) -PathType Leaf)) {
-                return (& $refuse "'$rel' is neither on this PC nor on Drive, so there is no hook to bring back.")
-            }
+        if ($isHookCode) {
+            return (& $refuse "hook code (hooks\<name>.js or .ps1) is always backed up and takes no decision; to remove a hook for good, delete it on every PC and on Drive. A scratch script kept out of the backup belongs outside hooks\ or is named tmp_*.")
         } else {
             if (-not (Test-Path -LiteralPath $full)) { return (& $refuse "'$rel' does not exist under $ClaudeBase.") }
             if ($Decision -eq 'skip') {
@@ -814,8 +801,9 @@ function Invoke-TriageDecide {
                 # it can never land on a tooling file). Every refusal below keeps something private,
                 # per-machine or oversized out of Drive and git.
                 if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return (& $refuse "'backup' is for a single file; a folder can only be skipped.") }
-                $why = Get-BackupRefusal -Rel $rel
-                if ($why) { return (& $refuse "'$rel' cannot be backed up: $why.") }
+                # Not $why: PowerShell names ignore case, so that would overwrite the $Why parameter.
+                $backupRefusal = Get-BackupRefusal -Rel $rel
+                if ($backupRefusal) { return (& $refuse "'$rel' cannot be backed up: $backupRefusal.") }
                 try { $defs = Get-SecretPatternDefs } catch { return (& $refuse "the secret patterns could not be loaded ($($_.Exception.Message)), so the file cannot be checked.") }
                 try { $text = [IO.File]::ReadAllText($full, [Text.Encoding]::UTF8) } catch { return (& $refuse "'$rel' could not be read for the secret check.") }
                 $hit = Find-SecretMatch -Text $text -Defs $defs
@@ -898,7 +886,14 @@ $BackupIgnorePatterns = @('backup-sweep-state','backups','cache','debug','downlo
                         'backup-sweep-surfacer-cursor.json',
                         '.last-update-result.json','remote-settings.json.synced-at',   # Claude Code's own update result / settings-fetch timestamp, rewritten automatically (2026-10-18)
                         'policy-limits.json.signature*.json','remote-settings.json.signature*.json',   # Claude Code's signature files for the two ignored files above, rewritten automatically (2026-10-21)
-                        '.claude.json')   # stray first-start stub (machine/user IDs only), seen 2026-10-14; real config is the sibling ~/.claude.json
+                        '.claude.json',   # stray first-start stub (machine/user IDs only), seen 2026-10-14; real config is the sibling ~/.claude.json
+                        '.config-unlock',   # break-glass switch (GEN-462): must never be backed up or pulled to another PC
+                        '.skip-loggate')    # compact-gate break-glass switch read by precompact-loggate.js: same reason
+
+# A hook's own state/switch files are named <hook name>.<one of these> (e.g.
+# reviewer-verdict-guard.accepted / .off / .testonly, GEN-812). Skipped by rule, and never accepted
+# as a 'backup' decision anywhere (Get-BackupRefusal).
+$MarkerExts = @('accepted','off','on','testonly','disabled','bak','orig')
 
 # ---- Backup coverage check (GEN-140; triage GEN-460) -------------------------
 # On every From-Claude run, sort any config-relevant file or folder that is neither in
@@ -917,9 +912,6 @@ function Test-BackupCoverage {
         # Siblings of .claude -- see the NOT-synced header note for the .claude.json rationale.
         # Wildcards allowed: .claude.json.tmp.* are the harness's transient atomic-write temp files.
         $IgnoreSiblings = @('.claude.json','.claude.json.backup','.claude.json.tmp.*')
-        # A hook's own state/switch files are named <hook name>.<one of these> (e.g.
-        # reviewer-verdict-guard.accepted / .off / .testonly, GEN-812).
-        $MarkerExts = @('accepted','off','on','testonly','disabled','bak','orig')
 
         $mapFiles = @($FileMap | ForEach-Object { $_.Claude })
         $mapDirs  = @($DirMap  | ForEach-Object { $_.Claude })
@@ -936,7 +928,8 @@ function Test-BackupCoverage {
         foreach ($d in (Get-ChildItem -LiteralPath $ClaudeBase -Directory -Force)) {
             $covered = $false
             foreach ($p in ($mapFiles + $mapDirs)) {
-                if ($p -eq $d.FullName -or $p -like (Join-Path $d.FullName '*')) { $covered = $true; break }
+                # Escaped: a '[' in a folder name would otherwise be an invalid wildcard and throw.
+                if ($p -eq $d.FullName -or $p -like ([System.Management.Automation.WildcardPattern]::Escape($d.FullName) + '\*')) { $covered = $true; break }
             }
             if ($covered -or (Test-MatchesAnyPattern $d.Name $IgnorePatterns)) { continue }
             $prior = $Decisions[(ConvertTo-TriageKey $d.Name)]
@@ -1033,14 +1026,20 @@ function Get-PushRefusal {
 $checkPushes = ($Direction -eq 'From-Claude' -or $CoverageOnly)
 
 # Rule 1: every hook's code on EITHER side is in the backup set (so a To-Claude pull restores a
-# hook added on another PC). The exceptions: a 'retired' hook that is no longer on this PC (keeps
-# a deliberately removed hook from being pulled back), and, when pushing, a hook file that is over
-# 1 MB or matches a secret pattern (left out of this push with a warning, like any other file
-# added without a person looking at it).
+# hook added on another PC). The one exception: when pushing, a hook file that is over 1 MB or
+# matches a secret pattern is left out of this push with a warning, like any other file added
+# without a person looking at it.
 $hookCodeNames = [ordered]@{}
 foreach ($hd in @((Join-Path $ClaudeBase 'hooks'), (Join-Path $DriveBase 'hooks'))) {
     if (-not (Test-Path -LiteralPath $hd)) { continue }
-    foreach ($f in (Get-ChildItem -LiteralPath $hd -File -Force)) {
+    # A read error here (e.g. Drive mid-reconnect) must not end the whole sync, even under a caller's
+    # $ErrorActionPreference = 'Stop': warn and carry on with what could be listed.
+    $listErrors = $null
+    $hookFiles = @(Get-ChildItem -LiteralPath $hd -File -Force -ErrorAction SilentlyContinue -ErrorVariable listErrors)
+    if ($listErrors -and $listErrors.Count -gt 0) {
+        Write-Warning "BACKUP-TRIAGE: could not fully list $hd ($($listErrors[0].Exception.Message)); hooks found only there are left out of this run."
+    }
+    foreach ($f in $hookFiles) {
         if ((Test-IsHookCodeName $f.Name) -and -not $hookCodeNames.Contains($f.Name.ToLowerInvariant())) {
             $hookCodeNames[$f.Name.ToLowerInvariant()] = $f.Name
         }
@@ -1049,17 +1048,7 @@ foreach ($hd in @((Join-Path $ClaudeBase 'hooks'), (Join-Path $DriveBase 'hooks'
 foreach ($name in $hookCodeNames.Values) {
     $rel = "hooks\" + $name
     $claudePath = Join-Path $ClaudeBase $rel
-    $d = $Triage[(ConvertTo-TriageKey $rel)]
     $isLocal = Test-Path -LiteralPath $claudePath -PathType Leaf
-    if ($d -and [string]$d.decision -eq 'retired' -and -not $isLocal) { continue }
-    if ($d -and [string]$d.decision -eq 'retired' -and $isLocal -and $Direction -eq 'From-Claude') {
-        # Retired, yet present here. That is either a PC that still holds the old copy (the normal case
-        # after another PC retired it) or a hook deliberately re-created. A file being present cannot
-        # tell the two apart, so nothing is inferred: retirement stays until it is lifted explicitly.
-        Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' is marked retired but is on this PC. Claude: if this PC just still has the old copy, delete it here; " +
-            "if the hook was re-created on purpose, lift the retirement with: " + (Get-TriageCommandText -RelPath $rel -Choices 'backup') +
-            " -- ask Erez if it is unclear which.")
-    }
     if ($checkPushes -and $isLocal) {
         $why = Get-PushRefusal -Path $claudePath
         if ($why) {
@@ -1080,11 +1069,9 @@ foreach ($k in @($Triage.Keys | Sort-Object)) {
     $rel = ([string]$d.path -replace '/', '\').TrimStart('\')
     $claudePath = Join-Path $ClaudeBase $rel
     if ($StaticBackupFiles -contains $claudePath) { continue }
-    # On hook code, 'backup' only records a lifted retirement; rule 1 already backs the hook up.
-    if ($rel -match '^hooks\\[^\\]+$' -and (Test-IsHookCodeName (Split-Path $rel -Leaf))) { continue }
     $refusal = Get-BackupRefusal -Rel $rel
     if ($refusal) {
-        Write-Warning "BACKUP-TRIAGE: ignored the 'backup' decision for '$rel' in $TriageFileName -- $refusal. Record it as skip with: $(Get-TriageCommandText -RelPath $rel -Choices 'skip')"
+        Write-Warning "BACKUP-TRIAGE: ignored the 'backup' decision for '$rel' in $TriageFileName -- $refusal. Delete that entry from $TriageFileName both here and on Drive (or, if the file exists here and is not hook code, record it as skip with: $(Get-TriageCommandText -RelPath $rel -Choices 'skip'))."
         continue
     }
     if ($checkPushes) {
@@ -1124,7 +1111,6 @@ if ($Direction -eq "To-Claude") {
     # From-Claude (local -> Drive) stays a straightforward overwrite: this machine's
     # local state is always the source of truth when pushing. Cross-machine
     # divergence on the Drive side is out of scope here (GEN-287).
-    $Baseline = Load-Baseline -Path $BaselineFile
     foreach ($pair in $FileMap) {
         $src = $pair.Claude
         $dst = $pair.Drive
@@ -1132,15 +1118,10 @@ if ($Direction -eq "To-Claude") {
         # -LiteralPath (GEN-460): rule-built entries carry real file names, which may hold [ ] -- a
         # -Path test/copy would treat those as wildcards and could copy a DIFFERENT file.
         if (-not (Test-Path -LiteralPath $src)) {
-            if ($pair.HookCode -and $null -ne $Baseline[$src]) {
-                # This PC had the hook (baseline entry) and it is gone: deleted here.
-                $rel = "hooks\" + (Split-Path $src -Leaf)
-                Write-Warning ("BACKUP-TRIAGE NEEDED: hook '" + $rel + "' was deleted on this PC but is still on Drive. Claude: if it was removed on purpose, " +
-                    "keep it from being pulled back with: " + (Get-TriageCommandText -RelPath $rel -Choices 'retired') +
-                    " -- if not, ask Erez whether to restore it.")
-            } elseif ($pair.HookCode) {
-                # Never on this PC: a hook added on another PC. The next To-Claude sync brings it here.
-                Write-Output "Hook on Drive only (added on another PC; the next To-Claude sync brings it here): $src"
+            if ($pair.HookCode) {
+                # On Drive but not here: added on another PC, or deleted on this one. Either way the next
+                # To-Claude sync brings it here; removing a hook for good means deleting it on every PC and on Drive.
+                Write-Output "Hook on Drive only (the next To-Claude sync brings it here; to remove it for good, delete it on every PC and on Drive): $src"
             } else {
                 Write-Warning "Source not found, skipping: $src"
             }
@@ -1175,6 +1156,7 @@ if ($Direction -eq "To-Claude") {
 
     # Refresh the baseline for every file we just pushed, so a subsequent To-Claude
     # pull on this machine correctly sees them as "unedited since last sync".
+    $Baseline = Load-Baseline -Path $BaselineFile
     foreach ($e in (Get-AllManagedFiles)) {
         $h = Get-FileHashSafe -Path $e.Claude
         if ($null -ne $h) { $Baseline[$e.Claude] = $h }

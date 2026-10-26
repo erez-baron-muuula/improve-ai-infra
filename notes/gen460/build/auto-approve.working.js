@@ -498,19 +498,20 @@ function isSafeSyncFromClaude(command) {
   return re.test(command.trim());
 }
 
-// GEN-460: exact-match allow for recording ONE backup-triage decision (sync.ps1 -TriageDecide), so a
-// session can sort a new file the sync flagged without a permission prompt reaching Erez. This only
-// proves the command is that single call, in that argument order, and nothing else; sync.ps1 itself
-// validates the decision (a path inside .claude or the one '..\.claude<name>' sibling form; for
-// 'backup', plain-name, credential-name, ignore-list, size and secret-pattern refusals, and the file
-// goes to its own triage-backup\ folder on Drive). Same guards as
+// GEN-460: exact-match allow for recording ONE backup-triage 'skip' decision (sync.ps1 -TriageDecide),
+// so a session can set aside a new file the sync flagged without a permission prompt reaching Erez.
+// Only 'skip' is allowed here: a 'backup' sends a file to Drive and git and onto every other PC, so it
+// keeps its normal permission prompt (a state or switch file spread that way would change how hooks
+// behave elsewhere). This only proves the command is that single call, in that argument order, and
+// nothing else; sync.ps1 itself validates the decision (a path inside .claude or the one
+// '..\.claude<name>' sibling form). Same guards as
 // isSafeSyncFromClaude: printable ASCII only, and values free of quotes, backtick and $ (no
 // PowerShell interpolation or substitution), plus % and, in the path, ':' (no drive-rooted path).
 // No `m` flag: ^ and $ anchor the WHOLE string, so an embedded newline cannot smuggle a second command.
 function isSafeSyncTriageDecide(command) {
   if (typeof command !== 'string') return false;
   if (/[^\x20-\x7E]/.test(command)) return false;
-  const re = /^&\s+(['"])G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync\.ps1\1\s+-TriageDecide\s+(['"])[^'"`$%:]{1,200}\2\s+-As\s+(?:skip|backup|retired)\s+-Reason\s+(['"])[^'"`$%]{1,300}\3\s*$/i;
+  const re = /^&\s+(['"])G:\\My Drive\\AI Projects\\_Tooling\\Claude\\sync\.ps1\1\s+-TriageDecide\s+(['"])[^'"`$%:]{1,200}\2\s+-As\s+skip\s+-Reason\s+(['"])[^'"`$%]{1,300}\3\s*$/i;
   return re.test(command.trim());
 }
 
