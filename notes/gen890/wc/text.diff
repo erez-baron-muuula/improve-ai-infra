@@ -1,0 +1,120 @@
+diff --git a/C:/Users/Erez/.claude/skills/config-health/SKILL.md b/notes/gen890/wc/text/config-health/SKILL.md
+index 0663d99..5fb7e07 100644
+--- a/C:/Users/Erez/.claude/skills/config-health/SKILL.md
++++ b/notes/gen890/wc/text/config-health/SKILL.md
+@@ -18,7 +18,7 @@ The deterministic parts run in the helper script `config-health-scan.ps1` (same
+
+## Step 1 — Determine mode, scope, and the session ID
+
+- If invoked by `/wrap`: **mode = auto**. Scope = the global `CLAUDE.md`, the active project's `CLAUDE.md`, AND the settings-health weekly nudge {+and the weekly size check+} (see "Settings-health dimension" below).
+- If invoked directly with no argument: **mode = full**, and ask the user exactly one question and wait: "Which should I sweep — global `CLAUDE.md`, a specific project (which one?), `all` of those, or `settings` (the permission files)?" Do not default.
+- If invoked directly with a target (`global` / a project name / `all`): **mode = full** on that target.
+- If invoked directly with the target `settings`: run the on-demand settings cleanup (see "Settings-health dimension" below) instead of the `CLAUDE.md` steps.
+@@ -90,6 +90,9 @@ After the `CLAUDE.md` auto checks, run once: the helper with `-Action settings-n
+
+This fires at most ~once per 7 days regardless of how often `/wrap` runs (the helper gates on the state file and resets it whenever it is due). The `keepListOld` reminder is drift-proof: it is driven by the OLDEST keep-list entry's stored date (default re-audit threshold 90 days), not the file's modification time, so a recent record for one entry can't mask a stale older one. The expensive verification runs only in the on-demand mode below.
+
+{+### Auto (at `/wrap`) — the weekly size check (GEN-890)+}
+{+After the settings nudge, follow `size-weekly.md` in this folder. It is this skill's one exception to read-only: it files and raises size tickets and writes its own state file.+}
+
+### On-demand (`/config-health settings`) — the cleanup engine
+Run the helper with `-Action scan-settings`. Handle each bucket it returns:
+
+diff --git a/C:/Users/Erez/.claude/skills/wrap/SKILL.md b/notes/gen890/wc/text/wrap/SKILL.md
+index c658a06..4e02349 100644
+--- a/C:/Users/Erez/.claude/skills/wrap/SKILL.md
++++ b/notes/gen890/wc/text/wrap/SKILL.md
+@@ -9,7 +9,7 @@ Run as the LAST actions of a session, after all other work is complete. Execute
+
+**How to use this runbook.** Each step lists what must not be skipped; where it says "Before doing this step, read `<file>`", open that file first on every run (once per wrap, again after a compaction). Editing this skill: keep this file at 12,000 characters or fewer and under 500 lines; new detail goes in a reference file.
+
+**Reporting rule (every step).** A step with nothing actionable gets only a ✓ in the Step 7 roll-up, no prose. A step that errored, was skipped, warned, or could not tell whether it had anything to report gets ✗, ⚠ or "skipped" plus a one-line reason, never a plain ✓. Anything a step reports goes under its own sub-heading in the "📌 For you" block and forces the full Step 7 report; a HISTORY.md line its file names goes in the Step 4 entry. Readouts never write their own logs or markers; acting on one is a follow-up, not part of the wrap (Step 3c's filing {+and the weekly size check's tickets and state file+} excepted).
+
+## Step 0 — Determine the active project
+- Identify the active project from the working directory and from which project CLAUDE.md was read this session (projects are listed in the global CLAUDE.md Projects Directory table).
+diff --git a/C:/Users/Erez/.claude/skills/wrap/step1-capture.md b/notes/gen890/wc/text/wrap/step1-capture.md
+index 4d76e33..4040bda 100644
+--- a/C:/Users/Erez/.claude/skills/wrap/step1-capture.md
++++ b/notes/gen890/wc/text/wrap/step1-capture.md
+@@ -3,9 +3,9 @@
+Reference file for the `/wrap` runbook (`C:/Users/Erez/.claude/skills/wrap/SKILL.md`), which sends you here at Step 1. The runbook keeps every step's order and its non-negotiables; this file holds the full detail, moved here word for word (a pointer to text now in another file names that file).
+
+## Step 1 — Capture unresolved items (all sessions)
+Auto-file every unresolved item this session surfaced as its own Notion Team-Tasks ticket, for future discussion. Do NOT ask Erez to weigh in on, approve, or apply any of them during the wrap — file silently; the Step 7 report's past-tense list of what was filed is required and is not "discussing" them. This step runs in every session (it is not project-gated; a global-only session still runs it — it is not one of the project-specific steps Step 0 skips). It **overrides, for capture-only [-filing and-]{+filing,+} for the on-demand ref-file appends in sub-step [-(3),**-]{+(3), and for the weekly size check's ticket filing and raising (config-health `size-weekly.md`),**+} the standing rules "Before creating or materially changing a ticket in a tracker, draft the full proposal" and "On \"apply learnings\"" (their approval-before-filing gates) — it does **not** override approval for applying a learning to any other home (`CLAUDE.md`, a skill, a hook's code; those still need `/check` + Erez's approval in a future session), and it does not change the assignee logic in sub-step 7.
+
+**Every Team-Tasks write this step and Step 3c make goes through the ticket-quality gate (GEN-508), UNATTENDED (GEN-702).** The gate hard-blocks every Team-Tasks create / duplicate / move / substantive-body edit unless a single-use pass minted by an independent review exists, so each write here — the create in sub-step 7 (and, if the GEN-145 symptom appears, its in-place body repair), the near-duplicate body append in sub-step 6, and Step 3c's create and append — is filed by running the `/vet-ticket` machinery: **reference that skill's flow, do not re-specify it here.** Per item, run it unattended: draft the payload — set `Urgency`/`Gain ratio`/`Priority` per `/vet-ticket` Step 1, which treats a create and a material body append alike (both are material, so both derive these fields) → get its `contentHash` per `/vet-ticket` Step 1 → spawn ONE independent `check-reviewer` against the ticket bar (`/vet-ticket` Step 2) → resolve any notes, then write the ticket-record (`/vet-ticket` Steps 3–4), with `source` set to `wrap-step1` for this step's writes and `wrap-step3c` for Step 3c's → run the `/vet-ticket` Step 7 evidence precondition → mint the single-use ticket pass → issue the Notion write → re-fetch and confirm it landed (`/vet-ticket` Step 8). **No Erez-facing card:** Steps 1 and [-3c-]{+3c, and the weekly size check (which uses `source` `wrap-step1`),+} carry the standing override exempting them from the draft-for-approval pause, so `/vet-ticket` Step 5's card is skipped and the mint proceeds silently; the Step 6 waive lane needs Erez and is therefore unavailable here. `check-reviewer` has no Notion tool, so the near-duplicate search is NOT its job on this lane — sub-steps 5–6 already did it before drafting; the reviewer judges only ticket quality against its bar.
+
+**Bounded — an unattended filing must never loop or hang the wrap.** If the reviewer does not return a clean PASS, amend the drafted payload per its findings and re-review with a fresh `check-reviewer` (re-hashing first) — but cap this at **2 further review rounds** (count every round that does not end in a clean PASS, not only literal REVISE verdicts). If the cap is reached, OR the item is blocked on information only Erez holds, OR any step of the machinery hard-errors (a non-zero `--ticket-hash` exit, a mint or evidence-precondition failure, a post-mint apply failure such as `consume-failed` or a Notion API error, a sidecar/transcript read failure — illustrative, not exhaustive: any hard error stops it) → do NOT force-file and do NOT loop. Leave the item unfiled, surface it in the Step 7 report **with enough substance to act on later**, and record it durably so a gate-blocked capture is not lost — in the Step 4 HISTORY.md entry (per Step 4 sub-step 2) when this wrap logs a project, or, when the wrap logs no project so Step 4 is skipped (Step 0), in a dated recovery file `C:\Users\Erez\.claude\wrap-surfaced-not-filed-<timestamp>.md` whose path the Step 7 report then names (Step 1 runs in every session, so its durability is unconditional too) — for a later manual `/vet-ticket`. Once a recovery file's items have all been filed, rename it to `wrap-surfaced-filed-<same timestamp>.md` rather than deleting it; Step 3i reports recovery files not yet renamed. **A surfaced-not-filed item counts as a note the steps require surfacing**, so it forces the full Step 7 report (never the all-clean fast-path). (Same posture as sub-step 7's GEN-145 handling: once, do not loop.)
+
+diff --git a/C:/Users/Erez/.claude/skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md b/notes/gen890/wc/text/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md
+index 6f5604b..cba5b5f 100644
+--- a/C:/Users/Erez/.claude/skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md
++++ b/notes/gen890/wc/text/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md
+@@ -1,5 +1,7 @@
+# Secure GEN-NNN lookup — design v2 (post-review)
+
+{+**Contents:** Status / handoff · Goal · Verified facts · Two true constraints · Recommended design (secret store, bootstrap, lookup, zero prompts, touching the store less) · Honest residual risks · What to update once settled · DB-id derivation+}
+
+## STATUS / HANDOFF (read first)
+DESIGN COMPLETE and CONVERGED via /check (3-lens panel, 2 rounds, all PASS round 2). BUILT and live as
+`~/.claude/scripts/notion-ticket-lookup.ps1` (auth header via a temp curl config file since GEN-639).
+diff --git a/C:/Users/Erez/.claude/skills/wrap/readouts-3d-3j.md b/notes/gen890/wc/text/wrap/readouts-3d-3j.md
+index 48cfa14..361a5bc 100644
+--- a/C:/Users/Erez/.claude/skills/wrap/readouts-3d-3j.md
++++ b/notes/gen890/wc/text/wrap/readouts-3d-3j.md
+@@ -1,5 +1,7 @@
+# /wrap Steps 3d to 3j — the readouts: full procedure
+
+{+**Contents:** 3d marker-liveness probe · 3e grounding-flag readout · 3f model-list readout · 3g search-first reminder readout · 3h verdict-guard readout · 3i ticket-gate readout · 3j release-review readout+}
+
+Reference file for the `/wrap` runbook (`C:/Users/Erez/.claude/skills/wrap/SKILL.md`), which sends you here at Steps 3d to 3j. The runbook keeps every step's order and its non-negotiables; this file holds the full detail, moved here word for word (a pointer to text now in another file names that file).
+
+## Step 3d — Ticket-gate marker-liveness probe (GEN-508 #6)
+diff --git a/C:/Users/Erez/.claude/skills/vet-ticket/record-card-mint.md b/notes/gen890/wc/text/vet-ticket/record-card-mint.md
+index 6f03e9e..f90edd1 100644
+--- a/C:/Users/Erez/.claude/skills/vet-ticket/record-card-mint.md
++++ b/notes/gen890/wc/text/vet-ticket/record-card-mint.md
+@@ -1,5 +1,7 @@
+# /vet-ticket — Steps 3 to 7: notes, record, card, mint, waive, evidence check
+
+{+**Contents:** Step 3 resolve every note · Step 4 write the ticket-record · Step 5 show the card, then mint · Step 6 the waive lane · Step 7 evidence precondition+}
+
+Full detail for runbook (`SKILL.md`) Steps 3 to 7. Read the section for the step you are on before
+doing it, every run. Step 7 executes immediately before the Step 5 mint write.
+
+diff --git a/C:/Users/Erez/.claude/skills/vet-code/reviews.md b/notes/gen890/wc/text/vet-code/reviews.md
+index 8582af6..e69e295 100644
+--- a/C:/Users/Erez/.claude/skills/vet-code/reviews.md
++++ b/notes/gen890/wc/text/vet-code/reviews.md
+@@ -1,5 +1,7 @@
+# /vet-code — model check, the two code reviews, and what to attest
+
+{+**Contents:** Step 0 gate self-check · Step 3 code review (two passes) · Step 5 what to attest · Step 6 Pass B model check+}
+
+Reference for `/vet-code` Steps 0, 3, 5 and 6 (the Pass B model check). The runbook is
+`C:/Users/Erez/.claude/skills/vet-code/SKILL.md`; the shared record/mint/apply mechanics are in
+`C:/Users/Erez/.claude/skills/vet-code/gate-mechanics.md`.
+diff --git a/C:/Users/Erez/.claude/skills/vet-code/live-verify.md b/notes/gen890/wc/text/vet-code/live-verify.md
+index 8e5bc1e..e2d0c91 100644
+--- a/C:/Users/Erez/.claude/skills/vet-code/live-verify.md
++++ b/notes/gen890/wc/text/vet-code/live-verify.md
+@@ -1,5 +1,7 @@
+# /vet-code — live-verify (Steps 4, 4a), install check (Step 8) and the antivirus re-check (Step 8a)
+
+{+**Contents:** Step 4 live-verify (input realism; pass-consumption assertion) · Step 4a antivirus-survival check · Step 8 verify installed · Step 8a arm the checkpoint-2 re-check+}
+
+Reference for `/vet-code` Steps 4, 4a, 8 and 8a. The runbook is
+`C:/Users/Erez/.claude/skills/vet-code/SKILL.md`. Why these checks exist (incident history, honest
+limits) is in `C:/Users/Erez/.claude/skills/vet-code/background.md`.
+diff --git a/C:/Users/Erez/.claude/skills/vet-code/gate-mechanics.md b/notes/gen890/wc/text/vet-code/gate-mechanics.md
+index 3776b32..5a0d7a6 100644
+--- a/C:/Users/Erez/.claude/skills/vet-code/gate-mechanics.md
++++ b/notes/gen890/wc/text/vet-code/gate-mechanics.md
+@@ -1,5 +1,7 @@
+# Gate mechanics shared by /vet-code and /vet-rule
+
+{+**Contents:** Parameters · 1. The record · 2. Evidence precondition, then mint · 3. Apply · 4. Recovery · 5. Break-glass OPEN/CLOSE commands+}
+
+The record, evidence check, mint, apply, recovery and break-glass mechanics that `/vet-code` and
+`/vet-rule` both use. Each runbook names the step at which to read this file. A change to this file
+changes BOTH gates: run its `/check` against both runbooks and keep the table below true for both.

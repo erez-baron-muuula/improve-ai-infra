@@ -1,0 +1,26 @@
+{
+    "lastRun":  null,
+    "items":  {
+                  "c:\\users\\erez\\.claude\\hooks\\refs\\windows-mcp.md|hook-injected-text|characters":  {
+                      "pageId":  "4056e495-d07c-811e-b275-f4ad63af8bda",
+                      "ticketId":  "GEN-958",
+                      "filedValue":  9788,
+                      "filedUtc":  "2026-10-26T00:00:00Z",
+                      "escalated":  false
+                  },
+                  "c:\\users\\erez\\.claude\\skills\\shell-howto\\skill.md|skill-description-listing|readable":  {
+                      "pageId":  "3fd6e495-d07c-818b-a02f-ca6b58d4676d",
+                      "ticketId":  "GEN-897",
+                      "filedValue":  null,
+                      "filedUtc":  "2026-10-26T00:00:00Z",
+                      "escalated":  false
+                  },
+                  "c:\\users\\erez\\ai projects\\invoiceautomation\\claude.md|claude-md-lines|lines":  {
+                      "pageId":  "3fa6e495-d07c-81e3-9d55-d831637b1ab9",
+                      "ticketId":  "GEN-888",
+                      "filedValue":  257,
+                      "filedUtc":  "2026-10-26T00:00:00Z",
+                      "escalated":  false
+                  }
+              }
+}

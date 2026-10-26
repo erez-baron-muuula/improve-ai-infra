@@ -1,0 +1,316 @@
+diff --git a/notes/gen890/wc/rollback-config-health-scan.ps1 b/notes/gen890/wc/config-health-scan.ps1
+index 675cafc..3c9268c 100644
+--- a/notes/gen890/wc/rollback-config-health-scan.ps1
++++ b/notes/gen890/wc/config-health-scan.ps1
+@@ -26,6 +26,15 @@
+ #                               as if it were the real file. (GEN-893) Its sizeLines output gives
+ #                               one "size:" line per applicable limit, near a limit or not; with an
+ #                               -AsIfPath that exists, each line reads <now> -> <proposed>.
++#   -Action size-weekly      -> (GEN-890) weekly size check at /wrap: is it due (-SizeStateFile), and
++#                               which findings need a ticket; lists the linked tickets whose status
++#                               the caller must fetch from Notion. Writes nothing.
++#   -Action size-decide      -> (GEN-890) given those statuses (-TicketsJson), decide per finding:
++#                               file / link / escalate / skip / deferred / error. Writes nothing.
++#   -Action size-record      -> (GEN-890) save filed tickets, escalations and pruned keys from
++#                               -RecordJson into the state file; "completed" advances the weekly date.
++#   -Action mark-reviewed also reports the weekly size check overdue (ok:false, marker still
++#   written) when its state file is missing or its last run is -SizeWeeklyDays or more old.
+ #
+ # Command files (GEN-926): ~/.claude/commands/*.md (-CommandsDir) are measured like a skill's
+ # description (listing cap and portable note); the docs give commands the same frontmatter fields
+@@ -40,7 +49,7 @@
+ # All paths are parameters with live defaults so nothing time-varying is baked in.
+ 
+ param(
+-    [ValidateSet('detect-global', 'detect-project', 'scan', 'scan-settings', 'settings-nudge', 'keep-record', 'mark-reviewed', 'size-sweep', 'size-check')]
++    [ValidateSet('detect-global', 'detect-project', 'scan', 'scan-settings', 'settings-nudge', 'keep-record', 'mark-reviewed', 'size-sweep', 'size-check', 'size-weekly', 'size-decide', 'size-record')]
+     [string]$Action = 'scan',
+ 
+     [string]$Target,
+@@ -78,7 +87,17 @@ param(
+     [switch]$FullReaudit,
+     [string]$ScanResult,
+     [string]$KeepIndices,
+-    [string]$Nonce
++    [string]$Nonce,
++
++    # GEN-890 weekly size check params
++    [string]$ClaudeHome       = 'C:\Users\Erez\.claude',
++    [string]$SizeStateFile    = 'C:\Users\Erez\.claude\.size-sweep-state.json',
++    [int]$SizeWeeklyDays      = 7,
++    [int]$SizeEscalateDays    = 28,
++    [int]$SizeFileCap         = 3,
++    [string]$TicketsJson,
++    [string]$RecordJson,
++    [string]$AsOf
+ )
+ 
+ $ErrorActionPreference = 'Stop'
+@@ -236,6 +255,12 @@ function Invoke-MarkReviewed {
+     } catch {
+         return [pscustomobject]@{ ok = $false; action = 'mark-reviewed'; error = "could not write marker: $($_.Exception.Message)" }
+     }
++    # GEN-890: the weekly size check's overdue alarm. /wrap always runs this action last, and
++    # surfaces a non-ok result in one line, so a weekly check that silently stopped is noticed.
++    $overdue = Get-SizeWeeklyOverdue
++    if ($overdue) {
++        return [pscustomobject]@{ ok = $false; action = 'mark-reviewed'; marker = $GlobalMarkerFile; sha = $sha; markerWritten = $true; error = $overdue }
++    }
+     return [pscustomobject]@{ ok = $true; action = 'mark-reviewed'; marker = $GlobalMarkerFile; sha = $sha }
+ }
+ 
+@@ -1442,6 +1467,244 @@ function Invoke-SizeSweep {
+     return (New-SizeResult 'size-sweep' $ctx $findings $measured $null)
+ }
+ 
++# ============================================================================
++# Weekly size check (GEN-890). Runs from /wrap's config-health pass, at most once per
++# -SizeWeeklyDays. This script decides; the caller only reads ticket status from Notion,
++# files or raises tickets, and hands the outcome back to size-record. State file shape:
++#   { "lastRun": "yyyy-MM-dd" | null,
++#     "items": { "<finding key>": { pageId, ticketId, filedValue, filedUtc, escalated } } }
++# ============================================================================
++
++function Get-SizeAsOfDate {
++    if ($AsOf) { return ([datetime]::ParseExact($AsOf, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture)).Date }
++    return (Get-Date).Date
++}
++
++function Read-SizeState {
++    if (-not (Test-Path -LiteralPath $SizeStateFile -PathType Leaf)) { return $null }
++    $raw = Get-Content -Raw -LiteralPath $SizeStateFile -Encoding UTF8
++    $o = $raw | ConvertFrom-Json
++    $items = @{}
++    if ($o.items) { foreach ($p in $o.items.PSObject.Properties) { $items[$p.Name] = $p.Value } }
++    $last = $null
++    if ($o.lastRun) { $last = [datetime]::ParseExact([string]$o.lastRun, 'yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture) }
++    return [pscustomobject]@{ lastRun = $last; items = $items }
++}
++
++function Write-SizeState($state) {
++    $itemsOut = [ordered]@{}
++    foreach ($k in @($state.items.Keys | Sort-Object)) { $itemsOut[$k] = $state.items[$k] }
++    $lastOut = if ($state.lastRun) { $state.lastRun.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture) } else { $null }
++    $json = [pscustomobject]([ordered]@{ lastRun = $lastOut; items = [pscustomobject]$itemsOut }) | ConvertTo-Json -Depth 6
++    $tmp = $SizeStateFile + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
++    [System.IO.File]::WriteAllText($tmp, $json, (New-Object System.Text.UTF8Encoding($false)))
++    if (Test-Path -LiteralPath $SizeStateFile -PathType Leaf) { [System.IO.File]::Replace($tmp, $SizeStateFile, [NullString]::Value) }
++    else { [System.IO.File]::Move($tmp, $SizeStateFile) }
++}
++
++# $null when fine; otherwise one plain sentence for mark-reviewed's overdue alarm.
++function Get-SizeWeeklyOverdue {
++    try {
++        $st = Read-SizeState
++        if ($null -eq $st) { return ('marker written; the weekly size check has no state file ({0}), so it is not running' -f $SizeStateFile) }
++        $today = Get-SizeAsOfDate
++        if ($null -eq $st.lastRun) { return 'marker written; the weekly size check has never completed a run' }
++        $ageDays = ($today - $st.lastRun.Date).Days
++        $lastTxt = $st.lastRun.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture)
++        if ($ageDays -lt 0) { return ('marker written; the weekly size check''s last run is dated in the future ({0}), so its timer cannot be trusted' -f $lastTxt) }
++        if ($ageDays -ge $SizeWeeklyDays) { return ('marker written; the weekly size check is overdue (last completed {0}, {1} days ago)' -f $lastTxt, $ageDays) }
++        return $null
++    } catch {
++        return ('marker written; the weekly size check''s state could not be checked ({0}): {1}' -f $SizeStateFile, $_.Exception.Message)
++    }
++}
++
++# A path shown in titles: ~/.claude/... or AI Projects/..., forward slashes.
++function Get-SizeDisplayPath([string]$file) {
++    $full = [System.IO.Path]::GetFullPath($file)
++    $home0 = [System.IO.Path]::GetFullPath($ClaudeHome).TrimEnd('\')
++    $proj0 = [System.IO.Path]::GetFullPath($ProjectsRoot).TrimEnd('\')
++    if ($full.ToLowerInvariant().StartsWith($home0.ToLowerInvariant() + '\')) { return ('~/.claude/' + $full.Substring($home0.Length + 1).Replace('\', '/')) }
++    if ($full.ToLowerInvariant().StartsWith($proj0.ToLowerInvariant() + '\')) { return ([System.IO.Path]::GetFileName($proj0) + '/' + $full.Substring($proj0.Length + 1).Replace('\', '/')) }
++    return $full.Replace('\', '/')
++}
++
++function Test-SizeInScope([string]$file) {
++    $p = Get-NormPath $file
++    foreach ($root in @($ClaudeHome, $ProjectsRoot)) {
++        if ($root -and $p.StartsWith((Get-NormPath $root) + '\')) { return $true }
++    }
++    return $false
++}
++
++# Findings that need a ticket: every breach and note, plus near-limit findings on HARD limits
++# (going over a hard limit silently cuts what Claude sees). Files outside ~/.claude and the
++# AI Projects folder are skipped on purpose (not ours to fix).
++function Get-SizeCandidates($ctx, $findings) {
++    $order = @{ breach = 0; note = 1; near = 2 }
++    $out = @()
++    foreach ($f in @($findings)) {
++        if (-not $f) { continue }
++        if ($f.severity -eq 'near' -and $f.kind -ne 'hard') { continue }
++        if (-not (Test-SizeInScope $f.file)) { continue }
++        $disp = Get-SizeDisplayPath $f.file
++        if ($f.limitId -eq 'hook-injected-text') {
++            $title = 'Keep refs/{0} under the injection limit' -f [System.IO.Path]::GetFileName($f.file)
++        } else {
++            $title = 'Keep {0} within its {1} size limit' -f $disp, $f.limitId
++        }
++        if ($f.severity -eq 'note') {
++            $tgt = 'fix the format problem so the file can be measured'
++        } elseif ($f.severity -eq 'near') {
++            $tgt = 'below {0} {1} ({2:0}% of the {3} limit)' -f (Format-SizeNum ([math]::Floor($ctx.nearLimitRatio * $f.limit))), $f.measure, ($ctx.nearLimitRatio * 100), (Format-SizeNum $f.limit)
++        } else {
++            $tgt = 'at or under {0} {1}' -f (Format-SizeNum $f.limit), $f.measure
++        }
++        $out += [pscustomobject]@{
++            key = $f.key; file = $f.file; display = $disp; severity = $f.severity; kind = $f.kind; limitId = $f.limitId
++            measure = $f.measure; value = $f.value; limit = $f.limit; line = $f.line; title = $title; target = $tgt
++            rank = $order[$f.severity]
++        }
++    }
++    return @($out | Sort-Object rank, key)
++}
++
++function Invoke-SizeWeekly {
++    $st = Read-SizeState
++    $today = Get-SizeAsOfDate
++    $lastOut = if ($st -and $st.lastRun) { $st.lastRun.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture) } else { $null }
++    if ($st -and $st.lastRun -and ($today - $st.lastRun.Date).Days -lt $SizeWeeklyDays) {
++        return [pscustomobject]@{ ok = $true; action = 'size-weekly'; due = $false; lastRun = $lastOut; intervalDays = $SizeWeeklyDays }
++    }
++    $sweep = Invoke-SizeSweep
++    $ctx = Read-SizeLimits
++    $items = if ($st) { $st.items } else { @{} }
++    $cands = @(Get-SizeCandidates $ctx $sweep.findings)
++    $need = @()
++    foreach ($c in $cands) {
++        $lk = $items[$c.key]
++        $c | Add-Member -NotePropertyName linked -NotePropertyValue $(if ($lk) { [pscustomobject]@{ pageId = $lk.pageId; ticketId = $lk.ticketId } } else { $null })
++        if ($lk -and $need -notcontains $lk.pageId) { $need += $lk.pageId }
++    }
++    return [pscustomobject]@{
++        ok = $true; action = 'size-weekly'; due = $true; lastRun = $lastOut; stateFile = $SizeStateFile
++        stateMissing = ($null -eq $st); candidates = $cands; needStatus = $need; sweepErrors = @($sweep.errors)
++    }
++}
++
++# -TicketsJson: { "<pageId>": { "status": "To Do", "createdTime": "2026-10-15T20:47:59.741Z", "gain": "2" }, ... }
++function Invoke-SizeDecide {
++    if (-not $TicketsJson -or -not (Test-Path -LiteralPath $TicketsJson -PathType Leaf)) {
++        return [pscustomobject]@{ ok = $false; action = 'size-decide'; error = "tickets file not found: $TicketsJson" }
++    }
++    $tix = Get-Content -Raw -LiteralPath $TicketsJson -Encoding UTF8 | ConvertFrom-Json
++    $st = Read-SizeState
++    $items = if ($st) { $st.items } else { @{} }
++    $today = Get-SizeAsOfDate
++    $sweep = Invoke-SizeSweep
++    $ctx = Read-SizeLimits
++    $cands = @(Get-SizeCandidates $ctx $sweep.findings)
++    $openEsc = @('To Do', 'In Progress')
++    $openOther = @('Backlog', 'Blocked', 'Review')
++    $filed = 0
++    $decisions = @()
++    foreach ($c in $cands) {
++        $lk = $items[$c.key]
++        $act = 'file'; $why = 'no ticket yet'; $tkt = $null; $prio = $null
++        if ($lk) {
++            $tkt = [pscustomobject]@{ pageId = $lk.pageId; ticketId = $lk.ticketId }
++            $tp = if ($tix) { $tix.PSObject.Properties[[string]$lk.pageId] } else { $null }
++            if (-not $tp) {
++                $act = 'error'; $why = 'linked ticket status not supplied'
++            } else {
++                $t = $tp.Value
++                $status = [string]$t.status
++                if ($openEsc -contains $status -or $openOther -contains $status) {
++                    $act = 'link'; $why = "ticket open ($status)"
++                    if ($openEsc -contains $status -and -not $lk.escalated) {
++                        $created = [datetime]::MinValue
++                        $okTime = [datetime]::TryParse([string]$t.createdTime, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind, [ref]$created)
++                        if (-not $okTime) {
++                            $act = 'error'; $why = 'linked ticket created time missing or unreadable'
++                        } else {
++                            $ageDays = ($today - $created.ToUniversalTime().Date).Days
++                            if ($ageDays -gt $SizeEscalateDays) {
++                                $act = 'escalate'; $why = "ticket open $ageDays days"
++                                $prio = if ([string]$t.gain -eq '1') { 'Highest' } else { 'High' }
++                            }
++                        }
++                    }
++                } elseif ($status -eq 'Wont Do') {
++                    $act = 'skip'; $why = 'ticket closed as Wont Do (accepted exception)'
++                } elseif ($status -eq 'Done') {
++                    if ($c.severity -eq 'near' -and $null -ne $lk.filedValue -and $c.value -le [double]$lk.filedValue) {
++                        $act = 'skip'; $why = 'ticket Done; still near the limit but not grown since it was filed'
++                    } else {
++                        $act = 'file'; $why = 'ticket Done but the problem is back'
++                    }
++                } else {
++                    $act = 'error'; $why = "linked ticket has an unexpected status '$status'"
++                }
++            }
++        }
++        if ($act -eq 'file') {
++            $filed++
++            if ($filed -gt $SizeFileCap) { $act = 'deferred'; $why = "over the $SizeFileCap-tickets-per-wrap cap; filed next week" }
++        }
++        $decisions += [pscustomobject]@{
++            action = $act; reason = $why; key = $c.key; file = $c.file; severity = $c.severity; kind = $c.kind
++            limitId = $c.limitId; measure = $c.measure; value = $c.value; limit = $c.limit; line = $c.line
++            title = $c.title; target = $c.target; ticket = $tkt; priority = $prio
++        }
++    }
++    # Prune links whose finding is gone, but never after an incomplete sweep: a missing folder
++    # would otherwise drop every link and re-file every ticket next week.
++    $live = @{}
++    foreach ($c in $cands) { $live[$c.key] = $true }
++    $prune = @()
++    if (@($sweep.errors).Count -eq 0) { $prune = @($items.Keys | Where-Object { -not $live.ContainsKey($_) } | Sort-Object) }
++    return [pscustomobject]@{
++        ok = $true; action = 'size-decide'; asOf = $today.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture); decisions = $decisions; prune = $prune
++        counts = [pscustomobject]@{
++            file = @($decisions | Where-Object { $_.action -eq 'file' }).Count
++            escalate = @($decisions | Where-Object { $_.action -eq 'escalate' }).Count
++            deferred = @($decisions | Where-Object { $_.action -eq 'deferred' }).Count
++            error = @($decisions | Where-Object { $_.action -eq 'error' }).Count
++        }
++        sweepErrors = @($sweep.errors)
++    }
++}
++
++# -RecordJson: { "filed": [ { key, pageId, ticketId, value } ], "escalated": [ key ], "prune": [ key ], "completed": true }
++function Invoke-SizeRecord {
++    if (-not $RecordJson -or -not (Test-Path -LiteralPath $RecordJson -PathType Leaf)) {
++        return [pscustomobject]@{ ok = $false; action = 'size-record'; error = "record file not found: $RecordJson" }
++    }
++    $rec = Get-Content -Raw -LiteralPath $RecordJson -Encoding UTF8 | ConvertFrom-Json
++    $st = Read-SizeState
++    if ($null -eq $st) { $st = [pscustomobject]@{ lastRun = $null; items = @{} } }
++    $nowUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
++    $nFiled = 0; $nEsc = 0; $nPruned = 0
++    foreach ($k in @($rec.prune)) { if ($k -and $st.items.ContainsKey([string]$k)) { $st.items.Remove([string]$k); $nPruned++ } }
++    foreach ($fr in @($rec.filed)) {
++        if (-not $fr -or -not $fr.key -or -not $fr.pageId) { continue }
++        $st.items[[string]$fr.key] = [pscustomobject]([ordered]@{ pageId = [string]$fr.pageId; ticketId = [string]$fr.ticketId; filedValue = $fr.value; filedUtc = $nowUtc; escalated = $false })
++        $nFiled++
++    }
++    foreach ($k in @($rec.escalated)) {
++        if (-not $k) { continue }
++        $e = $st.items[[string]$k]
++        if ($e) {
++            $st.items[[string]$k] = [pscustomobject]([ordered]@{ pageId = $e.pageId; ticketId = $e.ticketId; filedValue = $e.filedValue; filedUtc = $e.filedUtc; escalated = $true })
++            $nEsc++
++        }
++    }
++    if ($rec.completed -eq $true) { $st = [pscustomobject]@{ lastRun = (Get-SizeAsOfDate); items = $st.items } }
++    Write-SizeState $st
++    $lastOut = if ($st.lastRun) { $st.lastRun.ToString('yyyy-MM-dd', [System.Globalization.CultureInfo]::InvariantCulture) } else { $null }
++    return [pscustomobject]@{ ok = $true; action = 'size-record'; stateFile = $SizeStateFile; filed = $nFiled; escalated = $nEsc; pruned = $nPruned; lastRun = $lastOut; items = $st.items.Count }
++}
++
+ try {
+     switch ($Action) {
+         'detect-global'  { Emit (Invoke-DetectGlobal) }
+@@ -1453,6 +1716,9 @@ try {
+         'mark-reviewed'  { Emit (Invoke-MarkReviewed) }
+         'size-sweep'     { Emit (Invoke-SizeSweep) }
+         'size-check'     { Emit (Invoke-SizeCheck) }
++        'size-weekly'    { Emit (Invoke-SizeWeekly) }
++        'size-decide'    { Emit (Invoke-SizeDecide) }
++        'size-record'    { Emit (Invoke-SizeRecord) }
+     }
+ } catch {
+     Emit ([pscustomobject]@{ ok = $false; action = $Action; error = $_.Exception.Message })
