@@ -1,0 +1,264 @@
+diff --git "a/C:\\Users\\Erez/.claude/hooks/browser-site-gate.js" b/wc/browser-site-gate.js
+index cc1d13f..6f72efa 100644
+--- "a/C:\\Users\\Erez/.claude/hooks/browser-site-gate.js"
++++ b/wc/browser-site-gate.js
+@@ -45,12 +45,12 @@
+  * past the script rule; a helper approved once can later be called for a non-database change; a
+  * program running as Erez could edit the state file (same accepted risk as the hook files, GEN-903).
+  *
+- * Pop-up text (GEN-953): the reason Erez reads at the top of the pop-up opens, for each cause, with a
+- * sentence at least as strong as the earlier wording; what the gate itself reads in a typed command or a
+- * page script can only add a sharper line from a closed list of serious kinds. Then the site, "Undo is
+- * not guaranteed" and a caution, and Claude's own summaries last, marked as not checked. Text only: it
+- * is built after the decision is made and logged, and any error building it falls back to the earlier
+- * wording (legacyReasonFor).
++ * Pop-up text (GEN-953): the reason Erez reads at the top of the pop-up (about 3 lines show) opens with
++ * the site, then for each cause a sentence at least as strong as the earlier wording; what the gate itself
++ * reads in a typed command or a page script can only add a sharper line from a closed list of serious
++ * kinds. Claude's own summaries, marked unverified, follow the first sentence; "Undo not guaranteed; allow
++ * only if expected." ends it. Text only: it is built after the decision is made and logged, and any error
++ * building it falls back to the earlier wording (legacyReasonFor).
+  *
+  * Signals: each ask/deny is logged (cause + site, no page text) to browser-gate-asks.jsonl, and each
+  * interaction that went ahead on an ordinary approved site is logged as its site + the first six words
+@@ -516,19 +516,20 @@ const ASK_TEXT = {
+ // Erez reads this at the top of the pop-up, above Claude's raw request. Each change cause opens with a
+ // sentence that keeps at least the meaning of the earlier wording (legacyReasonFor), so no card reads
+ // milder than before, whatever the patterns below miss. What the check itself reads in a typed command
+-// or a page script can only ADD a line ("Among other things, the check sees that it ..."), and only from
+-// a closed list of serious kinds. Claude's own summaries come last, marked as not checked, with nothing
+-// from the check after them. Labels only: nothing here changes a decision.
++// or a page script can only ADD a line ("Among other things, it ..."), and only from
++// a closed list of serious kinds. The card opens with the site; Claude's own summaries, marked unverified,
++// come right after the first sentence (on a click they are the only part naming it). The order puts what
++// matters first, because the pop-up shows only about 3 lines. Labels only: nothing here changes a decision.
+ 
+ // Serious kinds of database command, worst first. Milder kinds (adding or changing rows, creating an
+ // object) are never named: the opening sentence already says the command changes or deletes data, and
+ // naming only a milder kind would read as the whole story.
+ const SQL_KINDS = [
+-  [/\b(drop|truncate)\s+[\w`"\[]|\bdelete\s+(from\s+)?[\w`"\[.]|\b(remove|rm)\s+@|\binsert\s+overwrite\b|\bthen\s+delete\b/i, 'deletes tables, rows or other database objects'],
++  [/\b(drop|truncate)\s+[\w`"\[]|\bdelete\s+(from\s+)?[\w`"\[.]|\b(remove|rm)\s+@|\binsert\s+overwrite\b|\bthen\s+delete\b/i, 'deletes data or database objects'],
+   [/\b(grant|revoke)\s+\w|\b(create|alter)\s+(or\s+replace\s+)?(user|role|share)\b/i, 'changes who has access'],
+-  [/\bcopy\s+into\s+(@|'|"?(s3|gcs|azure)\b)/i, 'copies data to or from storage outside the database, which can send data out'],
+-  [/\bcreate\s+or\s+replace\b|\balter\s+(table|schema|database|warehouse|task|integration|pipe|stream|view|account)\b/i, 'replaces or changes live tables, views or code'],
+-  [/\b(call|execute|exec)\s+[\w`"\[.(]|\bsystem\$\w+\s*\(/i, 'runs a saved database program, which can change anything']
++  [/\bcopy\s+into\s+(@|'|"?(s3|gcs|azure)\b)/i, 'sends data out of the database to outside storage'],
++  [/\bcreate\s+or\s+replace\b|\balter\s+(table|schema|database|warehouse|task|integration|pipe|stream|view|account)\b/i, 'replaces or changes live code or tables'],
++  [/\b(call|execute|exec)\s+[\w`"\[.(]|\bsystem\$\w+\s*\(/i, 'runs a saved program that can change anything']
+ ];
+ // The text a database command is read from: typed text whole; in a script only its quoted texts
+ // (JavaScript has its own "delete"). Comments and SQL string values are set aside, so a read query that
+@@ -585,11 +586,11 @@ function sqlKind(texts) {
+ // Serious things the check sees a page script do, worst first. "Changes the page or a form" is never
+ // named: the opening sentence already says the script can change the page or send data.
+ const SCRIPT_KINDS = [
+-  [/\beval\s*\(|\bFunction\s*\(|\bimport\s*\(|setTimeout\s*\(\s*['"`]|setInterval\s*\(\s*['"`]|\\u(?!00a0)[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}|\batob\s*\(|\bReflect\.|\bProxy\b|\bwith\s*\(|\[\s*['"`][^'"`]*['"`]\s*\+|\[\s*[a-zA-Z_$][\w$]*\s*\]\s*\(/, 'runs code that is hidden or hard to read'],
+-  [/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|postMessage|navigator\.(share|credentials)|(\$|jQuery)\s*\.\s*(ajax|post|get|getJSON)\s*\(|\.(src|href|action)\s*=[^=]/, 'sends data from the page to a server'],
+-  [/\.click\s*\(|\.submit\s*\(|requestSubmit|dispatchEvent|\bdispatch\s*\(|new\s+\w*Event\b|\.reset\s*\(/, 'clicks, submits or presses things on the page'],
+-  [/\blocation\s*=[^=]|\blocation\.(href|host|hostname|pathname|search|hash|port|protocol)\s*=[^=]|\blocation\.(assign|replace)\s*\(|\bwindow\s*\.\s*open\s*\(|(?<![\w$.])open\s*\(|history\.(push|replace)State|history\.(back|forward|go)\s*\(|navigation\.navigate/, 'opens another address, which can carry page data there'],
+-  [/(local|session)Storage\.(setItem|removeItem|clear)|document\.cookie\s*=|indexedDB|caches\.|navigator\.(clipboard|serviceWorker)/, "changes the site's data saved on this computer"]
++  [/\beval\s*\(|\bFunction\s*\(|\bimport\s*\(|setTimeout\s*\(\s*['"`]|setInterval\s*\(\s*['"`]|\\u(?!00a0)[0-9a-fA-F]{4}|\\x[0-9a-fA-F]{2}|\batob\s*\(|\bReflect\.|\bProxy\b|\bwith\s*\(|\[\s*['"`][^'"`]*['"`]\s*\+|\[\s*[a-zA-Z_$][\w$]*\s*\]\s*\(/, 'runs hidden code'],
++  [/\bfetch\s*\(|XMLHttpRequest|sendBeacon|WebSocket|EventSource|postMessage|navigator\.(share|credentials)|(\$|jQuery)\s*\.\s*(ajax|post|get|getJSON)\s*\(|\.(src|href|action)\s*=[^=]/, 'sends data to a server'],
++  [/\.click\s*\(|\.submit\s*\(|requestSubmit|dispatchEvent|\bdispatch\s*\(|new\s+\w*Event\b|\.reset\s*\(/, 'clicks or submits things'],
++  [/\blocation\s*=[^=]|\blocation\.(href|host|hostname|pathname|search|hash|port|protocol)\s*=[^=]|\blocation\.(assign|replace)\s*\(|\bwindow\s*\.\s*open\s*\(|(?<![\w$.])open\s*\(|history\.(push|replace)State|history\.(back|forward|go)\s*\(|navigation\.navigate/, 'opens another address, which can carry data'],
++  [/(local|session)Storage\.(setItem|removeItem|clear)|document\.cookie\s*=|indexedDB|caches\.|navigator\.(clipboard|serviceWorker)/, "changes the site's saved data"]
+ ];
+ function scriptKinds(texts) {
+   const src = (texts || []).filter(x => x.kind === 'script').map(x => String(x.text)).join('\n');
+@@ -603,16 +604,19 @@ const CHANGE_CAUSES = new Set(['high-stakes', 'word', 'typed-write', 'risky-scri
+   // actions the check cannot classify may change something too
+   'no-state', 'non-web-tab', 'unreadable-batch', 'unreadable-url', 'non-web-url']);
+ const isChangeCause = c => CHANGE_CAUSES.has(c) || c.startsWith('unknown-tool:') || c.startsWith('deny-loop-');
+-// Order on the card: the most serious first; the first-visit note last.
+-const CAUSE_ORDER = ['typed-write', 'helper-args', 'risky-script', 'script-helper', 'high-stakes', 'follow-up', 'word', 'typed-enter'];
+-const causeRank = c => c === 'new-site' ? 99 : (CAUSE_ORDER.includes(c) ? CAUSE_ORDER.indexOf(c) : 50);
+-// Claude's words as shown: one line, no control or invisible formatting characters (text-direction
+-// overrides among them), quote marks made plain so a quote cannot appear to close early, at most 100
+-// characters.
+-const QUOTE_LIKE = /[\p{Quotation_Mark}″‶״ʺˮ˝❝❞〃\u{1F676}-\u{1F678}]/gu;
++// Order on the card: the most serious first (a tab whose page is unconfirmed first of all: it puts what
++// follows in doubt); the first-visit note last.
++const CAUSE_ORDER = ['deny-loop-stale-tab', 'deny-loop-unknown-tab', 'deny-loop-no-summary', 'typed-write', 'helper-args', 'risky-script', 'script-helper', 'high-stakes', 'follow-up', 'word', 'typed-enter'];
++const causeRank = c => c === 'new-site' ? 99 : CAUSE_ORDER.includes(c) ? CAUSE_ORDER.indexOf(c) : c.startsWith('deny-loop-') ? 2.5 : 50;
++// Claude's words as shown: one line, no control or invisible characters (text-direction overrides among
++// them), at most 80 characters (as before GEN-953). Punctuation, symbols, modifier letters, combining
++// marks, letters outside the Latin, Greek, Cyrillic and Hebrew scripts, and letters of those drawn as
++// quote-like strokes all become one apostrophe (an allow-list), and a run of them one, so a closing double
++// quote is hard to fake. (Accepted: Hebrew letters such as yod stay, and two of them can look like a quote.)
++const PLAIN_MARK = /[^\p{Lu}\p{Ll}\p{Lt}\p{Lo}\p{N}\p{Zs}.,;:!?()\[\]{}@#%&*+=\/\\_<>|~^$€£₪…-]|(?![\p{sc=Latin}\p{sc=Greek}\p{sc=Cyrillic}\p{sc=Hebrew}])\p{L}|[ǀ-ǃװ-ײꞋꞌ]/gu;
+ function claimText(q) {
+-  const t = Array.from(String(q).replace(/\s+/g, ' ').replace(/[\p{Cc}\p{Cf}]/gu, '').replace(QUOTE_LIKE, "'").trim());
+-  return '"' + (t.length > 100 ? t.slice(0, 100).join('') + '…' : t.join('')) + '"';
++  const t = Array.from(String(q).replace(/\s+/g, ' ').replace(/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, '').replace(PLAIN_MARK, "'").replace(/'{2,}/g, "'").trim());
++  return '"' + (t.length > 80 ? t.slice(0, 80).join('') + '…' : t.join('')) + '"';
+ }
+ 
+ function plainReason(res) {
+@@ -626,85 +630,134 @@ function plainReason(res) {
+   const hosts = Array.isArray(res.hosts) ? res.hosts : [];
+   const causes = res.causes.slice().sort((a, b) => causeRank(a) - causeRank(b));
+   const change = causes.some(isChangeCause);
+-  const parts = [], named = new Set();
++  const groups = [];
++  const add = t => { if (!groups.length) groups.push([]); groups[groups.length - 1].push(t); };
++  let cur;
++  const sentence = (t, h) => { const g = [t]; g.host = h; g.cause = cur; groups.push(g); };
+   // A text longer than the part the check reads (one text, or a batch's texts together).
+   const cut = texts.some(x => x && x.cut) || texts.reduce((n, x) => n + String((x && x.text) || '').length, 0) > TEXT_CAP;
+   let sqlShown = false, jsShown = false;
+   const addSql = () => {
+     if (sqlShown) return; sqlShown = true;
+     const sql = sqlKind(texts);
+-    if (sql.kinds.length) parts.push('Among other things, the check sees that it ' + andJoin(sql.kinds) + '.');
+-    if (cut || sql.open) parts.push('The check could not read all of it.');
++    if (sql.kinds.length) add('Among other things, it ' + andJoin(sql.kinds) + '.');
++    if (cut || sql.open) add('The check could not read all of it.');
+   };
+   const addJs = () => {
+     if (jsShown) return; jsShown = true;
+     const js = scriptKinds(texts);
+-    if (js.length) parts.push('Among other things, the check sees that it ' + andJoin(js) + '.');
+-    if (cut) parts.push('The check could not read all of it.');
++    if (js.length) add('Among other things, it ' + andJoin(js) + '.');
++    if (cut) add('The check could not read all of it.');
+   };
+   for (const c of causes) {
++    cur = c;
+     if (c === 'new-site') {
+       for (const h of hosts.filter(x => !x.startsWith('helper:'))) {
+-        parts.push(change ? "It is also Claude's first action on " + h + ' this session; if you allow it, Claude can look around there without asking again.'
+-          : 'First action on ' + h + ' this session. If you allow it, Claude can look around there without asking again; anything that may change, send or delete something still asks.');
+-        named.add(h);
++        sentence(change ? 'Also the first action on ' + h + ' this session; if allowed, Claude can look around and search there without asking.'
++          : 'First action on ' + h + ' this session. If allowed, Claude can look around and search there without asking; changes, sends and deletes still ask.', h);
+       }
+     } else if (c === 'high-stakes') {
+       for (const h of noteSites.filter(x => isHigh(x, highOpts))) {
+-        parts.push(h + ' is a high-stakes site, so every click, key and form fill there asks.');
+-        named.add(h);
++        sentence('High-stakes site (' + h + '): every click, key and form fill asks.', h);
+       }
+     } else if (c === 'word') {
+-      parts.push('This may change, send, delete, pay, share or grant something.');
++      sentence('May change, send, delete, pay, share or grant something.');
+     } else if (c === 'typed-write') {
+       const typedHere = texts.some(x => x.kind === 'typed'), scriptHere = texts.some(x => x.kind === 'script');
+-      parts.push((typedHere && scriptHere ? 'Typing or a page script runs' : typedHere ? 'Typing' : 'The script runs') + ' a database command that changes or deletes data.');
++      sentence((typedHere && scriptHere ? 'Typing or a page script runs' : typedHere ? 'Typing' : 'A page script runs') + ' a database command that changes or deletes data.');
+       addSql();
+     } else if (c === 'helper-args') {
+-      parts.push('A page script hands code an earlier script left on the page something other than a look-only query, which can change or delete data or send it.');
++      // (with typed-write and one page script and no typed text, the typed-write sentence already says that
++      // script runs a database command that changes or deletes data)
++      if (!(causes.includes('typed-write') && !texts.some(x => x.kind === 'typed') && texts.filter(x => x.kind === 'script').length === 1)) sentence('A page script runs more than a lookup through code left on the page; it can change, delete or send data.');
+       addSql();
+     } else if (c === 'risky-script') {
+-      parts.push('A page script that can change the page or send data.');
++      sentence('A page script that can change the page or send data.');
+       addJs();
+     } else if (c === 'script-helper') {
+       const reused = hosts.some(h => h.startsWith('helper:'));
+-      parts.push('A page script reuses code an earlier script left on the page, which can change the page or send data.' +
+-        (reused ? ' If you allow it, later uses of that code this session go ahead unless they carry a database change or a risky step.' : ''));
++      sentence('A page script reuses code left on the page; it can change the page or send data.' +
++        (reused ? ' If allowed, later calls to it go ahead unless the call itself has a database change or a risky step.' : ''));
+       addJs();
+     } else if (c === 'follow-up') {
+       for (const h of noteSites.filter(x => !isHigh(x, highOpts))) {
+-        parts.push('This comes right after a click on a role, permission, owner or billing control on ' + h + ', and is often the click that applies it.');
+-        named.add(h);
++        sentence('Right after a role, permission, owner or billing control on ' + h + '; often the action that applies it.', h);
+       }
+     } else if (c === 'typed-enter') {
+-      parts.push('Typing that ends in Enter, which can submit a form.');
++      sentence('Typing that ends in Enter, which can submit a form.');
+     } else if (c === 'deny-loop-no-summary') {
+-      parts.push('Claude did not say what this action does, so the check could not look at it.');
++      sentence('Claude did not say what this action does, so the check could not look at it.');
+     } else if (c.startsWith('deny-loop-')) {
+-      parts.push('Claude could not confirm which page this tab is on.');
++      sentence('Claude could not confirm which page this tab is on.');
+     } else if (ASK_TEXT[c]) {
+-      parts.push(ASK_TEXT[c]().replace(/\bgate\b/g, 'check'));
++      sentence(ASK_TEXT[c]().replace(/\bgate\b/g, 'check'));
+     } else {
+-      parts.push('A browser action the check cannot classify (' + String(c).replace(/[^\w:.-]/g, '').slice(0, 60) + ').');
++      sentence('A browser action the check cannot classify (' + String(c).replace(/[^\w:.-]/g, '').slice(0, 60) + ').');
+     }
+   }
+-  let s = 'Browser safety check: ' + [...new Set(parts)].join(' ');
+-  const unnamed = sites.filter(h => !named.has(h));
+-  if (unnamed.length) s += ' Site: ' + unnamed.join(', ') + '.';
+-  if (change) s += ' Undo is not guaranteed; allow only if Claude told you in the chat it would do this.';
+-  // Claude's own summaries, last: every one that names a danger to the decision's own word lists or made
+-  // its own click ask (as the old text showed every such summary), then the others up to 6 in all; a
+-  // count of the rest goes inside the label.
++  // Claude's own summaries: every one that names a danger to the decision's own word lists or made its own
++  // click ask (as the old text showed every such summary), then the others up to 6 in all; a count of the
++  // rest is given after them.
+   const claims = (Array.isArray(res.claims) && res.claims.length ? res.claims : quotes.map(q => ({ text: q })))
+     .map(x => typeof x === 'string' ? { text: x } : x);
++  let claude = '';
+   if (claims.length) {
+     const danger = x => x.danger === undefined ? wordHit(String(x.text)) : !!x.danger;
+     const d = claims.filter(danger), p = claims.filter(x => !danger(x));
+     const shown = d.concat(p.slice(0, Math.max(0, 6 - d.length)));
+     const hidden = claims.length - shown.length;
+-    s += ' Claude says (not checked' + (hidden ? '; ' + hidden + ' more not shown' : '') + '): ' + shown.map(x => claimText(x.text)).join('; ') + '.';
++    claude = 'Claude says (unverified): ' + shown.map(x => claimText(x.text)).join('; ') + (hidden ? ' and ' + hidden + ' more' : '') + '.';
+   }
+-  return s;
++  // Most important first, to fit the pop-up's few visible lines: the site; the most serious cause with what
++  // the check sees in it; Claude's own words (on a click, the only part naming it); the other causes; the
++  // undo note. A stuck tab or a missing summary says little about the action itself, so the next cause
++  // (with what the check sees in it) and the tab's last-seen site come before Claude's words.
++  const seen = new Set(), out = [];
++  const put = list => { for (const t of list) if (t && !seen.has(t)) { seen.add(t); out.push(t); } };
++  // The site leads the card ("On h:") when the first sentence is about an action on a known page and does
++  // not name its own site; when it names its own, other sites follow Claude's words ("Also on h."). When
++  // the first sentence is about an action whose page is unknown or not a web site (a stuck tab, no
++  // summary, a non-web page, an unreadable batch), no site is put in front of it: a stuck tab's recorded
++  // site follows as "Last seen on h." (as before GEN-953) and others as "Sites in this request: …". A long
++  // name shows its end (where the registered domain is); at most two names are listed; when a name is
++  // shortened or left out, the full list ends the card.
++  const firstHost = groups[0] && groups[0].host;
++  const allSites = [...new Set(sites.concat(change ? hosts.filter(x => !x.startsWith('helper:')) : []))].filter(Boolean);
++  const unnamed = allSites.filter(h => h !== firstHost);
++  const short = h => h.length > 40 ? '…' + h.slice(-39) : h;
++  const siteList = unnamed.slice(0, 2).map(short).join(', ') + (unnamed.length > 2 ? ' and ' + (unnamed.length - 2) + ' more' : '');
++  const SITED = ['word', 'typed-write', 'helper-args', 'risky-script', 'script-helper', 'typed-enter', 'always-file_upload', 'always-upload_image', 'always-shortcuts_execute', 'always-gif-drop'];
++  const sited = causes.length && SITED.includes(causes[0]);
++  const stuckCause = g => String(g.cause || '').startsWith('deny-loop-');
++  const stuck = causes.length && causes[0].startsWith('deny-loop-');
++  const next = stuck ? groups.find(g => !stuckCause(g) && g.cause !== 'new-site') : null;
++  // (a site the next cause's sentence names is not listed again as last seen or as a site in the request)
++  const lastSeen = causes.includes('deny-loop-stale-tab') ? noteSites.filter(h => h !== firstHost && !(next && next.host === h)) : [];
++  const first = (groups[0] || []).slice();
++  if (first.length) seen.add(first[0]); // (so a later group repeating it, unprefixed, is not shown again)
++  let also = '', seenLine = '';
++  const listOf = a => a.slice(0, 2).map(short).join(', ') + (a.length > 2 ? ' and ' + (a.length - 2) + ' more' : '');
++  const others = unnamed.filter(h => !lastSeen.includes(h));
++  if (unnamed.length && first.length && sited) first[0] = 'On ' + siteList + ': ' + first[0];
++  else if (unnamed.length && firstHost) also = 'Also on ' + siteList + '.';
++  else if (unnamed.length) {
++    seenLine = lastSeen.length ? 'Last seen on ' + listOf(lastSeen) + '.' : '';
++    const rest = others.filter(h => !(next && next.host === h));
++    also = rest.length ? 'Sites in this request: ' + listOf(rest) + '.' : '';
++  }
++  if (first.length) out.push(first[0]);
++  put(first.slice(1));
++  if (stuck) {
++    for (const g of groups.slice(1)) if (stuckCause(g)) put(g);
++    put(next || []);
++  }
++  put([seenLine]);
++  put([claude]);
++  put([also]);
++  for (const g of groups.slice(1)) put(g);
++  if (change) put(['Undo not guaranteed; allow only if expected.']);
++  if (unnamed.length > 2 || unnamed.some(h => h.length > 40)) put(['All sites: ' + unnamed.join(', ') + '.']);
++  return out.join(' ');
+ }
+ 
+ function reasonFor(res) {
