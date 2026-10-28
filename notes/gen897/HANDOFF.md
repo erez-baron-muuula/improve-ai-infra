@@ -152,3 +152,16 @@ See the plan. Ticket progress notes (GEN-897, GEN-624, companions) go through /v
   adb3a3daebb78a123, a9ed1903cafac3996, a26632adb1c9d4cf6.
 - Then: records → one card list to Erez → mint/apply → statuses (propose Done/Review one at a time;
   GEN-897 → Review + assign Erez myself) → /loghistory.
+
+## Close-out — DONE (2026-10-28)
+- All 11 writes filed (reviewer PASS, 1 round each); GEN-981 created (child of GEN-897).
+- Statuses (Erez: "yes, close"): GEN-525/763/509/709/852/970/499/526/404/429 Done; GEN-320 Review;
+  GEN-897 Review, assigned to Erez; GEN-624 stays Review (his auto-mode question). /wrap ran; HISTORY.md
+  entry 2026-10-28, commit a0a296d.
+- Leftovers, all now homed (later 2026-10-28): Nov 4 check scheduled (`gen897-gen320-nov4-check` + calendar
+  reminder; noted on GEN-779/GEN-324); Round 1 Notion-lookup advisories -> GEN-982 (new; /check pointer was
+  already fixed); `config-health-scan.ps1` lines 14-15 -> note on GEN-271; auto-approve.js ~1887 -> note on GEN-505.
+- Side findings: GEN-271 refuses MCP `insert_content` (likely two old angle-bracket code spans) -> GEN-983 (new),
+  plus a note there that a REST block append via Invoke-RestMethod with full TLS worked. Over-asking Erez for
+  approvals -> third-recurrence note on GEN-558; a "Fix GEN-558" session was offered as a card.
+- Not pursued: the GEN-624 reviewer note on "title supersession" (minor).
