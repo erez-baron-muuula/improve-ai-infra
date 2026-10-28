@@ -1,0 +1,323 @@
+diff --git a/C:/Users/Erez/.claude/hooks/browser-site-gate.js b/wc/browser-site-gate.js
+index 6f72efa..4fc3de8 100644
+--- a/C:/Users/Erez/.claude/hooks/browser-site-gate.js
++++ b/wc/browser-site-gate.js
+@@ -27,8 +27,12 @@
+  *  - A helper a page script stores on window asks the first time a later script calls it, once per
+  *    helper per site per session (HELPER_ONCE; every time on high-stakes sites); after that a call goes
+  *    ahead only if every quoted text in it is a read-only query (READ_START) and it carries no database
+  *    write or risky pattern. If the gate cannot read its records (no lock, unreadable file), it asks.
++ *  - Tableau Cloud data reads (GEN-980): a page script on a Tableau Cloud tab whose every server call goes
++ *    through a wrapper of one fixed shape, declared in the script and called only with a method name in
++ *    quotes from a closed list of reads (TABLEAU_READS), is checked as a read: the rest of the script must
++ *    pass the script rules above on its own. A list of shapes the gate reads in full, not of bad requests.
+  *  - Typing that contains a newline (an Enter) asks unless it is a read-only query or a search.
+  *  - Denies with an instruction to Claude (Erez sees nothing): a click/key/type/drag/form fill with no
+  *    action_summary, a tab whose page is unknown, or a tab an earlier click may have moved. The third
+  *    such deny in a row becomes an ask, so it can never loop.
+@@ -271,14 +275,115 @@ const statementsOf = s => s.replace(/\\(?:x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]+\}|u[0-
+ // called as api("DELETE", "/v1/apps/42"), or SQL glued together with quotes ('TRUNCATE"t"').
+ const WRITE_WORD = /(^|[^a-z])(delete|drop|truncate|update|insert|merge|alter|create|replace|grant|revoke|call|exec|execute|undrop|post|put|patch)([^a-z]|$)/i;
+ const helperArgsOk = t => !strayQuote(t) && !/\\["'`]|\$\{/.test(String(t)) && quotedTexts(t).every(s => { if (!/[\s\\]/.test(s.trim())) return !WRITE_WORD.test(s); const st = statementsOf(s); return st.length > 0 && st.every(x => READ_START.test(x)); });
+ const callsHelper = (text, helpers) => helperCalls(text, helpers).length > 0;
++
++// Claude's standard Tableau Cloud data read (GEN-980): the page's own session API, through a wrapper of
++// exactly this shape (names, spacing and quote style free), declared in the script itself:
++//   const vz = async (m, p) => (await fetch('/vizportal/api/web/v1/' + m, {method: 'POST', headers:
++//     {'Content-Type': 'application/json', 'X-XSRF-TOKEN': x}, body: JSON.stringify({method: m, params: p})})).json();
++// or with fetch(...).then(r => r.json()); with parameters named method and params, the body may be
++// {method, params}. Every use of the wrapper's name must be a call with a listed method name in quotes, after
++// the declaration. The methods Claude has used to read Tableau, and those its browser notes name; Tableau does
++// not document them, so the list holds only names that read (an unlisted one asks). The browser tool may keep
++// a script's names for the next script, so every wrapper name seen is remembered for the session
++// (state.wrappers), and a later script that uses a remembered name other than as such a read call asks.
++const TABLEAU_HOST = /^[a-z0-9-]+\.online\.tableau\.com$/;
++const TABLEAU_READS = new Set(['getWorkbooks', 'getDatasources', 'getDataConnections', 'getExtractTasks', 'getDataAlerts',
++  'getSessionInfo', 'getUsers', 'getSchedules', 'getFlows', 'getBackgroundJobs']);
++const JS_ID = '[A-Za-z_$][\\w$]*';
++const reId = s => s.replace(/[$]/g, '\\$');
++const QS = s => `(?:'${s}'|"${s}"|\`${s}\`)`; // a fixed string, in matching quotes
++function tableauFetch(m, p) {
++  const S = '\\s*', M = reId(m), P = reId(p);
++  const body = m === 'method' && p === 'params' ? `(?:method${S}:${S}method${S},${S}params${S}:${S}params|method${S},${S}params)`
++    : `method${S}:${S}${M}${S},${S}params${S}:${S}${P}`;
++  return `fetch${S}\\(${S}${QS('/vizportal/api/web/v1/')}${S}\\+${S}${M}${S},${S}\\{${S}method${S}:${S}${QS('POST')}${S},${S}` +
++    `headers${S}:${S}\\{${S}${QS('Content-Type')}${S}:${S}(?:${QS('application/json')}|${QS('application/json;charset=UTF-8')})${S},${S}` +
++    `${QS('X-XSRF-TOKEN')}${S}:${S}${JS_ID}${S}\\}${S},${S}body${S}:${S}JSON\\.stringify\\(${S}\\{${S}${body}${S}\\}${S}\\)${S}\\}${S}\\)`;
++}
++// (a var wrapper is found, so its name is remembered, but never let through: a top-level var is a property of
++// window; a name fits the saved state's 61 characters)
++const TABLEAU_HEAD = new RegExp(`\\b(const|let|var)\\s+([A-Za-z_$][\\w$]{0,60})(?![\\w$])\\s*=\\s*(?:async\\s*)?\\(\\s*(${JS_ID})\\s*,\\s*(${JS_ID})\\s*(?:=\\s*\\{\\s*\\}\\s*)?\\)\\s*=>\\s*`, 'g');
++// A name is a whole identifier, not part of a longer one (in any script's letters). A call must be a bare
++// call (NB: not obj.name(...)); any other occurrence, a property one included, counts as a use (NBU).
++const NB = '(?<![\\p{ID_Continue}$.])', NBU = '(?<![\\p{ID_Continue}$])', NA = '(?![\\p{ID_Continue}$])';
++const tableauCall = n => new RegExp(NB + n + `\\s*\\(\\s*(['"\`])(${JS_ID})\\1\\s*([,)])`, 'gu');
++const countUses = (t, n, b) => (t.match(new RegExp((b || NBU) + n + NA, 'gu')) || []).length;
++// The wrappers of the fixed shape a script declares: [{ name, start, end }].
++function findWrappers(t) {
++  const found = [];
++  if (!t.includes('/vizportal/api/web/v1/')) return found;
++  TABLEAU_HEAD.lastIndex = 0;
++  let mm;
++  while ((mm = TABLEAU_HEAD.exec(t))) {
++    const [head, kind, W, m, p] = mm;
++    if (W === m || W === p || m === p || [W, m, p].some(x => x === 'fetch' || x === 'JSON')) continue;
++    const F = tableauFetch(m, p);
++    const b = new RegExp(`^(?:\\(\\s*await\\s+${F}\\s*\\)\\s*\\.json\\(\\s*\\)|${F}\\s*\\.then\\(\\s*(${JS_ID})\\s*=>\\s*\\1\\.json\\(\\s*\\)\\s*\\))\\s*;?`).exec(t.slice(mm.index + head.length));
++    if (!b) continue;
++    const end = mm.index + head.length + b[0].length;
++    found.push({ name: W, kind, start: mm.index, end });
++    TABLEAU_HEAD.lastIndex = end;
++  }
++  return found;
++}
++const wrapperNames = text => [...new Set(findWrappers(String(text)).map(w => w.name))];
++// Does this script use a wrapper name remembered from an earlier script (and not declared here) other than as a
++// bare call with a listed read method in quotes? Then it may reach that wrapper with any method: it asks.
++function wrapperMisuse(text, remembered) {
++  if (!remembered || !remembered.length) return false;
++  const t = String(text), own = wrapperNames(t);
++  if (/\\u\{/.test(t)) return true; // an escaped name is not read here
++  return remembered.some(W => {
++    if (own.includes(W) || !t.includes(W)) return false; // declared again here: tableauRead or the script rules judge it
++    // a bare use, or one through the global object (a top-level var is a property of window)
++    const n = reId(W), uses = countUses(t, n, NB) + countUses(t, n, '(?<![\\p{ID_Continue}$.])(?:window|globalThis|self|this|top|parent|frames)\\s*\\??\\.\\s*');
++    if (!uses) return false;
++    const calls = [...t.matchAll(tableauCall(n))];
++    return uses !== calls.length || calls.some(c => !TABLEAU_READS.has(c[2]));
++  });
++}
++// { ok, rest, methods, wrappers }: rest is the script with the wrappers and their calls blanked out, for the
++// script rules. ok is false (the script is checked as before) unless every part above holds.
++function tableauRead(text, helpers) {
++  const no = why => ({ ok: false, why });
++  let t = String(text);
++  const found = findWrappers(t);
++  if (!found.length) return no('no wrapper');
++  if (found.some(w => w.kind === 'var')) return no('var declaration');
++  // A name, fetch or JSON stored on window by an earlier script could be what the calls reach; an escaped name
++  // (v\\u{7a}) is not read here.
++  if ((helpers || []).some(h => h === 'fetch' || h === 'JSON' || found.some(w => w.name === h))) return no('a stored helper shadows the wrapper');
++  if (/\\u\{/.test(t)) return no('escaped name');
++  // A comment could hide where a declaration starts; keep the shape's meaning fixed: nothing may comment code out.
++  if (/\/\/|\/\*/.test(t)) return no('comment in the script');
++  for (const w of found) if (countUses(t.slice(0, w.start), reId(w.name)) > 0) return no('wrapper used before its declaration');
++  let out = '', last = 0;
++  for (const w of found) { out += t.slice(last, w.start) + ' 0; '; last = w.end; }
++  t = out + t.slice(last);
++  const methods = [], wrappers = [...new Set(found.map(w => w.name))];
++  for (const W of wrappers) {
++    const n = reId(W), call = tableauCall(n);
++    const calls = [...t.matchAll(call)];
++    if (!calls.length || countUses(t, n) !== calls.length) return no('wrapper used other than as a bare call with a method name in quotes');
++    for (const c of calls) { if (!TABLEAU_READS.has(c[2])) return no('method not on the read list: ' + c[2]); methods.push(c[2]); }
++    t = t.replace(call, (all, q, name, endc) => '__tableauRead__(' + (endc === ')' ? ')' : ''));
++  }
++  if (RISKY_SCRIPT.test(t) || RELOAD_SCRIPT.test(t)) return no('rest of the script has a risky pattern');
++  // ...nor reach or change what the wrapper relies on (fetch by another name, JSON or its stringify, toJSON, prototypes)
++  if (/(^|[^\w$.])fetch(?![\w$])|\bJSON\s*(=|\.\s*\w+\s*=[^=])|toJSON|\bprototype\b|__proto__|defineProperty/.test(t)) return no('rest touches fetch or JSON');
++  return { ok: true, rest: t, methods: [...new Set(methods)], wrappers };
++}
++// The text the script rules read: a recognized Tableau read without its wrappers and their calls. Used by
++// moves() on any site: a fetch cannot navigate, and the rest passed the risky-pattern check.
++const scriptRest = (t, helpers) => { const r = tableauRead(t, helpers); return r.ok ? r.rest : t; };
+ // Each helper asks the first time it is called on each site in a session (Erez then sees which site and helper);
+ // after that, calls to it go ahead unless they carry a database write or a risky pattern themselves.
+ const HELPER_ONCE = true;
+ 
+ function newState() {
+-  return { approved: {}, tabs: {}, pending: {}, helpers: [], streak: { cause: null, n: 0 },
++  return { approved: {}, tabs: {}, pending: {}, helpers: [], wrappers: [], streak: { cause: null, n: 0 },
+     counts: { calls: 0, actions: 0, asked: 0, nonSiteAsked: 0, denied: 0, ask: {}, deny: {} }, alerted: false };
+ }
+ 
+ // Coerce a loaded state into the expected shape; anything odd becomes empty (every site new).
+@@ -289,8 +394,9 @@ function normalizeState(s) {
+   d.approved = obj(s.approved) || {};
+   d.tabs = obj(s.tabs) || {};
+   d.pending = obj(s.pending) || {};
+   d.helpers = Array.isArray(s.helpers) ? s.helpers.filter(x => typeof x === 'string' && /^[A-Za-z_$][\w$]{0,60}$/.test(x)).slice(-200) : [];
++  d.wrappers = Array.isArray(s.wrappers) ? s.wrappers.filter(x => typeof x === 'string' && /^[A-Za-z_$][\w$]{0,60}$/.test(x)).slice(-200) : [];
+   if (obj(s.streak) && typeof s.streak.n === 'number') d.streak = { cause: typeof s.streak.cause === 'string' ? s.streak.cause : null, n: s.streak.n };
+   if (obj(s.counts)) {
+     for (const k of ['calls', 'actions', 'asked', 'nonSiteAsked', 'denied']) if (typeof s.counts[k] === 'number') d.counts[k] = s.counts[k];
+     d.counts.ask = obj(s.counts.ask) || {};
+@@ -352,13 +458,16 @@ function known(it) {
+   const n = it.name;
+   return ALWAYS.has(n) || n === 'gif_creator' || n === 'javascript_tool' || n === 'navigate' || n === 'form_input' ||
+     READ_TOOLS.has(n) || (n === 'computer' && (READ_COMPUTER.has(it.input.action) || INTERACT_COMPUTER.has(it.input.action)));
+ }
+-function moves(it, helpers) {
++function moves(it, helpers, wrappers) {
+   if (!known(it)) return true; // an unfamiliar tool or action: assume it may move every tab
+   if (mayMove(it) || it.name === 'navigate' || ALWAYS.has(it.name)) return true;
+   if (it.name === 'gif_creator') return it.input.action === 'export' && !!it.input.coordinate;
+-  if (it.name === 'javascript_tool') { const t = String(it.input.text || ''); return RISKY_SCRIPT.test(t) || RELOAD_SCRIPT.test(t) || typedWrite(t) || callsHelper(t, helpers); }
++  if (it.name === 'javascript_tool') {
++    const t = String(it.input.text || ''), tt = scriptRest(t, helpers);
++    return RISKY_SCRIPT.test(tt) || RELOAD_SCRIPT.test(tt) || typedWrite(t) || callsHelper(tt, helpers) || wrapperMisuse(t, wrappers);
++  }
+   return false;
+ }
+ const SWITCHES_BROWSER = new Set(['select_browser', 'switch_browser']);
+ 
+@@ -372,13 +481,16 @@ function decide(state, tool, input, opts) {
+   if (!items) return { decision: 'ask', causes: ['unreadable-batch'], hosts: [], notes: [], actions: 1, interactive: 1, moved: [], allMoved: true };
+   const tabs = {};
+   for (const k of Object.keys(state.tabs)) tabs[k] = Object.assign({}, state.tabs[k]);
+   const asks = [], denies = [], newHosts = [], notes = [], moved = new Set(), tainted = new Set(), untainted = new Set(), passed = [];
++  const waived = []; // items a GEN-980 rule let through that the script rules alone would have asked about (logged)
+   // For the pop-up text only (GEN-953): what an asking script or typed text says, and Claude's summaries.
+   const texts = [], claims = [], where = [];
+   let actions = 0, interactive = 0, allMoved = false;
+   const mode = opts.mode || SUMMARY_MODE;
+   let helpers = Array.isArray(state.helpers) ? state.helpers : [];
++  // Tableau wrapper names seen so far, earlier items of this batch included (GEN-980).
++  const wrappersKnown = Array.isArray(state.wrappers) ? state.wrappers.slice() : [];
+   // After a browser switch inside a batch, the old browser's approvals and helpers no longer apply.
+   let switched = false;
+   const approved = h => (!switched && has(state.approved, h)) || newHosts.includes(h);
+   const siteNote = id => { const t = has(tabs, String(id)) ? tabs[id] : null; const h = t && hostOf(t.url); if (h) notes.push(h); };
+@@ -389,21 +501,30 @@ function decide(state, tool, input, opts) {
+     if (n === 'gif_creator') { if (inp.action === 'export' && inp.coordinate) { asks.push('always-gif-drop'); siteNote(inp.tabId); } return; }
+     if (n === 'javascript_tool') {
+       const t = String(inp.text || '');
+       const jsBefore = asks.length;
+-      if (RISKY_SCRIPT.test(t)) asks.push('risky-script');
++      const st = has(tabs, String(inp.tabId)) ? tabs[inp.tabId] : null;
++      const site = (st && hostOf(st.url)) || '?';
++      // A Tableau Cloud data read (GEN-980) on a tab last seen on Tableau Cloud (the page the helper rule uses
++      // too; if a click moved it, the request is still only a listed read, sent to the page's own address): the
++      // rules below read the script without its wrappers and their calls. A script reaching a wrapper an earlier
++      // script declared, other than as a listed read, asks.
++      const misuse = wrapperMisuse(t, wrappersKnown);
++      for (const wn of wrapperNames(t)) if (!wrappersKnown.includes(wn)) wrappersKnown.push(wn);
++      const tr = TABLEAU_HOST.test(site) && !misuse ? tableauRead(t, helpers) : null;
++      const tt = tr && tr.ok ? tr.rest : t;
++      if (RISKY_SCRIPT.test(tt) || misuse) asks.push('risky-script');
+       else {
+         // Approved per site: a helper of the same name on another site is another function.
+-        const st = has(tabs, String(inp.tabId)) ? tabs[inp.tabId] : null;
+-        const site = (st && hostOf(st.url)) || '?';
+-        const hc = helperCalls(t, helpers).map(x => 'helper:' + site + ':' + x);
++        const hc = helperCalls(tt, helpers).map(x => 'helper:' + site + ':' + x);
+         // On a high-stakes site, or a tab whose site is not known, every helper call asks.
+         const once = (opts.helperOnce != null ? opts.helperOnce : HELPER_ONCE) && site !== '?' && !isHigh(site, opts);
+         const fresh = once ? hc.filter(k => !approved(k)) : hc;
+         if (fresh.length) { asks.push('script-helper'); for (const k of fresh) if (!newHosts.includes(k)) newHosts.push(k); }
+-        if (hc.length && !helperArgsOk(t)) asks.push('helper-args');
++        if (hc.length && !helperArgsOk(tt)) asks.push('helper-args');
+       }
+       if (typedWrite(t)) asks.push('typed-write');
++      if (tr && tr.ok && asks.length === jsBefore) waived.push({ rule: 'tableau-read', host: site, methods: tr.methods.slice(0, 10) });
+       if (asks.length > jsBefore) texts.push({ kind: 'script', text: t.slice(0, TEXT_CAP), cut: t.length > TEXT_CAP });
+       if (asks.length) siteNote(inp.tabId);
+       return;
+     }
+@@ -456,9 +577,9 @@ function decide(state, tool, input, opts) {
+   };
+   // Later items in the same call cannot trust a tab this item may have moved.
+   const markMoves = it => {
+     if (SWITCHES_BROWSER.has(it.name)) { switched = true; allMoved = true; for (const k of Object.keys(tabs)) tabs[k].stale = true; return; }
+-    if (!moves(it, helpers)) return;
++    if (!moves(it, helpers, wrappersKnown)) return;
+     const id = it.input.tabId;
+     // No tab named (or an odd tab id), or an unfamiliar tool/action: any tab may have moved.
+     if (id == null || id === ODD_TAB || !known(it)) { allMoved = true; for (const k of Object.keys(tabs)) tabs[k].stale = true; return; }
+     const prev = has(tabs, String(id)) ? tabs[id] : null;
+@@ -469,10 +590,11 @@ function decide(state, tool, input, opts) {
+   for (const it of items) { actions++; check(it); markMoves(it); }
+   // Helpers this call's scripts store on window (recorded before the call runs, see applyDecision).
+   const newHelpers = [];
+   for (const it of items) if (it.name === 'javascript_tool') for (const hn of helperNames(it.input.text || '')) if (!newHelpers.includes(hn)) newHelpers.push(hn);
++  const newWrappers = wrappersKnown.filter(w => !(state.wrappers || []).includes(w));
+   const res = { actions, interactive, hosts: newHosts, notes: [...new Set(notes)], moved: [...moved], allMoved,
+-    tainted: [...tainted], untainted: [...untainted], passed, newHelpers,
++    tainted: [...tainted], untainted: [...untainted], passed, waived, newHelpers, newWrappers,
+     texts, claims: claims.reduce((a, c) => { const o = a.find(x => x.text === c.text); if (o) o.danger = o.danger || c.danger; else a.push(c); return a; }, []), where: [...new Set(where)],
+     switchesBrowser: items.some(it => SWITCHES_BROWSER.has(it.name)) };
+   if (denies.length) {
+     const cause = denies[0];
+@@ -865,21 +987,29 @@ function applyDecision(state, res) {
+   // are added: they only ever make a later script ask (their approvals are per site and are dropped).
+   if (res.switchesBrowser) {
+     state.tabs = {}; state.approved = {};
+     rememberHelpers(state, res.newHelpers);
++    rememberWrappers(state, res.newWrappers);
+     return;
+   }
+   markStale(state, res.moved || [], !!res.allMoved);
+   for (const id of res.tainted || []) if (id !== '__proto__' && has(state.tabs, id)) state.tabs[id].taint = true;
+   if (res.decision !== 'ask') unmark(state, res.untainted);
+   // A helper is remembered as soon as a script that stores it may run (a lost PostToolUse must not forget it).
+   rememberHelpers(state, res.newHelpers);
++  rememberWrappers(state, res.newWrappers);
+ }
+ // Remember helper names a script stores on window (the newest 200).
+ function rememberHelpers(state, names) {
+   for (const hn of names || []) if (!state.helpers.includes(hn)) state.helpers.push(hn);
+   if (state.helpers.length > 200) state.helpers = state.helpers.slice(-200);
+ }
++// Remember Tableau wrapper names a script declares (the newest 200), as soon as it may run (GEN-980).
++function rememberWrappers(state, names) {
++  if (!Array.isArray(state.wrappers)) state.wrappers = [];
++  for (const wn of names || []) if (!state.wrappers.includes(wn)) state.wrappers.push(wn);
++  if (state.wrappers.length > 200) state.wrappers = state.wrappers.slice(-200);
++}
+ function unmark(state, ids) {
+   for (const id of ids || []) if (typeof id === 'string' && id !== '__proto__' && has(state.tabs, id)) state.tabs[id].taint = false;
+ }
+ 
+@@ -895,20 +1025,20 @@ function record(state, tool, input, resultText, pendingHosts, failed, pendingUnm
+   // Tab ids and site approvals belong to one browser (and its signed-in accounts), also inside a batch;
+   // helper names are kept (and this call's added), since they only ever make a later script ask.
+   if (items.some(it => SWITCHES_BROWSER.has(it.name))) {
+     state.tabs = {}; state.approved = {};
+-    for (const it of items) if (it.name === 'javascript_tool') rememberHelpers(state, helperNames(it.input.text || ''));
++    for (const it of items) if (it.name === 'javascript_tool') { rememberHelpers(state, helperNames(it.input.text || '')); rememberWrappers(state, wrapperNames(it.input.text || '')); }
+     return;
+   }
+   const lastMove = {}, lastAny = {};
+   let noTabMove = -1;
+   items.forEach((it, i) => {
+     const id = it.input && it.input.tabId;
+-    const mv = moves(it, state.helpers);
++    const mv = moves(it, state.helpers, state.wrappers);
+     if (id != null && id !== ODD_TAB) { lastAny[id] = i; if (mv) lastMove[id] = i; }
+     else if (mv) noTabMove = i;
+     // A helper a script stored on window is remembered: later scripts calling it count as risky.
+-    if (it.name === 'javascript_tool') rememberHelpers(state, helperNames(it.input.text || ''));
++    if (it.name === 'javascript_tool') { rememberHelpers(state, helperNames(it.input.text || '')); rememberWrappers(state, wrapperNames(it.input.text || '')); }
+   });
+   const touched = Object.keys(lastAny);
+   // A failed call may have stopped anywhere: every tab it touched is unsure, and its error text is not a page report.
+   if (failed) { markStale(state, touched, noTabMove >= 0); return; }
+@@ -1096,17 +1226,20 @@ function handlePre(input) {
+       try { saveState(file, state); } catch (e) {
+         // A read that changes nothing may go ahead without its count saved; anything else asks (the
+         // error reaches main(), which answers "ask").
+         const changesNothing = res.decision === 'none' && !res.interactive && !(res.moved || []).length && !res.allMoved &&
+-          !(res.newHelpers || []).length && !res.switchesBrowser;
++          !(res.newHelpers || []).length && !(res.newWrappers || []).length && !res.switchesBrowser;
+         if (!changesNothing) throw e;
+       }
+     }
+   } finally { if (release) release(); }
+   if (res.decision !== 'none') logLine({ event: res.decision, session: input.session_id, tool: shortName(tool), causes: res.causes, hosts: res.notes.filter(x => !x.startsWith('"')) });
+   // What went ahead on an ordinary approved site without its own ask: site + the first six words of
+   // Claude's own summary (no page text). A sampling aid, read at the live check, not a live watch.
+   if (res.decision !== 'deny' && res.passed && res.passed.length) logLine({ event: 'pass', session: input.session_id, items: res.passed.slice(0, 10) });
++  // What a GEN-980 rule let through (site + method names, no page text), and whether the call then went
++  // ahead without any ask ('none'): read by the two-week check after install.
++  if (res.decision !== 'deny' && res.waived && res.waived.length) logLine({ event: 'waived', session: input.session_id, decision: res.decision, items: res.waived.slice(0, 10) });
+   if (res.decision === 'ask') return askOut(reasonFor(res));
+   if (res.decision === 'deny') return denyOut(DENY_TEXT[res.denyCause] || 'Browser gate (GEN-924): repeat the action after reading the tab.');
+ }
+ 
+@@ -1167,5 +1300,5 @@ function main() {
+ 
+ if (require.main === module) main();
+ module.exports = { PREFIX, shortName, hostOf, decide, record, countCall, reasonFor, DENY_TEXT, newState, normalizeState,
+   tabsFromText, responseText, overBar, BAR, wordHit, harmless, summaryAsks, RISKY_SCRIPT, typedWrite, isHigh, applyDecision,
+-  ADMIN_CONSOLES_HIGH_STAKES, SUMMARY_MODE, plainReason, legacyReasonFor, sqlKind, scriptKinds };
++  ADMIN_CONSOLES_HIGH_STAKES, SUMMARY_MODE, plainReason, legacyReasonFor, sqlKind, scriptKinds, tableauRead, TABLEAU_READS, TABLEAU_HOST };
