@@ -34,6 +34,8 @@ GEN-467 v2.2 shipped — double-block regression fixed by removing the Arm-2 con
 GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history via full /vet-code (header edit dropped after /check caught a false premise); GEN-570 split off, GEN-562 appended. <!-- toc-session:a8070c8d-cefa-4229-96db-8d90e4e00e41 -->
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
+- 2026-10-28 — GEN-897 bundle: Rounds 2-3 of skill fixes live, close-out notes filed, GEN-981 created, 10 tickets Done, GEN-897/320 in Review. <!-- toc-session:4cd4759a-8cb6-4d6c-989e-096163b30991 -->
+- 2026-10-28 — GEN-882 status given; GEN-897 bundle planned (8 tickets combined, 4 to close), Round 1 (9 files) live and verified; auto mode shows no pop-up for unlock writes (F1); Round 2 onward handed to a sub-session <!-- toc-session:f64d352d-fd05-450c-a840-bfa400fc40f1 -->
 - 2026-10-27 — GEN-953 step 2 done: plain-words browser pop-ups v2.6 live and passed Erez's test; GEN-953 step 5 added; GEN-972, GEN-973 filed; GEN-931 evidence note. <!-- toc-session:af1e772b-677b-4843-be83-ee0a830da9a5 -->
 - 2026-10-26 (5) — GEN-890 weekly size check built and live (silent, files tickets itself), first weekly run filed GEN-970/971; GEN-966 Done; GEN-889 contents lines; GEN-969 filed <!-- toc-session:190ca257-572e-4b57-b1a6-9fb97c36c582 -->
 - 2026-10-26 (4) — GEN-825 verified Done; GEN-893 size lines live (Review until 9 Nov check); GEN-926 Done; GEN-892 auto-limit design approved; 4 follow-ups filed <!-- toc-session:e7771e49-d097-4cfe-a0b4-e88824f3ce0e -->
@@ -282,6 +284,48 @@ GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; 
 - 2026-06-29 (6) — **Diagnosed why GEN-NNN ticket lookup keeps failing, then `/check`-designed (converged, 3 lenses, 2 rounds) a secure lookup using Windows Credential Manager; design saved as a durable handoff, build deferred to a Sonnet session** — traced the "we fixed this today" confusion to its root (a working REST `unique_id` lookup *was* run today in session `eddc326e`, but by inlining the literal token — the leak; and a separate session only *analysed* a TOC idea and changed nothing); corrected Erez's "the sheet leaks tokens" to the true leak path (token written into an **allow-listed command** in `settings.local.json` → Drive+git); panel killed the first draft's plaintext-token-file (net-new cleartext copy + a circular bootstrap) → switched to **Credential Manager (native `PasswordVault` API, verified working on this machine with a dummy value)** with an **out-of-band one-time bootstrap by Erez** (token never enters Claude's context); design + build steps saved to `skills/notion-ticket-lookup/SECURE-LOOKUP-DESIGN.md`; **nothing built yet; no ticket filed yet**
 - 2026-06-29 (5) — **Redesigned `/wrap` to auto-capture unresolved items as Notion tickets (replacing the interactive apply-learnings step); applied 6 skill edits; filed [GEN-319](https://app.notion.com/p/38e6e495d07c816eae45d39cd04b853e) for the global-`CLAUDE.md` follow-up** — converged design + literal wording over many `/check` rounds; the panel caught a non-existent session-start timestamp and that locked-config edits are invisible to the auto-approve log → dropped the whole mechanical resolved-list for session-context judgment + Notion dedupe; also fixed over-broad assignee/override and stale cross-refs; skill edits applied to `skills/wrap/SKILL.md` but NOT yet committed/synced (deferred to `/wrap`, tracked in GEN-319)
 - 2026-06-29 (4) — **[GEN-317](https://app.notion.com/p/38e6e495d07c81a4898fde80a7045191) → Done: added a global rule to auto-deploy after an approved implementation** — drafted the rule, `/check`-converged it (4 lenses, 2 rounds; the panel killed a self-defeating exception that would have fired on every `clasp push`, and verified two "conflicting" rules were harness defaults the new rule legitimately overrides), applied to global `CLAUDE.md` via `update-global-rule.ps1` (exit 0, verified); filed [GEN-318](https://app.notion.com/p/38e6e495d07c8128b261ebcbba2d87ff) (open question: what counts as "established deploy practice" for a project); caught a `/wrap` mis-scope — called this a "no-project" session when it is Improve AI Infra (GEN-58 Class-N recurrence)
+## 2026-10-28 — GEN-897 bundle: Rounds 2-3 live, close-out filed, 10 tickets Done
+<!-- session:4cd4759a-8cb6-4d6c-989e-096163b30991 -->
+
+Side session started from the GEN-897 planning session; continued the bundle from Round 2 per `C:\Users\Erez\.claude\plans\come-up-with-a-vectorized-beacon.md` and `notes/gen897/HANDOFF.md` (full working record there).
+
+- **Round 2 (live, 18/18 hash-matched):** vet-code (`SKILL.md`, `gate-mechanics.md`, `reviews.md`, `live-verify.md`, `probe-fastpath.md`, `background.md`), vet-rule (`SKILL.md`, `background.md`, `claude-md-apply.md`), vet-ticket (8 files) and staging `SKILL.md` (rebuilt on top of the Jira-redline session's staging edit and re-reviewed). History text removed; the F1 "that prompt IS the gate" claim corrected (the hook never returns `ask`; in auto mode an undecided write goes to the classifier, no prompt); GEN-525/763/509/709 and the vet-ticket half of GEN-852 fixed. `probe-fastpath.md` grew +375 chars; Erez: "Keep it, with your OK."
+- **Round 3 (live, 4/4 match):** wrap Step 0 rewritten (GEN-852 + GEN-320; Erez's GEN-320 choice: "my choice for 320 - A"): look up each worked ticket's epic before calling a session global; no-project wraps skip only Steps 4, 4b, 6. wrap description now triggers on "end session"/"wrap up"; Step 5 names the full `sync.ps1` path; `step1-capture.md` inv-M5 fixed. config-health `SKILL.md` 4,580 → 3,569 tokens by splitting the on-demand settings clean-up into new `config-health/settings-cleanup.md` (Erez: "Yes — move only the on-demand settings clean-up section into its own side sheet; everything wrap-up uses stays."). GEN-970 fixed. Each round went through /vet-rule (size checker, /check panel, check-records, one approval card, passes, `update-config.ps1 -Op write-file`, hash check).
+- **Close-out (via /vet-ticket, 11 writes, all reviewer PASS first round):** progress notes on GEN-897, 624, 505, 525, 763, 509, 709, 852, 320, 970; new GEN-981 "A wrap-up of a session with no project leaves nothing half-done" (To Do, Low, child of GEN-897).
+- **Statuses:** GEN-897 → Review, assigned to Erez (run `/doctor prompt-audit` by Nov 4; global-rule findings remain, owned by GEN-674). On Erez's "yes, close": GEN-525, 763, 509, 709, 852, 970, 499, 526, 404, 429 → Done; GEN-320 → Review (proof = next wrap of a Claude-files-only session). GEN-624 stays in Review for Erez (is auto mode with no pop-up on approval passes what he wants?). All re-checked live.
+- Effort: Erez asked "do we really need xhigh to install?" — no, install is mechanical; ran it at medium, raised to xhigh for Round 3 drafting.
+
+Unresolved items filed: none (GEN-981 was filed during the close-out).
+Reversals judged non-learning: the xhigh-for-install tag — I had copied the plan's per-round rating onto a mechanical step; corrected on Erez's question, one-off.
+Grounding flag: 2 count-nudges this session, 43 lifetime, newest 0 days ago.
+Signal-surface FYI: 3 false-detect retirements in the last 90 days (detector-retune signal, GEN-510).
+Release review: last run 2026-10-26 (2.1.300 → 2.1.310): 1 new ticket(s), 1 note(s) added, 0 moved Blocked → To Do, 1 waiting for your yes/no as of that run in GEN-959, 0 not filed
+
+---
+
+## 2026-10-28 — GEN-882 status, GEN-897 bundle planned + Round 1 live, permission-prompt finding (F1)
+<!-- session:f64d352d-fd05-450c-a840-bfa400fc40f1 -->
+
+Erez asked "Where are we on 882?". Answered from a live REST read of GEN-882's 16 children: 5 Done (GEN-825, 845, 677, 886, 926), 2 Review (GEN-893/890, scheduled checks Nov 9+), 1 In Progress (GEN-674, waves after Nov 1), 8 To Do (incl. GEN-892, which waits on the Oct 29 release-review run). The first chat answer said "6 Done / 7 To Do" (GEN-969 miscounted); corrected in chat the same session.
+
+**Plan.** Erez: "Come up with a converged proposal for gen 897, together with any other in progress, todo, backlog ticket from gen 86 or 59 you think we should combine. Convey the proposal in laymens terms, and tell me the needed model effort level to execute". Survey: all 921 Team-Tasks rows read via REST; 399 open under GEN-86/59; 16 candidates read in full. Plan converged via /check in 2 rounds (round 1: layman's terms, size lines, dropped findings, GEN-970 framing, effort level, F1 test design; all resolved). Approved via plan mode. Plan file: `C:\Users\Erez\.claude\plans\come-up-with-a-vectorized-beacon.md`.
+- Combined into GEN-897: GEN-852, GEN-320, GEN-525, GEN-763, GEN-709, GEN-509, GEN-270 item 1, GEN-970.
+- To close as already done (Erez's OK still needed): GEN-499, GEN-526, GEN-404, GEN-429.
+- Kept separate: GEN-830 (global file, frozen till Nov 1), GEN-370, GEN-538, GEN-603, GEN-971, GEN-965, GEN-439/517/687/730, GEN-270 item 2.
+- F2 needs no decision: the global "counts as one item" clause already resolves it.
+- Effort: rounds xhigh; decisions at least high; strong model required.
+
+**Done.**
+- GEN-897 set In Progress.
+- Round 1 live and verified: 9 files (skills shell-howto, notion-howto, notion-ticket-lookup + SECURE-LOOKUP-DESIGN.md, content-review, review-design, check; agents/check-reviewer.md; project CLAUDE.md). /check converged in 1 round (4 lenses PASS). Erez: "Yes, install the nine Round 1 fixes as reviewed." All 9 hash/diff-match the reviewed copies; all 7 check passes consumed. shell-howto's description now loads (seen in the live skill list).
+- F1 settled: this session runs in `auto` mode; a harmless probe write to `~/.claude-staging/check-passes/` completed with NO pop-up (Erez's screenshot). So the skills' "the mint write prompts Erez — that prompt IS the gate" is false in auto mode; the real gate is Erez's chat approval of the card. To record on GEN-624 at close-out.
+
+**Still open.** Round 2 (vet family + staging, F1 wording, GEN-525/763/509/709, GEN-852 vet-ticket half), Round 3 (wrap + config-health, GEN-320/852/970), and close-out (ticket notes via /vet-ticket, status proposals, Erez re-runs `/doctor prompt-audit`). Moved to a linked sub-session working from `notes/gen897/HANDOFF.md` (Erez chose "sub" over compacting here).
+
+**Not done (non-blocking Round 1 advisories):** SECURE-LOOKUP-DESIGN.md line ~40 still says "Business/Enterprise error"; check's removed pre-mortem pointer could be renamed; dropped "re-test if the Notion plan changes" cue.
+
+---
+
 ## 2026-10-27 — GEN-953 step 2 done: plain-words browser pop-ups v2.6 installed and live-tested; step 5 added
 <!-- session:af1e772b-677b-4843-be83-ee0a830da9a5 -->
 
