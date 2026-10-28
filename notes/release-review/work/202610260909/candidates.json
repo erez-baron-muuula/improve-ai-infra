@@ -1,0 +1,52 @@
+[
+  {
+    "key": "auto-mode-setup",
+    "lines": ["Added `/auto-mode-setup`: a guided setup that reads your project and recent sessions to teach auto mode about your environment, now also available on Bedrock, Vertex, Foundry, Claude apps gateway and telemetry-disabled sessions"],
+    "versions": ["2.1.304"],
+    "target": "GEN-349",
+    "kind": "ticket",
+    "meaning": "A built-in command drafts autoMode.environment entries (trusted repos, domains, workflow context) for the auto mode classifier from the project and recent sessions - the 'give the classifier awareness of our environment' systemic fix GEN-349 asks to evaluate; we have no autoMode block in settings.json.",
+    "docs": "https://code.claude.com/docs/en/auto-mode-config",
+    "verdict": "finding"
+  },
+  {
+    "key": "server-classifier-compacts-long-conversation",
+    "lines": ["Improved auto mode with the server-side classifier: a conversation too long for the safety check is now compacted, instead of every checked tool call being denied"],
+    "versions": ["2.1.302"],
+    "target": "GEN-423",
+    "kind": "ticket",
+    "meaning": "Removes one more cause of blanket auto-mode denials tracked by GEN-423.",
+    "docs": "https://code.claude.com/docs/en/errors (error listed, body not readable)",
+    "verdict": "unverified"
+  },
+  {
+    "key": "grep-glob-error-on-search-failure",
+    "lines": ["Fixed Grep and Glob reporting no matches when the search program failed unexpectedly before returning any results; they now return an error saying the search failed"],
+    "versions": ["2.1.301"],
+    "target": "GEN-297",
+    "kind": "ticket",
+    "meaning": "Upstream fix for the 'failed search read as nothing found' risk GEN-297 guards against, for Grep and Glob.",
+    "docs": null,
+    "verdict": "unverified"
+  },
+  {
+    "key": "otel-safety-event",
+    "lines": ["Added the `claude_code.safety_event` OpenTelemetry event for each tool call a permission rule, auto mode, a safety check, a hook or the sandbox stopped, prompted or sent back"],
+    "versions": ["2.1.307"],
+    "target": "GEN-953",
+    "kind": "opportunity",
+    "meaning": "Native per-prompt/refusal telemetry; needs an OpenTelemetry collector we do not run, and GEN-953 already dropped its own pop-up counter (GEN-946).",
+    "docs": "https://code.claude.com/docs/en/monitoring-usage",
+    "verdict": "dropped: no fit"
+  },
+  {
+    "key": "gen892-blocker-supervised-run",
+    "lines": [],
+    "versions": [],
+    "target": "GEN-892",
+    "kind": "proposal",
+    "meaning": "GEN-892 is Blocked only until GEN-871's supervised run passes; once this run passes, propose To Do (yes/no on the digest).",
+    "docs": null,
+    "verdict": "digest yes/no"
+  }
+]

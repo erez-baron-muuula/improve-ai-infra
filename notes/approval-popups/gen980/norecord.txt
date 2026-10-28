@@ -1,0 +1,39 @@
+080b0354 #9 «Runs USE ROLE ACCOUNTADMIN in the worksheet» last cleared by: javascript_tool:javascript_exec window.__ etSql = ( ql) => { con t v = document.querySelector('iframe').contentDocument.qu
+080b0354 #73 «Runs CREATE OR REPLACE of the nightly NaN-fix routine in Snowflake» last cleared by: computer:key Pa te  the routine text into the empty editor
+080b0354 #109 «Runs the read-only after-change check» last cleared by: javascript_tool:javascript_exec window.__ etSql = ( ql) => { con t v = document.querySelector('iframe').contentDocument.qu
+0c29abc4 #50 «Runs the query» last cleared by: computer:type Type  a read-only daily  ummary query of Yakir'  activity
+0c29abc4 #61 «Runs the query» last cleared by: computer:type Type  a read-only query li ting Yakir'  mo t frequent change  tatement 
+0c29abc4 #71 «Runs the query» last cleared by: computer:type Type  a read-only query of Yakir'   tatement   ince 13 Oct
+0c29abc4 #81 «Runs the query» last cleared by: computer:type Type  a read-only query of  cheduled-ta k run  in the la t 60 day 
+0c29abc4 #93 «Runs the query» last cleared by: computer:type Type  a read-only query of daily warehou e credit   ince 15 Sep
+0c29abc4 #103 «Runs the query» last cleared by: computer:type Type  a read-only query checking whether anyone el e u ed the LEXICON table 
+0c29abc4 #108 «Runs the query» last cleared by: computer:type Type  a read-only query of LEXICON query outcome   ince 13 Oct
+0c29abc4 #123 «Runs the query» last cleared by: computer:type Type  a read-only query of Yakir'  change  out ide LEXICON  ince 15 Sep
+0c29abc4 #131 «Runs the query» last cleared by: computer:type Type  a read-only query of the Ver ion Analy i  ta k error 
+0c29abc4 #141 «Runs the query» last cleared by: computer:type Type  a read-only query for the end of the fir t and la t error me age 
+0c29abc4 #159 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #168 «Runs the query» last cleared by: computer:type Type  a read-only query  howing the header and comment  of the report-builder procedure
+0c29abc4 #197 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #203 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #210 «Runs the command» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #218 «Runs the command» last cleared by: computer:type Type  a read-only command li ting Lexicon ta k 
+0c29abc4 #224 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #235 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #245 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+0c29abc4 #270 «Runs the query» last cleared by: computer:left_click Place  cur or in the SQL editor
+3df07a58 #40 «Runs the read-only test query» last cleared by: computer:type Type  a read-only te t query into the editor
+3df07a58 #47 «Runs USE ROLE ACCOUNTADMIN in the worksheet» last cleared by: javascript_tool:javascript_exec window.__ etSql = ( ql) => { con t v = document.querySelector('iframe').contentDocument.qu
+3df07a58 #51 «Runs a read-only status query» last cleared by: javascript_tool:javascript_exec window.__readGrid = () => { con t d = document.querySelector('iframe').contentDocument; co
+3df07a58 #56 «Runs the read-only status query» last cleared by: computer:left_click Place  cur or at end of the  tatu  query
+3df07a58 #60 «Runs the approved rule update adding GameSelection» last cleared by: javascript_tool:javascript_exec window.__ etSql = ( ql) => { con t v = document.querySelector('iframe').contentDocument.qu
+3df07a58 #74 «Runs CREATE OR REPLACE of the reviewed routine» last cleared by: computer:key Select  the whole routine text in the editor
+3df07a58 #115 «Runs the read-only query-history lookup» last cleared by: javascript_tool:javascript_exec window.__ etSql = ( ql) => { con t v = document.querySelector('iframe').contentDocument.qu
+3df07a58 #130 «Runs CREATE OR REPLACE of the fixed repair tool» last cleared by: computer:key Select  the whole repair-tool text in the editor
+46d40f1e #21 «Runs the read-only query» last cleared by: computer:key Clo e  the autocomplete popup
+46d40f1e #26 «Runs the list-users query» last cleared by: computer:type Type  a read-only li t-u er  query
+46d40f1e #32 «Runs the users query» last cleared by: computer:type Type  a read-only query on the u er  li t
+46d40f1e #364 «Runs the describe-user query» last cleared by: computer:type Type  a read-only de cribe-u er query
+46d40f1e #368 «Runs the public key query» last cleared by: computer:type Type  a read-only query for the u er'  public key field 
+5b31b801 #38 «Runs the approved routine replacement» last cleared by: computer:key Select  all editor text
+5b31b801 #61 «Runs the approved supervised routine call as SYSADMIN» last cleared by: computer:key Select  the three  tatement 
+5b31b801 #75 «Runs read-only post-run checks» last cleared by: computer:key Select  both  tatement 
