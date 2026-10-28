@@ -1,0 +1,13 @@
+{ "run": "202610260909",
+  "mode": "live",
+  "from": "2.1.300",
+  "through": "2.1.310",
+  "outcome": "ok",
+  "filed": ["GEN-959"],
+  "appended": ["GEN-349"],
+  "unblocked": [],
+  "waiting": 1,
+  "notFiled": 0,
+  "recovery": null,
+  "digestTicket": "GEN-959",
+  "note": "First supervised live run (Erez present). max-writes set by Erez: \"do as many writes as needed\" (3 writes: GEN-349 note, GEN-959 digest create, GEN-959 body + first section). Planned for 2026-10-22, held 2026-10-26. 24 Blocked tickets read, none unblockable. Help Center: one entry after 2026-10-07 (2026-10-21, Claude Duet research preview), not a surface we use. The IDE filter wrongly dropped two non-IDE lines (2.1.305 /usage fixes, 2.1.309 /rename) - neither relevant. A stale run.lock from an unrecorded 2026-10-25 20:43Z attempt was replaced (over 3 h old)." }
