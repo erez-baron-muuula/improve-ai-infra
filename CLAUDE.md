@@ -4,9 +4,6 @@ A project for tracking, testing, and implementing improvements to Claude Code wo
 
 ## Project Structure
 
-- `rules/` — Proposed or tested additions to global/project CLAUDE.md
-- `prompts/` — Reusable prompt templates
-- `scripts/` — Automation scripts for Claude Code tooling
 - `notes/` — Research notes, experiment logs, and findings
 
 ## Local Path

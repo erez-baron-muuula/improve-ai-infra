@@ -1,0 +1,10 @@
+[
+  { "version": "2.1.307", "text": "Added the `claude_code.safety_event` OpenTelemetry event for each tool call" },
+  { "version": "2.1.302", "text": "Improved auto mode with the server-side classifier: a conversation too long for the safety check is now compacted" },
+  { "version": "2.1.309", "text": "Fixed features missing from Claude Code sessions in the Claude desktop app when the terminal on the same computer was signed in to a different account" },
+  { "version": "2.1.301", "text": "Fixed Grep and Glob reporting no matches when the search program failed unexpectedly" },
+  { "version": "2.1.304", "text": "Added `/auto-mode-setup`: a guided setup" },
+  { "version": "2.1.309", "text": "Fixed hooks that run in PowerShell not blocking when the hook's program exits with code 2" },
+  { "version": "2.1.310", "text": "Windows: Fixed PreToolUse and PermissionRequest hooks letting a tool call through when Git Bash is missing" },
+  { "version": "2.1.307", "text": "Fixed `/permissions` > Recently denied not showing the denied shell command" }
+]
