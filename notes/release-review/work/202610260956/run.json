@@ -1,0 +1,13 @@
+{ "run": "202610260956",
+  "mode": "dry",
+  "from": "2.1.300",
+  "through": "2.1.310",
+  "outcome": "ok",
+  "filed": [],
+  "appended": [],
+  "unblocked": [],
+  "waiting": 0,
+  "notFiled": 0,
+  "recovery": null,
+  "digestTicket": "GEN-959",
+  "note": "GEN-871 dedupe re-check after the supervised run: same 10 versions (collect.json byte-identical), every candidate skipped or held, 0 would-be writes. See dry-runs/2026-10-26.md." }

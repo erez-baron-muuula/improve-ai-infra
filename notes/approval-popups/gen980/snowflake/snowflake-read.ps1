@@ -1,0 +1,282 @@
+#!/usr/bin/env pwsh
+# snowflake-read.ps1 -- run ONE look-only query in Snowflake as Claude's own login
+# CLAUDE_READER (role CLAUDE_READ, warehouse CLAUDE_WH), outside the browser.
+# GEN-980 lever e / GEN-953 step 4.
+#
+#   & 'C:\Users\Erez\.claude\scripts\snowflake-read.ps1' -SqlFile '<a .sql file under %TEMP%>'
+#
+# Write the query to a .sql file in the session scratchpad (it is under %TEMP%) first, then run
+# this. The ROLE is what makes it look-only: CLAUDE_READ has SELECT/USAGE grants and three
+# SNOWFLAKE viewer roles, nothing that can change data or run a routine. This script adds no
+# statement filter of its own. One statement per run (MULTI_STATEMENT_COUNT = 1).
+#
+# How: Snowflake's SQL API (POST /api/v2/statements) with key-pair sign-in. The JWT is signed
+# here with .NET (RSA, SHA-256); HTTPS uses Windows' own certificate checks, left ON. (The
+# Snowflake ODBC driver was tried first: .NET caps its connection string at 1024 characters,
+# and the driver's own certificate list rejects the Avast web-shield certificate on this PC.)
+#
+# Output: the row count and the first 50 rows on screen; ALL rows as CSV in
+# %TEMP%\snowflake-read\<time>.csv. Every result page is fetched and the total is checked
+# against Snowflake's row count. The key is read from Windows Credential Manager
+# ('claude-snowflake-reader', base64 PKCS#8, stored by snowflake-reader-setup.ps1) into memory
+# only; neither the key nor the signed token is ever printed, put on a command line, or written.
+#
+# Keep this file ASCII-only: PS 5.1 reads a BOM-less script as Windows-1252.
+
+param(
+  [Parameter(Mandatory = $true)][string]$SqlFile
+)
+
+$ErrorActionPreference = 'Stop'
+$Resource  = 'claude-snowflake-reader'
+$Account   = 'IUTDPNK-QL40012'
+$BaseUrl   = 'https://iutdpnk-ql40012.snowflakecomputing.com'
+$User      = 'CLAUDE_READER'
+$Role      = 'CLAUDE_READ'
+$Warehouse = 'CLAUDE_WH'
+$ShowRows  = 50
+$CellMax   = 200
+$PollLimitSeconds = 420
+
+Add-Type -AssemblyName System.Web.Extensions
+Add-Type -AssemblyName System.Core
+
+function Get-SqlText([string]$Path) {
+  $tempRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\') + '\'
+  $full = [IO.Path]::GetFullPath($Path)
+  if (-not $full.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
+    throw ('The query file must be under ' + $tempRoot + ' (the session scratchpad is).')
+  }
+  if ([IO.Path]::GetExtension($full) -ne '.sql') { throw 'The query file must end in .sql.' }
+  if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw ('No such query file: ' + $full) }
+  if ((Get-Item -LiteralPath $full).Length -gt 1MB) { throw 'The query file is larger than 1 MB.' }
+  $sql = [IO.File]::ReadAllText($full, [Text.Encoding]::UTF8).Trim()
+  if ([string]::IsNullOrWhiteSpace($sql)) { throw 'The query file is empty.' }
+  return $sql
+}
+
+function Get-ReaderKeyBytes {
+  $vault = [Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]::new()
+  try {
+    $c = $vault.Retrieve($Resource, $Resource)
+    $c.RetrievePassword()
+    $b64 = $c.Password
+  } catch {
+    throw 'The Snowflake reader key is not stored on this PC. Erez runs once, in his own PowerShell window: powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Erez\AI Projects\Improve AI Infra\notes\approval-popups\gen980\snowflake\snowflake-reader-setup.ps1"'
+  } finally {
+    Remove-Variable -Name c -ErrorAction SilentlyContinue
+  }
+  try {
+    return [Convert]::FromBase64String($b64)
+  } catch {
+    throw 'The stored Snowflake reader key is damaged (not valid base64). Re-run the setup script with -Replace, then register the new public key on CLAUDE_READER.'
+  } finally {
+    Remove-Variable -Name b64 -ErrorAction SilentlyContinue
+  }
+}
+
+# --- DER helpers to rebuild the public key (SubjectPublicKeyInfo) for its fingerprint ---
+function Get-DerLength([int]$Len) {
+  if ($Len -lt 128) { return ,([byte[]]@($Len)) }
+  $b = New-Object System.Collections.Generic.List[byte]
+  while ($Len -gt 0) { $b.Insert(0, [byte]($Len -band 0xFF)); $Len = $Len -shr 8 }
+  return ,([byte[]](@([byte](0x80 + $b.Count)) + $b.ToArray()))
+}
+function New-Der([byte]$Tag, [byte[]]$Body) {
+  return ,([byte[]](@($Tag) + (Get-DerLength $Body.Length) + $Body))
+}
+function New-DerInteger([byte[]]$Unsigned) {
+  $i = 0
+  while ($i -lt $Unsigned.Length - 1 -and $Unsigned[$i] -eq 0) { $i++ }
+  $v = [byte[]]$Unsigned[$i..($Unsigned.Length - 1)]
+  if ($v[0] -band 0x80) { $v = [byte[]](@([byte]0) + $v) }
+  return New-Der 0x02 $v
+}
+function Get-PublicKeyFingerprint($Rsa) {
+  $p = $Rsa.ExportParameters($false)
+  $rsaPub = New-Der 0x30 ([byte[]]((New-DerInteger $p.Modulus) + (New-DerInteger $p.Exponent)))
+  $algId = [byte[]](0x30,0x0D,0x06,0x09,0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x01,0x01,0x05,0x00)
+  $bitString = New-Der 0x03 ([byte[]](@([byte]0) + $rsaPub))
+  $spki = New-Der 0x30 ([byte[]]($algId + $bitString))
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { return 'SHA256:' + [Convert]::ToBase64String($sha.ComputeHash($spki)) } finally { $sha.Dispose() }
+}
+
+function ConvertTo-Base64Url([byte[]]$Bytes) {
+  return [Convert]::ToBase64String($Bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+
+function New-Jwt {
+  $keyBytes = Get-ReaderKeyBytes
+  try {
+    $cng = [Security.Cryptography.CngKey]::Import($keyBytes, [Security.Cryptography.CngKeyBlobFormat]::Pkcs8PrivateBlob)
+  } finally {
+    [Array]::Clear($keyBytes, 0, $keyBytes.Length)
+  }
+  $rsa = New-Object Security.Cryptography.RSACng($cng)
+  try {
+    $fp = Get-PublicKeyFingerprint $rsa
+    $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    $ser = New-Object Web.Script.Serialization.JavaScriptSerializer
+    $head = ConvertTo-Base64Url ([Text.Encoding]::UTF8.GetBytes('{"alg":"RS256","typ":"JWT"}'))
+    $claims = [ordered]@{ iss = ($Account + '.' + $User + '.' + $fp); sub = ($Account + '.' + $User); iat = $now; exp = ($now + 3300) }
+    $body = ConvertTo-Base64Url ([Text.Encoding]::UTF8.GetBytes($ser.Serialize($claims)))
+    $sig = $rsa.SignData([Text.Encoding]::ASCII.GetBytes($head + '.' + $body),
+      [Security.Cryptography.HashAlgorithmName]::SHA256, [Security.Cryptography.RSASignaturePadding]::Pkcs1)
+    return $head + '.' + $body + '.' + (ConvertTo-Base64Url $sig)
+  } finally {
+    $rsa.Dispose()
+    $cng.Dispose()
+  }
+}
+
+# One HTTPS call. Returns @{ Status; Json } where Json is the parsed body (or $null).
+function Invoke-SnowflakeApi([string]$Method, [string]$Url, [string]$Jwt, [string]$JsonBody) {
+  $req = [Net.HttpWebRequest]::Create($Url)
+  $req.Method = $Method
+  $req.Accept = 'application/json'
+  $req.UserAgent = 'claude-snowflake-read/1.0'
+  $req.Timeout = 120000
+  $req.ReadWriteTimeout = 300000
+  $req.AutomaticDecompression = [Net.DecompressionMethods]::GZip -bor [Net.DecompressionMethods]::Deflate
+  $req.Headers.Add('Authorization', 'Bearer ' + $Jwt)
+  $req.Headers.Add('X-Snowflake-Authorization-Token-Type', 'KEYPAIR_JWT')
+  if ($JsonBody) {
+    $req.ContentType = 'application/json'
+    $bytes = [Text.Encoding]::UTF8.GetBytes($JsonBody)
+    $req.ContentLength = $bytes.Length
+    $s = $req.GetRequestStream(); try { $s.Write($bytes, 0, $bytes.Length) } finally { $s.Dispose() }
+  }
+  try {
+    $resp = $req.GetResponse()
+  } catch [Net.WebException] {
+    $resp = $_.Exception.Response
+    if ($null -eq $resp) { throw ('Could not reach Snowflake: ' + $_.Exception.Message) }
+  }
+  try {
+    $code = [int]$resp.StatusCode
+    $rd = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
+    try { $text = $rd.ReadToEnd() } finally { $rd.Dispose() }
+  } finally { $resp.Dispose() }
+  $json = $null
+  if ($text) {
+    $ser = New-Object Web.Script.Serialization.JavaScriptSerializer
+    $ser.MaxJsonLength = [int]::MaxValue
+    try { $json = $ser.DeserializeObject($text) } catch { $json = $null }
+  }
+  return @{ Status = $code; Json = $json; Text = $text }
+}
+
+function Get-ApiError($R) {
+  if ($R.Json -and $R.Json.ContainsKey('message')) {
+    $m = [string]$R.Json['message']
+    if ($R.Json.ContainsKey('code')) { $m = $m + ' (code ' + $R.Json['code'] + ')' }
+    return $m
+  }
+  $t = [string]$R.Text
+  if ($t.Length -gt 300) { $t = $t.Substring(0, 300) }
+  return ('HTTP ' + $R.Status + ' ' + $t)
+}
+
+function Format-Cell($Value) {
+  if ($null -eq $Value) { return '' }
+  $s = [string]$Value
+  if ($s.Length -gt $CellMax) { $s = $s.Substring(0, $CellMax) + '...' }
+  return ($s -replace "[\r\n\t]+", ' ')
+}
+
+function ConvertTo-CsvField($Value) {
+  if ($null -eq $Value) { return '' }
+  return '"' + ([string]$Value).Replace('"', '""') + '"'
+}
+
+function Invoke-Read {
+  [Console]::OutputEncoding = [Text.Encoding]::UTF8
+  [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+  $sql = Get-SqlText $SqlFile
+  $outDir = Join-Path $env:TEMP 'snowflake-read'
+  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+  $csvPath = Join-Path $outDir ((Get-Date).ToString('yyyyMMdd-HHmmss-fff') + '.csv')
+
+  $jwt = New-Jwt
+  try {
+    $ser = New-Object Web.Script.Serialization.JavaScriptSerializer
+    $req = [ordered]@{
+      statement = $sql; timeout = 300; warehouse = $Warehouse; role = $Role
+      parameters = [ordered]@{ MULTI_STATEMENT_COUNT = '1'; QUERY_TAG = 'claude-reader' }
+    }
+    $url = $BaseUrl + '/api/v2/statements?requestId=' + [guid]::NewGuid().ToString()
+    $r = Invoke-SnowflakeApi 'POST' $url $jwt ($ser.Serialize($req))
+
+    $deadline = (Get-Date).AddSeconds($PollLimitSeconds)
+    while ($r.Status -eq 202) {
+      $handle = [string]$r.Json['statementHandle']
+      if ($handle -cnotmatch '\A[0-9a-fA-F-]{20,}\z') { throw 'Snowflake returned an unexpected statement handle.' }
+      if ((Get-Date) -gt $deadline) {
+        try { [void](Invoke-SnowflakeApi 'POST' ($BaseUrl + '/api/v2/statements/' + $handle + '/cancel') $jwt '{}') } catch { }
+        throw 'The query was still running after 7 minutes; stopped waiting and asked Snowflake to cancel it.'
+      }
+      Start-Sleep -Seconds 2
+      $r = Invoke-SnowflakeApi 'GET' ($BaseUrl + '/api/v2/statements/' + $handle) $jwt $null
+    }
+    if ($r.Status -ne 200) { throw ('Snowflake refused the query: ' + (Get-ApiError $r)) }
+
+    $meta = $r.Json['resultSetMetaData']
+    $handle = [string]$r.Json['statementHandle']
+    $names = @($meta['rowType'] | ForEach-Object { [string]$_['name'] })
+    $expected = [long]$meta['numRows']
+    $partCount = 1
+    if ($meta.ContainsKey('partitionInfo') -and $meta['partitionInfo']) { $partCount = @($meta['partitionInfo']).Count }
+
+    $w = New-Object IO.StreamWriter($csvPath, $false, (New-Object Text.UTF8Encoding($false)))
+    $rows = 0
+    $complete = $false
+    $sb = New-Object Text.StringBuilder
+    try {
+      $w.WriteLine((@($names | ForEach-Object { ConvertTo-CsvField $_ }) -join ','))
+      Write-Output ($names -join "`t")
+      for ($p = 0; $p -lt $partCount; $p++) {
+        if ($p -eq 0) { $data = $r.Json['data'] } else {
+          $pr = Invoke-SnowflakeApi 'GET' ($BaseUrl + '/api/v2/statements/' + $handle + '?partition=' + $p) $jwt $null
+          if ($pr.Status -ne 200) { throw ('Fetching result page ' + $p + ' failed: ' + (Get-ApiError $pr)) }
+          $data = $pr.Json['data']
+        }
+        foreach ($row in $data) {
+          [void]$sb.Clear()
+          $first = $true
+          foreach ($v in $row) {
+            if (-not $first) { [void]$sb.Append(',') }
+            $first = $false
+            if ($null -ne $v) { [void]$sb.Append('"').Append(([string]$v).Replace('"', '""')).Append('"') }
+          }
+          $w.WriteLine($sb.ToString())
+          if ($rows -lt $ShowRows) { Write-Output ((@($row | ForEach-Object { Format-Cell $_ })) -join "`t") }
+          $rows++
+        }
+      }
+      if ($rows -ne $expected) { throw ('Got ' + $rows + ' rows but Snowflake reported ' + $expected + '; the result is incomplete and was not kept.') }
+      $complete = $true
+    } finally {
+      $w.Dispose()
+      if (-not $complete) { Remove-Item -LiteralPath $csvPath -Force -ErrorAction SilentlyContinue }
+    }
+    Write-Output ''
+    $shown = [Math]::Min($rows, $ShowRows)
+    Write-Output ('Rows: ' + $rows + ' (showing ' + $shown + '). All rows: ' + $csvPath)
+  } finally {
+    Remove-Variable -Name jwt -ErrorAction SilentlyContinue
+  }
+}
+
+if ($MyInvocation.InvocationName -ne '.') {
+  $priorEncoding = [Console]::OutputEncoding
+  try {
+    Invoke-Read
+  } catch {
+    [Console]::Error.WriteLine('ERROR: ' + $_.Exception.Message)
+    [Console]::OutputEncoding = $priorEncoding
+    exit 1
+  }
+  [Console]::OutputEncoding = $priorEncoding
+  exit 0
+}
