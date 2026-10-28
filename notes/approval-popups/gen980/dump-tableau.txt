@@ -1,0 +1,325 @@
+### 0434ba33 #72 host=us-west-2b.online.tableau.com causes=risky-script
+window.__vz = async (method, params={}) => { const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||''); const r=await fetch('/vizportal/api/web/v1/'+method,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method,params})}); return r.json(); };
+const t = await __vz('getExtractTasks', {page:{startIndex:0,maxItems:100}});
+const r = t.result || t; JSON.stringify(Object.keys(r)).slice(0,300) + ' | ' + JSON.stringify(r.tasks ? r.tasks[0] : r).slice(0,1200)
+
+### 0434ba33 #73 host=us-west-2b.online.tableau.com causes=script-helper
+const r=(await __vz('getExtractTasks', {page:{startIndex:0,maxItems:100}})).result;
+const wb=Object.fromEntries((r.workbooks||[]).map(w=>[w.id,w])); const ds=Object.fromEntries((r.datasources||[]).map(d=>[d.id,d])); const sc=Object.fromEntries((r.schedules||[]).map(s=>[s.id,s]));
+({total:r.totalCount, more:r.moreItems, ests:(r.extractServiceTasks||[]).length, tasks:r.tasks.map(t=>{const tgt=t.targetType==='Workbook'?wb[t.targetId]:ds[t.targetId]; const s=sc[t.scheduleId]||{}; return [t.targetType, tgt?tgt.name:t.targetId, tgt?(tgt.ownerId||tgt.owner&&tgt.owner.id||''):'', t.type, t.state, 'last '+t.lastRunAt, 'next '+t.runNextAt, 'sched '+(s.name||'')+' '+(s.frequency||'')+' '+(s.frequencyDetails?JSON.stringify(s.frequencyDetails).slice(0,80):'')].join(' | ')}), sampleSchedKeys: Object.keys((r.schedules||[{}])[0]||{})})
+
+### 0434ba33 #78 host=us-west-2b.online.tableau.com causes=risky-script
+const r=(await __vz('getDataAlerts',{page:{startIndex:0,maxItems:100}})).result;
+const users=Object.fromEntries((r.users||[]).map(u=>[u.id,(u.displayName||u.username||u.name||'')]));
+r.dataAlerts.map(a=>{ const ds=a.dataSpecification||''; const sheet=(ds.match(/worksheet name='([^']+)'/)||[])[1]; const dash=(ds.match(/dashboard name='([^']+)'/)||[])[1]; return [a.title||a.subject||'', 'view: '+(a.viewName||a.view&&a.view.name||'')+' / '+(a.workbookName||a.workbook&&a.workbook.name||''), 'sheet '+sheet+' in '+dash, 'owner '+users[a.ownerId], 'recipients '+(a.displayRecipients||[]).map(x=>users[x.id]||x.id).join(','), 'freq '+(a.frequency||a.checkFrequency||''), 'lastChecked '+a.lastChecked, 'suspended '+(a.suspended??a.isSuspended??'')].join(' | ').replace(/@/g,' at ')}).concat(['otherKeys: '+Object.keys(r.dataAlerts[0]).filter(k=>k!=='dataSpecification').join(',')])
+
+### 0434ba33 #82 host=us-west-2b.online.tableau.com causes=helper-args
+const t=(await __vz('getExtractTasks',{page:{startIndex:0,maxItems:100}})).result;
+const wbIds=[...new Set(t.tasks.map(x=>x.targetId))]; const w=(await __vz('getWorkbooks',{page:{startIndex:0,maxItems:200}})).result.workbooks; const byId=Object.fromEntries(w.map(b=>[b.id,b]));
+const lines=[]; for (const id of wbIds){ const c=(await __vz('getDataConnections',{filter:{operator:'and',clauses:[{operator:'eq',field:'workbookId',value:id}]},page:{startIndex:0,maxItems:50}})).result; const cons=[...new Set((c.dataConnections||[]).map(d=>{const x=d.connectionDetails||{}; return (x.databaseUsername||'-')+'/'+(x.authenticationType||'-')+(x.hasEmbeddedPassword?'/embedded':'/not-embedded');}))]; const b=byId[id]||{}; lines.push((b.name||id)+' | alert '+b.hasAlert+' | updated '+(b.updatedAt||'')+' | '+cons.join(', ')); }
+const cv=await __vz('getCustomViews',{page:{startIndex:0,maxItems:200}});
+({active:lines, alertWorkbooks: w.filter(b=>b.hasAlert).map(b=>b.name), customViews: cv.result && !cv.result.errors ? (cv.result.totalCount+' total; '+(cv.result.customViews||[]).map(v=>v.name).slice(0,20).join(', ')) : JSON.stringify(cv).slice(0,200)})
+
+### 09536171 #57 host=us-west-2b.online.tableau.com causes=risky-script
+const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const r=await fetch('/vizportal/api/web/v1/getDataAlerts',{method:'POST',headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x},body:JSON.stringify({method:'getDataAlerts',params:{page:{startIndex:0,maxItems:100}}})});
+const j=await r.json();
+JSON.stringify(j).slice(0,4000).replace(/=/g,'(eq)').replace(/@/g,' at ')
+
+### 09536171 #58 host=us-west-2b.online.tableau.com causes=risky-script
+const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const r=await fetch('/vizportal/api/web/v1/getDataAlerts',{method:'POST',headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x},body:JSON.stringify({method:'getDataAlerts',params:{page:{startIndex:0,maxItems:100}}})});
+const j=await r.json();
+window.__alerts=j.result.dataAlerts;
+j.result.dataAlerts.map(a=>[a.id,a.title||a.name,a.frequency||a.checkFrequency,(a.dataSpecification.match(/worksheet name='([^']+)'/)||[])[1],(a.dataSpecification.match(/dashboard name='([^']+)'/)||[])[1]].join(' ; ')).join('\n').replace(/=/g,'(eq)')
+
+### 0c29abc4 #308 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const wb = await call('getWorkbooks', {page:{startIndex:0,maxItems:200}, order:[{field:'updatedAt',ascending:false}]});
+const ds = await call('getDatasources', {page:{startIndex:0,maxItems:200}});
+const w = (wb.result&&wb.result.workbooks)||[]; const d=(ds.result&&ds.result.datasources)||[];
+JSON.stringify({xsrf:!!x, wbTotal: wb.result&&wb.result.totalCount, wb: w.map(a=>[a.name, (a.projectName||''), (a.updatedAt||'').slice(0,10), a.size, a.ownerId]), dsTotal: ds.result&&ds.result.totalCount, ds: d.map(a=>[a.name,(a.projectName||''),(a.updatedAt||'').slice(0,10),a.type, a.hasExtracts]), err: wb.errors||ds.errors})
+
+### 0c29abc4 #309 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const wb = await call('getWorkbooks', {page:{startIndex:0,maxItems:200}, order:[{field:'updatedAt',ascending:false}]});
+const ds = await call('getDatasources', {page:{startIndex:0,maxItems:200}});
+const fl = await call('getFlows', {page:{startIndex:0,maxItems:50}});
+const w = wb.result.workbooks; const d=(ds.result&&ds.result.datasources)||[];
+'WB '+w.length+'\n'+w.map(a=>a.name.trim()+' | '+(a.updatedAt||'').slice(0,10)+' | '+Math.round((a.size||0)/1e6)+'MB').join('\n')+'\nDS '+d.length+'\n'+d.map(a=>a.name+' | '+(a.updatedAt||'').slice(0,10)+' | '+Math.round((a.size||0)/1e6)+'MB').join('\n')+'\nFLOWS '+JSON.stringify(fl.result? fl.result.totalCount : fl.errors)
+
+### 0c29abc4 #310 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const wb = await call('getWorkbooks', {page:{startIndex:0,maxItems:200}, order:[{field:'updatedAt',ascending:false}]});
+const ds = await call('getDatasources', {page:{startIndex:0,maxItems:200}});
+const w = wb.result.workbooks.slice(22); const d=(ds.result&&ds.result.datasources)||[];
+const tot = wb.result.workbooks.reduce((s,a)=>s+(a.size||0),0);
+'REST '+w.length+' totalMB '+Math.round(tot/1e6)+'\n'+w.map(a=>a.name.trim()+' | '+(a.updatedAt||'').slice(0,10)+' | '+Math.round((a.size||0)/1e6)).join('\n')+'\nDS '+d.length+'\n'+d.map(a=>a.name+' | '+(a.updatedAt||'').slice(0,10)+' | '+Math.round((a.size||0)/1e6)+'MB').join('\n')
+
+### 0c29abc4 #311 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const ds = await call('getDatasources', {page:{startIndex:0,maxItems:200}});
+const d=(ds.result&&ds.result.datasources)||[];
+'DS '+d.length+' '+JSON.stringify(ds.errors||'')+'\n'+d.map(a=>a.name+' | upd '+(a.updatedAt||'').slice(0,10)+' | '+Math.round((a.size||0)/1e6)+'MB | extract '+a.hasExtracts+' | type '+(a.connectionType||a.type||'')).join('\n')
+
+### 0c29abc4 #312 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const out = {};
+for (const [m,p] of [['getFlows',{page:{startIndex:0,maxItems:50}}],['getSubscriptions',{page:{startIndex:0,maxItems:100}}],['getDataAlerts',{page:{startIndex:0,maxItems:100}}],['getUsers',{page:{startIndex:0,maxItems:100}}],['getProjects',{page:{startIndex:0,maxItems:100}}]]) { try { const r = await call(m,p); out[m] = r.result ? (r.result.totalCount ?? Object.keys(r.result)) : (r.errors||'?'); if (m==='getUsers' && r.result) out.users = (r.result.users||[]).map(u=>[u.username||u.name, u.siteRole]); if (m==='getSubscriptions' && r.result) out.subs = (r.result.subscriptions||[]).slice(0,20).map(s=>[s.subject, (s.schedule&&s.schedule.name)||'', s.userId]); } catch(e){ out[m]='err '+e.message } }
+JSON.stringify(out)
+
+### 0c29abc4 #313 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const f = await call('getFlows',{page:{startIndex:0,maxItems:50}});
+const a = await call('getDataAlerts',{page:{startIndex:0,maxItems:100}});
+JSON.stringify({flows:(f.result.flows||[]).map(z=>[z.name,(z.updatedAt||'').slice(0,10)]), alerts:(a.result.dataAlerts||[]).map(z=>[z.subject||z.name,(z.frequency||''),(z.ownerId||''), (z.updatedAt||z.createdAt||'').slice(0,10)])})
+
+### 0c29abc4 #332 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const ds = await call('getDatasources', {page:{startIndex:0,maxItems:200}});
+const d = ds.result.datasources;
+const keys = Object.keys(d[0]||{});
+const pub = d.filter(a=>a.isPublished!==false && (a.parentWorkbookId==null) );
+const sch = await call('getSchedules', {page:{startIndex:0,maxItems:50}});
+const tasks = await call('getExtractTasks', {page:{startIndex:0,maxItems:100}});
+JSON.stringify({keys: keys.slice(0,40), publishedLike: pub.length, pubNames: pub.map(a=>a.name+'|'+(a.connectionType||'')).slice(0,20), schedules: sch.result? (sch.result.schedules||[]).map(s=>[s.name,s.frequency||'',s.state||'']) : sch.errors, extractTasks: tasks.result? tasks.result.totalCount : tasks.errors})
+
+### 0c29abc4 #333 host=us-west-2b.online.tableau.com causes=risky-script
+const x = (document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1];
+const call = async (method, params) => (await fetch('/vizportal/api/web/v1/'+method, {method:'POST', headers:{'Content-Type':'application/json;charset=UTF-8','X-XSRF-TOKEN':x}, body: JSON.stringify({method, params})})).json();
+const ds = await call('getDatasources', {page:{startIndex:0,maxItems:200}});
+const d = ds.result.datasources;
+const standalone = d.filter(a=>!a.workbookId);
+const sch = await call('getSchedules', {page:{startIndex:0,maxItems:50}});
+const tasks = await call('getExtractTasks', {page:{startIndex:0,maxItems:100}});
+JSON.stringify({standalone: standalone.map(a=>a.name+'|'+a.connectionType+'|'+(a.lastRefreshedAt||'').slice(0,10)), embedded: d.length-standalone.length, schedules: sch.result? (sch.result.schedules||[]).map(s=>[s.name,s.frequency||s.scheduleType||'',s.state||'']) : JSON.stringify(sch.errors).slice(0,200), extractTasks: tasks.result? [tasks.result.totalCount,(tasks.result.tasks||[]).slice(0,15).map(t=>[(t.targetName||t.name||''), (t.scheduleName||''), (t.type||'')])] : JSON.stringify(tasks.errors).slice(0,200)})
+
+### 46d40f1e #41 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const r = await fetch('/vizportal/api/web/v1/getWorkbooks',{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:'getWorkbooks',params:{page:{startIndex:0,maxItems:100},filter:{operator:'and',clauses:[{operator:'matches',field:'name',value:'Version Analysis'}]}}})});
+const j = await r.json();
+names=['Version Analysis','Version Analysis - Distribution','Version Analysis Test - Distribution WIP','Features','Cohort Analysis','Periodic','Data Integrity'];
+const r2 = await fetch('/vizportal/api/web/v1/getWorkbooks',{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:'getWorkbooks',params:{page:{startIndex:0,maxItems:100}}})});
+const j2 = await r2.json();
+(j2.result.workbooks||[]).filter(w=>names.includes(w.name)).map(w=>({id:w.id,name:w.name,size:w.size,project:w.projectName,owner:w.ownerId,repoUrl:w.repositoryUrl,updated:w.updatedAt, rev: w.revision}))
+
+### 46d40f1e #49 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const r2 = await fetch('/vizportal/api/web/v1/getWorkbooks',{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:'getWorkbooks',params:{page:{startIndex:0,maxItems:100}}})});
+const j2 = await r2.json();
+const names=['Version Analysis','Version Analysis - Distribution','Version Analysis Test - Distribution (WIP)','Features','Cohort Analysis','Periodic','Data Integrity'];
+JSON.stringify(j2.result ? (j2.result.workbooks||[]).filter(w=>names.includes(w.name)).map(w=>({id:w.id,name:w.name,size:w.size,repo:w.repositoryUrl,project:w.projectName})) : j2)
+
+### 46d40f1e #74 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+JSON.stringify(t.result ? {tasks:(t.result.tasks||[]).map(k=>({id:k.id,type:k.type,state:k.state,targetId:k.targetId,targetType:k.targetType,targetName:k.targetName,workbookId:k.workbookId,datasourceId:k.datasourceId,keys:Object.keys(k).join(',')})), wbs:(t.result.workbooks||[]).map(w=>({id:w.id,name:w.name,owner:w.ownerId})), dss:(t.result.datasources||[]).map(d=>({id:d.id,name:d.name}))} : t).slice(0,6000)
+
+### 46d40f1e #75 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200}});
+const byId = {}; (w.result.workbooks||[]).forEach(b=>byId[b.id]=b);
+(t.result.tasks||[]).map(k=>[k.id,k.state,k.targetType,k.targetId,(byId[k.targetId]||{}).name,(byId[k.targetId]||{}).repositoryUrl,k.lastRunAt].join(' | ')).join('\n')
+
+### 46d40f1e #87 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200},filter:{operator:'and',clauses:[{operator:'eq',field:'id',value:'3573640'}]}});
+const u = await post('getUsers',{page:{startIndex:0,maxItems:50}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+JSON.stringify({wb:(w.result.workbooks||[]).map(b=>({id:b.id,name:b.name,owner:b.ownerId,updated:b.updatedAt})), users:(u.result.users||[]).map(x=>({id:x.id,name:x.displayName})), task:(t.result.tasks||[]).filter(k=>k.targetId==='3573640')})
+
+### 46d40f1e #88 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200},filter:{operator:'and',clauses:[{operator:'eq',field:'name',value:'Version Analysis Test - Distribution WIP'}]}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+JSON.stringify({wb:(w.result.workbooks||[]).map(b=>({id:b.id,owner:b.ownerId,updated:b.updatedAt,project:b.projectName})), tasks:(t.result.tasks||[]).filter(k=>['3573640'].includes(k.targetId) || (w.result.workbooks||[]).some(b=>b.id===k.targetId)), taskCount:(t.result.tasks||[]).length})
+
+### 46d40f1e #98 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const j = await post('getBackgroundJobs',{page:{startIndex:0,maxItems:5},order:[{field:'createdAt',ascending:false}]});
+JSON.stringify((j.result && j.result.backgroundJobs||[]).map(b=>({id:b.id,status:b.status,title:b.title||b.subtitle,created:b.createdAt,completed:b.completedAt,details:b.details})) || j).slice(0,3000)
+
+### 46d40f1e #169 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const ids=['933759','928428','909794','1200708','946709','2561496','3573640'];
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+(w.result.workbooks||[]).filter(b=>ids.includes(b.id)).map(b=>b.name+' | owner '+b.ownerId+' | tasks '+(t.result.tasks||[]).filter(k=>k.targetId===b.id).map(k=>k.id+':'+k.state).join(',')).join('\n')
+
+### 46d40f1e #170 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const ids={'928428':'Periodic','909794':'Features','933759':'Version Analysis','946709':'Cohort Analysis','2561496':'Version Analysis - Distribution','1200708':'Data Integrity'};
+const out=[];
+for (const id of Object.keys(ids)) {
+  const r = await post('getDatasources',{filter:{operator:'and',clauses:[{operator:'eq',field:'parentWorkbookId',value:id}]},page:{startIndex:0,maxItems:50}});
+  const ds = (r.result && r.result.datasources)||[];
+  out.push(ids[id]+': '+ds.length+' -> '+ds.map(d=>(d.connectionType||d.type||'?')+':'+(d.serverName||'').slice(0,10)+':'+(d.username||'')).join(' | '));
+}
+out.join('\n') || JSON.stringify(r)
+
+### 46d40f1e #173 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200},filter:{operator:'and',clauses:[{operator:'eq',field:'name',value:'Periodic'}]}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+JSON.stringify({wb:(w.result.workbooks||[]).map(b=>({id:b.id,owner:b.ownerId,updated:b.updatedAt})), tasks:(t.result.tasks||[]).filter(k=>(w.result.workbooks||[]).some(b=>b.id===k.targetId)).map(k=>({id:k.id,type:k.type,state:k.state,next:k.runNextAt}))})
+
+### 46d40f1e #188 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const b=(w.result.workbooks||[]).find(b=>b.id==='933759');
+JSON.stringify({updated:b.updatedAt, owner:b.ownerId, tasks:(t.result.tasks||[]).filter(k=>k.targetId==='933759').map(k=>({id:k.id,type:k.type,state:k.state}))})
+
+### 46d40f1e #200 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+let last='';
+for (let i=0;i<12;i++){
+  await new Promise(r=>setTimeout(r,10000));
+  const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+  const k=(t.result.tasks||[]).find(k=>k.targetId==='933759');
+  last = k ? k.lastRunAt : 'none';
+  if (last && last > '2026-10-20T10:04') break;
+}
+last
+
+### 46d40f1e #209 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const b=(w.result.workbooks||[]).find(b=>b.id==='2561496');
+JSON.stringify({updated:b.updatedAt, owner:b.ownerId, tasks:(t.result.tasks||[]).filter(k=>k.targetId==='2561496').map(k=>({id:k.id,type:k.type,state:k.state}))})
+
+### 46d40f1e #224 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const ids=['946709','2561496'];
+JSON.stringify(ids.map(id=>{const b=(w.result.workbooks||[]).find(b=>b.id===id); return {id, name:b.name, updated:b.updatedAt, owner:b.ownerId, tasks:(t.result.tasks||[]).filter(k=>k.targetId===id).map(k=>({id:k.id,type:k.type,state:k.state,last:k.lastRunAt}))}}))
+
+### 46d40f1e #226 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const w = await post('getWorkbooks',{page:{startIndex:0,maxItems:200}});
+const t = await post('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const ids=['946709','2561496'];
+JSON.stringify(ids.map(id=>{const b=(w.result.workbooks||[]).find(b=>b.id===id); return {id, name:b.name, updated:b.updatedAt, owner:b.ownerId, tasks:(t.result.tasks||[]).filter(k=>k.targetId===id).map(k=>({id:k.id,type:k.type,state:k.state,last:k.lastRunAt}))}}))
+
+### 46d40f1e #280 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const r = await post('getDataAlerts',{page:{startIndex:0,maxItems:50}});
+JSON.stringify(r.result ? (r.result.dataAlerts||r.result.alerts||[]).map(a=>({subject:a.subject||a.title, owner:a.ownerId, suspended:a.suspended, failures:a.failureCount, view:a.viewId})) : r).slice(0,2000)
+
+### 46d40f1e #281 host=us-west-2b.online.tableau.com causes=risky-script
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const r = await post('getDataAlerts',{page:{startIndex:0,maxItems:50}});
+JSON.stringify((r.result.dataAlerts||[])[0]).slice(0,2500)
+
+### 46d40f1e #282 host=us-west-2b.online.tableau.com causes=risky-script,typed-write
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const r = await post('getDataAlerts',{page:{startIndex:0,maxItems:50}});
+JSON.stringify((r.result.dataAlerts||[]).map(a=>{const o={...a}; delete o.dataSpecification; return o;})).slice(0,4000)
+
+### 46d40f1e #318 host=us-west-2b.online.tableau.com causes=risky-script
+await new Promise(r=>setTimeout(r,1500));
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const r = await post('getDataAlerts',{page:{startIndex:0,maxItems:50}});
+(r.result.dataAlerts||[]).map(a=>a.id+' | '+a.title+' | owner '+a.ownerId+' | recips '+(a.displayRecipients||[]).map(d=>d.id).join(',')+' | view '+a.context.path+' | public '+a.isPublic).join('\n')
+
+### 46d40f1e #353 host=us-west-2b.online.tableau.com causes=risky-script
+await new Promise(r=>setTimeout(r,1500));
+const x = decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||'');
+const post = async (m,p)=> (await fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})})).json();
+const r = await post('getDataAlerts',{page:{startIndex:0,maxItems:50}});
+(r.result.dataAlerts||[]).map(a=>a.title+' | owner '+a.ownerId+' | recips '+(a.displayRecipients||[]).map(d=>d.id).join(',')+' | '+a.suspendState+' | fails '+a.failureCount).join('\n')
+
+### 5c32c608 #2 host=us-west-2b.online.tableau.com causes=risky-script
+window.__vz = async (method, params={}) => { const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||''); const r=await fetch('/vizportal/api/web/v1/'+method,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method,params})}); return r.json(); };
+const t=(await __vz('getExtractTasks',{page:{startIndex:0,maxItems:100}})).result; const active=new Set(t.tasks.map(x=>x.targetId));
+const w=(await __vz('getWorkbooks',{page:{startIndex:0,maxItems:200}})).result.workbooks;
+const rows=[]; for (const b of w){ if(active.has(b.id)) continue; const c=(await __vz('getDataConnections',{filter:{operator:'and',clauses:[{operator:'eq',field:'workbookId',value:b.id}]},page:{startIndex:0,maxItems:50}})).result; const cons=(c.dataConnections||[]); const kp=cons.filter(d=>(d.connectionDetails||{}).authenticationType==='auth-keypair'); if(!kp.length) continue; rows.push({name:b.name, id:b.id, sizeKB:Math.round((b.size||0)/1024), hasExtracts:b.hasExtracts, sheets:b.sheetCount, updated:b.updatedAt, conns:cons.length, kp:kp.length, kpEmb:kp.filter(d=>d.connectionDetails.hasEmbeddedPassword).length, url:b.repositoryUrl}); }
+rows.sort((a,b)=>a.sizeKB-b.sizeKB); rows
+
+### 5c32c608 #5 host=us-west-2b.online.tableau.com causes=script-helper
+const s=(await __vz('getSessionInfo',{})).result; const u=s.user||{}; ({name:u.username||u.name, domain:u.domainName||u.domain, id:u.id}).toString(); JSON.stringify({username:u.username, domainName:u.domainName, id:u.id}).replace(/@/g,' at ')
+
+### 5c32c608 #33 host=us-west-2b.online.tableau.com causes=word
+const out={}; for (const [m,p] of [['refreshExtractsForDatasources',{ids:['118981392']}],['runExtractRefresh',{datasourceIds:['118981392']}],['refreshDatasourceExtracts',{ids:['118981392']}],['refreshExtracts',{datasourceIds:['118981392']}]]) { const j=await __vz(m,p); out[m]=JSON.stringify(j).slice(0,200); } out
+
+### 5c32c608 #45 host=us-west-2b.online.tableau.com causes=word,helper-args
+const t=(await __vz('getExtractTasks',{page:{startIndex:0,maxItems:100}})).result; 'tasks on site: '+t.totalCount+' | on test copy: '+t.tasks.filter(x=>x.targetId==='118981392').length
+
+### 5c32c608 #46 host=us-west-2b.online.tableau.com causes=risky-script
+window.__vz = async (method, params={}) => { const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||''); const r=await fetch('/vizportal/api/web/v1/'+method,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method,params})}); return r.json(); };
+const t=(await __vz('getExtractTasks',{page:{startIndex:0,maxItems:100}})).result; 'tasks on site: '+t.totalCount+' | on test copy: '+t.tasks.filter(x=>x.targetId==='118981392').length
+
+### 5c32c608 #47 host=us-west-2b.online.tableau.com causes=helper-args
+const t=(await __vz('getExtractTasks',{page:{startIndex:0,maxItems:100}})).result; const act=t.tasks.filter(x=>x.state==='Active').map(x=>x.targetId);
+const w=(await __vz('getWorkbooks',{page:{startIndex:0,maxItems:200}})).result.workbooks.filter(b=>act.includes(b.id));
+const rows=[]; for (const b of w){ const c=(await __vz('getDataConnections',{filter:{operator:'and',clauses:[{operator:'eq',field:'workbookId',value:b.id}]},page:{startIndex:0,maxItems:50}})).result; rows.push(b.name+' | '+Math.round((b.size||0)/1048576)+' MB | '+(c.dataConnections||[]).length+' connections'); } rows.sort((a,b)=>parseInt(a.split('|')[1])-parseInt(b.split('|')[1])); rows
+
+### 79219a99 #11 host=us-west-2b.online.tableau.com causes=risky-script
+const x=document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN')).split('=')[1];
+const r=await fetch('/vizportal/api/web/v1/getWorkbooks',{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:'getWorkbooks',params:{page:{startIndex:0,maxItems:100}}})}).then(r=>r.json());
+r.result.workbooks.filter(w=>/push/i.test(w.name)).map(w=>[w.id,w.name,w.ownerId,w.projectName,w.updatedAt].join(' | ')).join(' ;; ')+' TOTAL '+r.result.totalCount
+
+### 79219a99 #12 host=us-west-2b.online.tableau.com causes=risky-script
+const x=document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN')).split('=')[1];
+const call=(m,p)=>fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})}).then(r=>r.json());
+const w=await call('getWorkbooks',{page:{startIndex:0,maxItems:100}});
+const d=await call('getDatasources',{page:{startIndex:0,maxItems:100}});
+'WB: '+w.result.workbooks.filter(a=>/test|push/i.test(a.name)).map(a=>a.id+' '+a.name).join(' ; ')+' || DS: '+(d.result.datasources||[]).map(a=>a.id+' '+a.name).join(' ; ')
+
+### 79219a99 #13 host=us-west-2b.online.tableau.com causes=risky-script
+const x=document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN')).split('=')[1];
+const call=(m,p)=>fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})}).then(r=>r.json());
+const d=await call('getDatasources',{page:{startIndex:0,maxItems:200}});
+const t=await call('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+'DS total '+d.result.totalCount+' match: '+(d.result.datasources||[]).filter(a=>/push|copy/i.test(a.name)).map(a=>a.id+' '+a.name).join(' ; ')+' || tasks '+((t.result.tasks||[]).length)
+
+### 79219a99 #14 host=us-west-2b.online.tableau.com causes=risky-script
+const x=document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN')).split('=')[1];
+const call=(m,p)=>fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})}).then(r=>r.json());
+const d=await call('getDatasources',{filter:{operator:'and',clauses:[{operator:'eq',field:'id',value:'118981392'}]},page:{startIndex:0,maxItems:5}});
+const ds=d.result.datasources[0];
+const t=await call('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const owners=d.result.users?d.result.users.map(u=>u.id+':'+u.username).join(','):'';
+JSON.stringify({name:ds.name,owner:ds.ownerId,project:ds.projectName,created:ds.createdAt,wbCount:ds.connectedWorkbooksCount,isPublished:ds.isPublished,owners}).replace(/[=@]/g,'_')+' || tasks: '+(t.result.tasks||[]).map(k=>k.targetId+'/'+k.type+'/'+k.state).join(' ; ')
+
+### 79219a99 #15 host=us-west-2b.online.tableau.com causes=risky-script
+const x=document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN')).split('=')[1];
+const call=(m,p)=>fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})}).then(async r=>r.status+' '+(await r.text()).slice(0,300));
+await call('deleteDatasources',{ids:['118981392']})
+
+### 79219a99 #16 host=us-west-2b.online.tableau.com causes=risky-script
+const x=document.cookie.split('; ').find(c=>c.startsWith('XSRF-TOKEN')).split('=')[1];
+const call=(m,p)=>fetch('/vizportal/api/web/v1/'+m,{method:'POST',headers:{'Content-Type':'application/json','X-XSRF-TOKEN':x},body:JSON.stringify({method:m,params:p})}).then(r=>r.json());
+const d=await call('getDatasources',{page:{startIndex:0,maxItems:200}});
+const w=await call('getWorkbooks',{page:{startIndex:0,maxItems:100}});
+const t=await call('getExtractTasks',{page:{startIndex:0,maxItems:100}});
+const ids=new Set((t.result.tasks||[]).filter(k=>k.state==='Active').map(k=>String(k.targetId)));
+const live=w.result.workbooks.filter(a=>ids.has(String(a.id))).map(a=>a.name+' (owner '+a.ownerId+')');
+'DS total '+d.result.totalCount+', test copy present: '+d.result.datasources.some(a=>a.id=='118981392')+' || WB total '+w.result.totalCount+' || active refresh workbooks '+live.length+': '+live.join(' ; ')

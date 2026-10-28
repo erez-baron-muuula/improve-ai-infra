@@ -152,3 +152,12 @@ See the plan. Ticket progress notes (GEN-897, GEN-624, companions) go through /v
   adb3a3daebb78a123, a9ed1903cafac3996, a26632adb1c9d4cf6.
 - Then: records → one card list to Erez → mint/apply → statuses (propose Done/Review one at a time;
   GEN-897 → Review + assign Erez myself) → /loghistory.
+
+## Close-out — DONE (2026-10-28)
+- All 11 writes filed (reviewer PASS, 1 round each); GEN-981 created (child of GEN-897).
+- Statuses (Erez: "yes, close"): GEN-525/763/509/709/852/970/499/526/404/429 Done; GEN-320 Review;
+  GEN-897 Review, assigned to Erez; GEN-624 stays Review (his auto-mode question). /wrap ran; HISTORY.md
+  entry 2026-10-28, commit a0a296d.
+- Left open, not yet owned by a ticket: Round 1 advisories (top of this file); the `config-health-scan.ps1`
+  line 14 comment ("since the last config sync"); auto-approve.js line ~1887 "silently discarded in
+  bypassPermissions" claim (not in the GEN-505 line list); no scheduled check yet for GEN-897 (Nov 4) or GEN-320.

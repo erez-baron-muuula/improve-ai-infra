@@ -1,0 +1,146 @@
+RISKY-SCRIPT asks by matched pattern (top 3 alternatives):
+39  \bfetch\s*\(  ||  port
+      e.g. window.__vz = async (method, params={}) => { const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^
+      e.g. const x=decodeURIComponent((document.cookie.match(/XSRF-TOKEN=([^;]+)/)||[])[1]||''); const r=await fetch('/vi
+16  \bdispatch\s*\(
+      e.g. window.__setSql = (sql) => { const v=document.querySelector('.cm-content').cmView.view; v.dispatch({changes:{f
+      e.g. { const c=document.querySelector('.cm-content').cmView.view; c.dispatch({changes:{from:0,to:c.state.doc.length
+12  \.click\s*\(  ||  innerText  ||  innerText
+      e.g. const b=[...document.querySelectorAll('button[aria-label="More actions"],[aria-label="More actions"]')][0]; b.
+      e.g. const m=[...document.querySelectorAll('[role="menuitem"]')].find(e=>e.innerText.trim().startsWith('Refresh Ext
+7  \bfetch\s*\(
+      e.g. await fetch('/robots.txt').then(r => r.status)
+      e.g. const b='https://dev.azure.com/MUUULA/Memory%20Pirates/_apis/'; const defs=await fetch(b+'build/definitions?ap
+5  src  ||  href  ||  port
+      e.g. location.href = document.querySelector('iframe[name="payments-portal-embeddedIframe"]').src; 'navigating'
+      e.g. location.href = document.querySelector('iframe[name="payments-portal-embeddedIframe"]').src; 'nav'
+5  innerText  ||  innerText
+      e.g. window.__out = () => [...document.querySelector('iframe').contentDocument.querySelectorAll('[role=gridcell], t
+      e.g. window.__readGrid = () => { const d = document.querySelector('iframe').contentDocument; const cells = [...d.qu
+5  \bdispatch\s*\(  ||  innerText  ||  innerText
+      e.g. window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-con
+      e.g. window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-con
+4  (none?)
+      e.g. { const v=__ed(); const s=v.state.doc.toString().replace('GROUP BY 1=1, ','GROUP BY '); __setSql(s); } window.
+      e.g. const before = window.onbeforeunload === null ? 'none' : 'set'; window.onbeforeunload = null; for (const f of 
+2  dispatchEvent  ||  new\s+\w*Event\b  ||  textContent
+      e.g. window.__cap = []; const _o = window.open; window.open = function(u){ window.__cap.push(String(u||'')); return
+      e.g. const id='t'+Date.now(); const got=[]; window.addEventListener('message', e=>{ if(e.data && e.data.id===id) go
+2  href  ||  postMessage
+      e.g. const id='t'+Date.now(); let url=null; window.addEventListener('message', e=>{ if(e.data && e.data.id===id && 
+      e.g. const id='t'+Date.now(); let url=null; window.addEventListener('message', e=>{ if(e.data && e.data.id===id && 
+2  \.click\s*\(  ||  \bdispatch\s*\(  ||  selected
+      e.g. window.__ed = () => document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view;
+      e.g. window.__ed = () => document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view;
+2  innerText  ||  hash  ||  innerText
+      e.g. const ids={'928428':'Periodic','909794':'Features','933759':'Version Analysis','946709':'Cohort Analysis','256
+      e.g. const ids={'928428':'Periodic','909794':'Features','933759':'Version Analysis','946709':'Cohort Analysis','256
+1  \bfetch\s*\(  ||  search
+      e.g. (() => { if (false) fetch('/never-sent'); const box = document.querySelector('input[name="search"]'); if (box)
+1  \.click\s*\(  ||  textContent
+      e.g. Array.from(document.querySelectorAll('a')).find(e => /GG104K18BQ/.test(e.textContent)).click(); 'clicked'
+1  \bfetch\s*\(  ||  href  ||  pathname
+      e.g. const u = new URL(window.__cap[0], location.href); let res = {}; try { const r = await fetch(u.href, { credent
+1  href
+      e.g. location.href = new URL(window.__cap[0], location.href).href; 'navigating'
+1  window\.open
+      e.g. ({ overriddenInPageWorld: /armedUntil/.test(String(window.open)), openSrc: String(window.open).slice(0, 60) })
+1  \bfetch\s*\(  ||  \.submit\s*\(  ||  appendChild
+      e.g. const errs=[]; document.addEventListener('securitypolicyviolation', e=>errs.push(e.violatedDirective+' '+e.blo
+1  \.click\s*\(  ||  selected
+      e.g. window.__q = async (sql, wait=6000) => { __setSql(sql); const d=document.querySelector('iframe').contentDocume
+1  \.click\s*\(  ||  selected  ||  innerText
+      e.g. window.__go = (sql) => { __setSql(sql); const d=document.querySelector('iframe').contentDocument; [...d.queryS
+1  \[\s*['"`][^'"`]*['"`]\s*\+
+      e.g. const r=(await __vz('getDataAlerts',{page:{startIndex:0,maxItems:100}})).result; const users=Object.fromEntrie
+1  innerText  ||  innerText  ||  \[\s*['"`][^'"`]*['"`]\s*\+
+      e.g. (document.body.innerText.match(/Last used date[\s\S]{0,250}/)||['none: '+document.body.innerText.slice(0,300)]
+1  \.click\s*\(  ||  dispatchEvent  ||  new\s+\w*Event\b
+      e.g. const b=[...document.querySelectorAll('button')].filter(b=>b.title==='More actions')[0]; b.dispatchEvent(new M
+1  setAttribute
+      e.g. [...document.querySelectorAll('input[type=file]')].map((e,i)=>{e.setAttribute('data-claude-file',String(i));re
+
+FOLLOW-UP asks (83):
+  after «Runs USE ROLE ACCOUNTADMIN in the worksheet» → «Runs the read-only check query»
+  after «Runs read-only query A» → «Runs read-only query A»
+  after «Clicks Remove access on eden@muuula.com's row» → «Confirms removing eden@muuula.com's access to Google Ads account 573-3»
+  after «Clicks Remove access on eden@muuula.com's row» → «Confirms removing eden@muuula.com's access to Google Ads account 573-3»
+  after «Clicks Remove access on arthur.nikogosyan@bynet.co.il's row» → «Confirms removing arthur.nikogosyan@bynet.co.il's access to Google Ads»
+  after «Opens Manage roles» → «Selects the QA role to view its permissions»
+  after «Opens the Test devices tab» → «Opens the Users tab in AdMob Settings»
+  after «Opens Governance & security» → «Closes the Governance menu»
+  after «Opens the Roles tab» → «Opens the ACCOUNTADMIN role details»
+  after «Opens the ACCOUNTADMIN role details» → «Opens the create menu»
+  after «Opens the billing Contacts tab» → «Opens the edit form for Invoice emails»
+  after «Types Viewer into the role filter» → «Selects the Viewer role for Eden»
+  after «Selects the Viewer role for Eden» → «Saves Eden's role change from Owner to Viewer»
+  after «Opens Remove access for the selected yakir@muuula.com entry» → «Confirms removing the deleted yakir@muuula.com entry's access»
+  after «Runs a read-only status query» → «Runs a read-only status query»
+  after «Transfers routine ownership back to BI_ENGINEER keeping grants» → «Runs read-only check of routine grants, owner and text fingerprint»
+  after «Runs read-only check of routine grants, owner and text fingerprint» → «Runs read-only pre-run counts»
+  after «Switches the worksheet to role SYSADMIN» → «Switches the worksheet to warehouse LOADING»
+  after «Switches the worksheet back to role ACCOUNTADMIN» → «Runs the read-only post-run exact-count checks»
+  after «Transfers repair-tool ownership back to SYSADMIN keeping grants» → «Runs read-only check of repair-tool grants, owner and text fingerprint»
+  after «Runs read-only check of repair-tool grants, owner and text fingerprint» → «Runs the read-only count of NaN-accuracy logs»
+  after «Opens the Change Owner dialog» → «Closes the More actions menu»
+  after «Opens the Change Owner dialog for Periodic» → «Selects Erez Baron as the new owner»
+  after «Confirms changing Periodic's owner to Erez Baron» → «Opens the Features workbook's More actions menu»
+  after «Opens the Change Owner dialog for Features» → «Selects Erez Baron as the new owner»
+  after «Confirms changing Features' owner to Erez Baron» → «Opens the Version Analysis workbook's More actions menu»
+  after «Opens the Change Owner dialog for Version Analysis» → «Selects Erez Baron as the new owner»
+  after «Confirms changing Version Analysis's owner to Erez Baron» → «Opens the Cohort Analysis workbook's More actions menu»
+  after «Opens the Change Owner dialog for Cohort Analysis» → «Selects Erez Baron as the new owner»
+  after «Confirms changing Cohort Analysis's owner to Erez Baron» → «Opens the Version Analysis - Distribution workbook's More actions menu»
+  after «Opens the Change Owner dialog for Version Analysis - Distribution» → «Selects Erez Baron as the new owner»
+  after «Confirms changing Version Analysis - Distribution's owner to Erez Baro» → «Opens the Data Integrity workbook's More actions menu»
+  after «Opens the Change Owner dialog for Data Integrity» → «Selects Erez Baron as the new owner»
+  after «Confirms changing Data Integrity's owner to Erez Baron» → «Opens the Periodic workbook's More actions menu»
+  after «Opens Change owner for the Process Tracking alert» → «Selects Erez Baron as the alert's new owner»
+  after «Confirms changing the Process Tracking alert's owner to Erez Baron» → «Opens the Actions menu of the Low Binding rate alert»
+  after «Selects Erez Baron as the alert's new owner» → «Confirms changing the Low Binding rate alert's owner to Erez Baron»
+  after «Opens Change owner for the Duplication in agg table alert» → «Selects Erez Baron as the alert's new owner»
+  after «Confirms changing the Duplication in agg table alert's owner to Erez B» → «Opens the dashboard's Watch menu»
+  after «Opens the Actions menu of the Log Validation [>=10] alert» → «Opens Change owner for the Log Validation [>=10] alert»
+  after «Selects Erez Baron as the alert's new owner» → «Confirms changing the Log Validation [>=10] alert's owner to Erez»
+  after «Selects Erez Baron as the alert's new owner» → «Confirms changing the Log Validation >10 v2 alert's owner to Erez»
+  after «Selects Erez Baron as the alert's new owner» → «Confirms changing the Log Validation >=1 v3 alert's owner to Erez»
+  after «Opens the Gmail connector's admin details (read-only view)» → «Closes the Gmail connector details without changes»
+  after «Opens Change billing dialog for Memory Pirates» → «Opens the actions menu for Memory Pirates»
+  after «Opens the billing account dropdown» → «Selects Muuula Games billing account»
+  after «Selects Muuula Games billing account» → «Moves Memory Pirates to Muuula Games billing»
+  after «Moves Memory Pirates to Muuula Games billing» → «Opens actions menu for ClaudeGGL»
+  after «Opens Change billing dialog for ClaudeGGL» → «Clicks the ClaudeGGL actions button»
+  after «Selects Change billing in the menu» → «Clicks Change billing for ClaudeGGL»
+  after «Clicks Change billing for ClaudeGGL» → «Opens actions menu for CharactersTest»
+  after «Opens Change billing dialog for CharactersTest» → «Opens Grant access panel for ClaudeGGL»
+  after «Filters roles for Owner» → «Selects the Owner role»
+  after «Selects the Owner role» → «Saves Owner role for erez on ClaudeGGL»
+  after «Opens billing account dropdown» → «Selects Muuula Games billing»
+  after «Selects Muuula Games billing» → «Moves Default Gemini Project to Muuula Games billing»
+  after «Switches charts to 30 days» → «Switches charts to 30 days»
+  after «Ticks Arthur's row checkbox» → «Ticks Arthur's row checkbox»
+  after «Runs the ownership grant back to BI_ENGINEER» → «Runs read-only fingerprint and grants check»
+  after «Opens the Add saved credential dialog for Snowflake» → «Opens the Authentication type list»
+  after «Selects Key Pair Authentication Credential» → «Continues to the key-pair credential form (does not save)»
+  after «Types the username AUTOMATION_READER» → «Tests the saved Snowflake key-pair login»
+  after «Opens Remove access dialog for the selected eden@muuula.com» → «Confirms removing eden@muuula.com from project Memory Pirates»
+  after «Filters roles for Owner» → «Selects the Owner role»
+  after «Selects the Owner role» → «Saves Owner role for erez@muuula.com on My First Project»
+  after «Opens Remove access dialog for Eden and Yakir» → «Confirms removing Eden and Yakir from My First Project»
+  after «Opens the Super Admin role» → «Expands the Admins section of Super Admin role»
+  after «Expands Billing Account Administrator role» → «Clicks delete on eden@muuula.com Billing Account Administrator»
+  after «Opens the Billing settings tab» → «Opens the Change plan menu»
+  after «Types erez@muuula.com into the primary billing email field» → «Selects the current primary billing email text»
+  after «Selects the current primary billing email text» → «Types erez@muuula.com into the primary billing email field»
+  after «Types erez@muuula.com into the primary billing email field» → «Saves erez@muuula.com as the primary billing email»
+  after «Opens Eden's Admin roles and privileges section» → «Opens edit mode for Eden's admin roles»
+  after «Opens edit mode for Eden's admin roles» → «Turns off Eden's Super Admin role toggle»
+  after «Turns off Eden's Super Admin role toggle» → «Saves removal of Eden's Super Admin role»
+  after «Opens role assignment for info@muuula.com» → «Turns on Super Admin role for info@muuula.com»
+  after «Turns on Super Admin role for info@muuula.com» → «Saves Super Admin role for info@muuula.com»
+  after «Types the token description» → «Opens the resource owner menu»
+  after «Opens the resource owner menu» → «Selects Muuula as resource owner»
+  after «Selects Muuula as resource owner» → «Opens the expiration menu»
+  after «Searches permissions for Contents» → «Ticks the Contents permission»
+  after «Closes the permissions menu» → «Opens the Contents access menu»
+  after «Opens the Contents access menu» → «Sets Contents to Read and write»

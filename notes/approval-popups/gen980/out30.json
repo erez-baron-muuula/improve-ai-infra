@@ -1,0 +1,98 @@
+{
+ "base": 708,
+ "baseline": {
+  "asks": 708,
+  "removed": 0,
+  "pct": "0.0%",
+  "tableau": 0,
+  "snowRun": 0,
+  "snowFill": 0
+ },
+ "tableau": {
+  "asks": 673,
+  "removed": 35,
+  "pct": "4.9%",
+  "tableau": 35,
+  "snowRun": 0,
+  "snowFill": 0,
+  "keptTableau": {
+   "no recognized call": 8,
+   "rest has risky pattern: window.__alerts=": 1,
+   "wrapper used other than with a literal m": 1
+  },
+  "keptSnow": {}
+ },
+ "snowRun_strict": {
+  "asks": 708,
+  "removed": 0,
+  "pct": "0.0%",
+  "tableau": 0,
+  "snowRun": 0,
+  "snowFill": 0
+ },
+ "snowRun_projected": {
+  "asks": 698,
+  "removed": 10,
+  "pct": "1.4%",
+  "tableau": 0,
+  "snowRun": 10,
+  "snowFill": 0
+ },
+ "snowRun_projected_lenient": {
+  "asks": 698,
+  "removed": 10,
+  "pct": "1.4%",
+  "tableau": 0,
+  "snowRun": 10,
+  "snowFill": 0
+ },
+ "snowFill_projected": {
+  "asks": 696,
+  "removed": 12,
+  "pct": "1.7%",
+  "tableau": 0,
+  "snowRun": 0,
+  "snowFill": 28
+ },
+ "both_projected": {
+  "asks": 663,
+  "removed": 45,
+  "pct": "6.4%",
+  "tableau": 35,
+  "snowRun": 10,
+  "snowFill": 0
+ },
+ "all_projected": {
+  "asks": 651,
+  "removed": 57,
+  "pct": "8.1%",
+  "tableau": 35,
+  "snowRun": 10,
+  "snowFill": 28,
+  "keptTableau": {
+   "no recognized call": 8,
+   "rest has risky pattern: window.__alerts=": 1,
+   "wrapper used other than with a literal m": 1
+  },
+  "keptSnow": {
+   "danger word": 6,
+   "editor not read-only": 7
+  }
+ },
+ "snowRun_ceiling": {
+  "asks": 683,
+  "removed": 25,
+  "pct": "3.5%",
+  "tableau": 0,
+  "snowRun": 25,
+  "snowFill": 0
+ },
+ "all_ceiling": {
+  "asks": 636,
+  "removed": 72,
+  "pct": "10.2%",
+  "tableau": 35,
+  "snowRun": 25,
+  "snowFill": 28
+ }
+}
