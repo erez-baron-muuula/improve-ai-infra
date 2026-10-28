@@ -35,7 +35,7 @@ GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history v
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
 - 2026-10-28 — GEN-897 bundle: Rounds 2-3 of skill fixes live, close-out filed, 10 tickets Done, leftovers homed, GEN-982/983 filed, over-asking noted on GEN-558. <!-- toc-session:4cd4759a-8cb6-4d6c-989e-096163b30991 -->
-- 2026-10-28 — GEN-882 status given; GEN-897 bundle planned (8 tickets combined, 4 to close), Round 1 (9 files) live and verified; auto mode shows no pop-up for unlock writes (F1); Round 2 onward handed to a sub-session <!-- toc-session:f64d352d-fd05-450c-a840-bfa400fc40f1 -->
+- 2026-10-28 — GEN-882 status given; GEN-897 bundle planned (8 tickets combined, 4 to close), Round 1 (9 files) live and verified; auto mode shows no pop-up for unlock writes (F1); Rounds 2-3 handed to a sub-session; GEN-978 filed; idle compaction root-caused, GEN-984 filed <!-- toc-session:f64d352d-fd05-450c-a840-bfa400fc40f1 -->
 - 2026-10-27 — GEN-953 step 2 done: plain-words browser pop-ups v2.6 live and passed Erez's test; GEN-953 step 5 added; GEN-972, GEN-973 filed; GEN-931 evidence note. <!-- toc-session:af1e772b-677b-4843-be83-ee0a830da9a5 -->
 - 2026-10-26 (5) — GEN-890 weekly size check built and live (silent, files tickets itself), first weekly run filed GEN-970/971; GEN-966 Done; GEN-889 contents lines; GEN-969 filed <!-- toc-session:190ca257-572e-4b57-b1a6-9fb97c36c582 -->
 - 2026-10-26 (4) — GEN-825 verified Done; GEN-893 size lines live (Review until 9 Nov check); GEN-926 Done; GEN-892 auto-limit design approved; 4 follow-ups filed <!-- toc-session:e7771e49-d097-4cfe-a0b4-e88824f3ce0e -->
@@ -314,7 +314,7 @@ Release review: last run 2026-10-26 (2.1.300 → 2.1.310): 1 new ticket(s), 1 no
 
 ---
 
-## 2026-10-28 — GEN-882 status, GEN-897 bundle planned + Round 1 live, permission-prompt finding (F1)
+## 2026-10-28 — GEN-882 status, GEN-897 bundle planned + Round 1 live, permission-prompt finding (F1); GEN-978 + GEN-984 filed
 <!-- session:f64d352d-fd05-450c-a840-bfa400fc40f1 -->
 
 Erez asked "Where are we on 882?". Answered from a live REST read of GEN-882's 16 children: 5 Done (GEN-825, 845, 677, 886, 926), 2 Review (GEN-893/890, scheduled checks Nov 9+), 1 In Progress (GEN-674, waves after Nov 1), 8 To Do (incl. GEN-892, which waits on the Oct 29 release-review run). The first chat answer said "6 Done / 7 To Do" (GEN-969 miscounted); corrected in chat the same session.
@@ -331,9 +331,23 @@ Erez asked "Where are we on 882?". Answered from a live REST read of GEN-882's 1
 - Round 1 live and verified: 9 files (skills shell-howto, notion-howto, notion-ticket-lookup + SECURE-LOOKUP-DESIGN.md, content-review, review-design, check; agents/check-reviewer.md; project CLAUDE.md). /check converged in 1 round (4 lenses PASS). Erez: "Yes, install the nine Round 1 fixes as reviewed." All 9 hash/diff-match the reviewed copies; all 7 check passes consumed. shell-howto's description now loads (seen in the live skill list).
 - F1 settled: this session runs in `auto` mode; a harmless probe write to `~/.claude-staging/check-passes/` completed with NO pop-up (Erez's screenshot). So the skills' "the mint write prompts Erez — that prompt IS the gate" is false in auto mode; the real gate is Erez's chat approval of the card. To record on GEN-624 at close-out.
 
-**Still open.** Round 2 (vet family + staging, F1 wording, GEN-525/763/509/709, GEN-852 vet-ticket half), Round 3 (wrap + config-health, GEN-320/852/970), and close-out (ticket notes via /vet-ticket, status proposals, Erez re-runs `/doctor prompt-audit`). Moved to a linked sub-session working from `notes/gen897/HANDOFF.md` (Erez chose "sub" over compacting here).
+**Handed to a sub-session.** Round 2 (vet family + staging, F1 wording, GEN-525/763/509/709, GEN-852 vet-ticket half), Round 3 (wrap + config-health, GEN-320/852/970) and close-out ran in the linked sub-session "GEN-897 Rounds 2–3 and close-out" (local_033cfc53), working from `notes/gen897/HANDOFF.md` (Erez chose "sub" over compacting here). That session wrapped itself and logged its own HISTORY entries; its final report: history written, commit b19234f pushed, config synced, key check / ticket gate / model list clean.
+
+**After the hand-off (this session).**
+- Erez: "file a ticket without showing me, that make sure that when it's a good time to start a sub-session, or anything else, you say it. This time you didn't even give me this option." Filed GEN-978 "Claude names the better way to run the work, such as a sub-session, the moment it becomes the better choice" (To Do, High, under GEN-86; reviewer PASS, 1 round). The miss was logged on GEN-58 (Class C, now seen 38x; trace in Vol. 11).
+- Then only relays of the sub-session's reports to Erez.
+
+**Idle compaction (found during this wrap).** When Erez typed `/wrap` after ~7.5 h idle, Claude Code compacted the session at 594,371 tokens (59% of 1M). Erez: "You compacted, even though you were on 59%. investigate why this happened, and file a ticket to prevent this from happening again without telling me first. Also, check what was lost due to compaction, and re-wrap". Cause, from the transcript: a `compact_boundary` with `trigger: auto`, `precomputed: true`, summary built 55 min after the last reply — Claude Code's idle compaction (changelog 2.1.299; this PC runs 2.1.309). A scan of all local transcripts found 11 such compactions 2026-10-26..28 (344k-877k tokens, all 54-55 min after the last reply); before 2026-10-26 automatic compaction only came near ~966k. Our compact gate guards manual `/compact` only. Filed GEN-984 "Sessions are not compacted just because they sat idle" (To Do, Urgent, Gain 1, Highest; under GEN-86; reviewer PASS, 1 round): recommends `"idleCompaction": false` in `settings.json` (after the Nov 1 freeze, or earlier with Erez's OK), cross-linked to GEN-208. What was lost: nothing material — the only work after the earlier log of this entry was GEN-978, its GEN-58 log and relays, all present in the summary and the on-disk transcript; the first `/wrap` attempt had run no step before the compaction, so this wrap re-ran in full.
+
+Unresolved items filed: none (GEN-978 and GEN-984 were filed on Erez's request during the session)
+Dropped learnings: REST filter on Team-Tasks Status sent as a `status` property (it is a `select`) — already shown by the select example in the notion-ticket-lookup skill.
+Reversals judged non-learning: none (the GEN-882 count fix was self-caught; the sub-session miss is GEN-978).
+Grounding flag: 1 count-nudge this session, 43 lifetime, newest 0 days ago — retire the count patterns via /vet-code if the yield isn't worth the noise.
+Release review: last run 2026-10-26 (2.1.300 → 2.1.310): 1 new ticket(s), 1 note(s) added, 0 moved Blocked → To Do, 1 waiting for your yes/no as of that run in GEN-959, 0 not filed
 
 **Not done (non-blocking Round 1 advisories):** SECURE-LOOKUP-DESIGN.md line ~40 still says "Business/Enterprise error"; check's removed pre-mortem pointer could be renamed; dropped "re-test if the Notion plan changes" cue.
+
+---
 
 ---
 
