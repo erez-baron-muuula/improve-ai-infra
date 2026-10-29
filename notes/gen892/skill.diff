@@ -1,0 +1,110 @@
+diff --git a/C:/Users/Erez/.claude/skills/release-review/SKILL.md b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen892/wc/skills/release-review/SKILL.md
+index 55502e9..c39b5af 100644
+--- a/C:/Users/Erez/.claude/skills/release-review/SKILL.md
++++ b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/gen892/wc/skills/release-review/SKILL.md	
+@@ -78,7 +78,8 @@ any `pending` row is unresolved — so a crashed run can neither lose a finding
+ 1. Lock: if `RR\run.lock` exists and its timestamp is under 3 hours old, another run is live — stop
+    and report that. Otherwise write `run.lock` with the current UTC time (from `date -u +%FT%TZ`).
+    Delete it at the end of every exit path (Step 11). Pick the run stamp (`yyyymmddHHMM`, UTC) now.
+-2. Read `state.json`, `findings.jsonl`, and any `unfiled-*.md` (carry-over). Carry-over items are
++2. Read `state.json`, `findings.jsonl`, and any `unfiled-*.md` and `guidelines-pending-*.json`
++   (carry-over; the latter per `guidelines-watch.md`). Carry-over items are
+    processed in Step 8 BEFORE new findings, inside the same caps.
+ 3. Reconcile: run `pending`. For each row it prints, re-fetch the target and check whether the
+    intended change landed (for a create, find a ticket with that title in the listing or by
+@@ -100,8 +101,9 @@ any `pending` row is unresolved — so a crashed run can neither lose a finding
+   its npm publish date and its lines, with IDE-only lines removed (`droppedIde` — skim it once for a
+   line that is not really IDE-only). Keep "Fixed" lines: a fix is how a workaround ticket becomes
+   obsolete.
+-- No new versions and no new Help Center entries → record a no-op run (Step 10, `through` =
+-  `from`) and stop. That is a normal, quiet outcome.
++- Guidelines watch (GEN-892): run it now, as `guidelines-watch.md` in this folder says.
++- No new versions, no new Help Center entries and nothing from the guidelines watch to write →
++  record a no-op run (Step 10, `through` = `from`) and stop. That is a normal, quiet outcome.
+ - `through` for this run = the newest version collected (`latest`).
+ - Help Center (app-level changes): WebFetch `https://support.claude.com/en/articles/12138966-release-notes`
+   and take entries dated after `helpCenterLastSeen`. If the fetch fails, say so in the digest and
+@@ -174,7 +176,7 @@ not use. Be selective: a weekly run that files a lot is a run nobody reads.
+ 
+ - Against `findings.jsonl`: same capability key + same target already `filed`, `appended`,
+   `unblocked`, `proposed` or `reverted` → skip (a `proposed` item Erez has not answered is still on
+-  the digest; do not re-list it).
++  the digest; do not re-list it). `guidelines:` keys follow the re-arm rule in `guidelines-watch.md`.
+ - Against the target ticket: if its body already records this change, skip.
+ - A `new` ticket: search the board as `/vet-ticket` Step 0b defines it (that is the definition; a
+   ticket in Review counts) plus a title scan of the Step 4 listing, and write the search summary for
+@@ -184,20 +186,12 @@ not use. Be selective: a weekly run that files a lot is a run nobody reads.
+ 
+ Count writes against the caps as you go; at a cap, the rest go to "Not filed this run". Every write
+ is bracketed by the write-ahead rows above.
+-- **Note on an affected ticket** (append): one dated block at the end of the body —
+-  `**Release review YYYY-MM-DD — Claude Code 2.1.NNN:** <the change, plain words> — <what it means for this ticket>. Docs: <url>.`
+-  A body append is material, so re-derive `Urgency`, `Gain ratio` and `Priority` per `/vet-ticket`
+-  Step 1, and raise urgency only with a stated reason.
+-- **New ticket** (create): named by outcome; body stands on its own (problem, why it matters, the
+-  release and docs link, the files or tickets involved, next action, who verifies); parent the
+-  AI-infra epic GEN-86 unless the domain is another project's (global "route by domain" rule); the
+-  Task template applied (check it exists); type task; status the one actually true (normally To Do);
+-  unassigned unless only Erez can do it; priority fields derived.
++Before doing this step, read `writes-and-digest.md` in this folder (the note, new-ticket and unblock
++formats).
++- **Note on an affected ticket** (append): re-derive the priority fields.
++- **New ticket** (create): by the ticket-drafting rules.
+ - **Unblock** (Blocked → To Do), only when Step 6.3 holds and the global `CLAUDE.md` "Ticket status"
+-  exception allows it: first the gated note `**Unblocked by release review YYYY-MM-DD — Claude Code 2.1.NNN:** <capability>. Was blocked on: "<quoted blocker>". Docs: <url>. Available: installed <version>; <plan note>.`
+-  — with the three conditions and the quoted blocker in the reviewer's brief so it judges the unblock
+-  itself — and re-fetch it. Only if the note landed, set Status to To Do (a status-only update) and
+-  re-fetch. If the note fails, do not touch the status.
++  exception allows it: the gated note first; the status flip only after the note is confirmed.
+ - **Any other status change** (close as obsolete, Done, Wont Do, …) — never made here: it is a
+   yes/no item on the digest.
+ - **Risk to something we built with no ticket** — a new ticket (it is real work), not just a digest line.
+@@ -210,26 +204,10 @@ The digest is one standing ticket, "Decide on Claude Code release-review finding
+ `state.json` `digestTicket`; find its page id in the Step 4 listing). If it does not exist yet,
+ create it through the gate (parent GEN-86, To Do, assigned to Erez, body: what it is, how to answer —
+ reply in any session "release review: yes to 2, no to 3"), and put its GEN id in the run row's
+-`digestTicket`. Each live run appends ONE dated section, plain language, Erez-facing:
+-
+-```
+-## Run YYYY-MM-DD — Claude Code 2.1.AAA → 2.1.BBB (N versions; installed 2.1.III)
+-[Re-evaluate line, if any]
+-Filed: GEN-x <title> — why (one line each)
+-Notes added: GEN-y — one line each
+-Moved Blocked → To Do: GEN-z — the capability; say "back to Blocked" to reverse
+-Waiting for your yes/no:
+-  1. <proposal, its reason, the ticket> — yes / no
+-Not filed this run: <items, why (cap / review did not pass / error)> — saved in <recovery file>
+-Unverified, maybe later: <one line each>
+-Arrives in a version not installed yet: <one line each, if any>
+-Reviews: <n> written, <n> needed more than one review round, <n> not filed
+-```
+-
+-Before appending, read the digest's earlier sections and count yes/no items not yet struck through
+-(answered items are struck and moved to a "Decided" section by the session where Erez answers); that
+-count plus this run's new ones is the run's `waiting`. In `dry`, write the section to the dry-run file
+-instead. In `supervised`, the digest append is one of the N writes.
++`digestTicket`. Each live run appends ONE dated section, plain language, Erez-facing, in the format in
++`writes-and-digest.md` (re-read it if you no longer have it), which also says how to count the run's
++`waiting`; it includes the guidelines lines `guidelines-watch.md` names. In `dry`, write the section to
++the dry-run file instead. In `supervised`, the digest append is one of the N writes.
+ 
+ ## Step 10 — Record (state advances last)
+ 
+@@ -254,14 +232,14 @@ instead. In `supervised`, the digest append is one of the N writes.
+    `git -C "C:/Users/Erez/AI Projects/Improve AI Infra" add -- <paths>`, then
+    `git -C "C:/Users/Erez/AI Projects/Improve AI Infra" commit -m "Release review run <date>" -- <same paths>`,
+    then `git -C "C:/Users/Erez/AI Projects/Improve AI Infra" push`, where `<paths>` are
+-   `notes/release-review/state.json`, `runs.jsonl`, `findings.jsonl` and this run's recovery or
+-   dry-run file — each only if it exists. A refused push is reported, not retried in a loop and never
++   `notes/release-review/state.json`, `runs.jsonl`, `findings.jsonl`, this run's recovery or
++   dry-run file, and the guidelines files `guidelines-watch.md` lists — each only if it exists. A refused push is reported, not retried in a loop and never
+    forced; the next run pushes again.
+ 
+ ## Step 11 — Finish and report
+ 
+ Delete `run.lock`. The final message (the scheduled run's summary) is short and plain: versions
+-reviewed, what was filed / noted / unblocked (IDs), the review tally, how many wait for Erez and
++reviewed, limit changes applied, what was filed / noted / unblocked (IDs), the review tally, how many wait for Erez and
+ where, anything not filed and the recovery file, and any failure. In `supervised` mode, give it as
+ the "📌 For you" block.
+ 
