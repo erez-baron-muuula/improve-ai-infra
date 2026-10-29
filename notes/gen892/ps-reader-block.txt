@@ -1,0 +1,71 @@
+# The new value of the last applied row for this limit and field in the weekly guidelines watch's change log
+# (GEN-892), ignoring rows whose changeId was later marked not-applied; $null when there is none or the log
+# cannot be read. A malformed line is skipped. Same rules as hooks\guidelines-limits.js loggedValue, written
+# as an explicit row shape so the two readers agree whatever each language's own type rules: status and
+# limit are strings; field is absent, null or '' (meaning 'value') or a string; changeId counts only as a
+# non-empty string; new must be a whole number. Any other shape is skipped.
+
+# A property read with its name in exact case (PowerShell's own .Name access ignores case; JSON keys do not).
+# The leading comma keeps an array value an array (PowerShell would otherwise unroll a one-item array).
+function Get-ExactProperty($JsonObject, [string]$PropertyName) {
+    foreach ($jsonProperty in $JsonObject.PSObject.Properties) { if ($jsonProperty.Name -ceq $PropertyName) { return ,$jsonProperty.Value } }
+    return $null
+}
+
+function Get-RowField($LogRow) {
+    $fieldValue = Get-ExactProperty $LogRow 'field'
+    if ($null -eq $fieldValue -or ($fieldValue -is [string] -and $fieldValue -eq '')) { return 'value' }
+    if ($fieldValue -is [string]) { return $fieldValue }
+    return $null
+}
+
+function Get-RowChangeId($LogRow) {
+    $idValue = Get-ExactProperty $LogRow 'changeId'
+    if ($idValue -is [string] -and $idValue) { return $idValue }
+    return $null
+}
+
+function Test-WholeNumber($NumberValue) {
+    if ($NumberValue -is [array]) { return $false }
+    if (-not ($NumberValue -is [int] -or $NumberValue -is [long] -or $NumberValue -is [double] -or $NumberValue -is [decimal])) { return $false }
+    return ([double]$NumberValue -eq [Math]::Floor([double]$NumberValue))
+}
+
+function Get-LoggedLimitValue([string]$LimitId, [string]$FieldName) {
+    $logLines = $null
+    try { $logLines = [System.IO.File]::ReadAllLines($GuidelinesLog, [System.Text.Encoding]::UTF8) } catch { return $null }
+    $logRows = New-Object System.Collections.ArrayList
+    foreach ($logLine in $logLines) {
+        if (-not $logLine -or -not $logLine.Trim()) { continue }
+        try { $logRow = $logLine | ConvertFrom-Json; if ($logRow -is [System.Management.Automation.PSCustomObject]) { [void]$logRows.Add($logRow) } } catch { }
+    }
+    $notAppliedIds = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($logRow in $logRows) {
+        $rowStatus = Get-ExactProperty $logRow 'status'
+        $rowChangeId = Get-RowChangeId $logRow
+        if ($rowStatus -is [string] -and $rowStatus -ceq 'not-applied' -and $rowChangeId) { [void]$notAppliedIds.Add($rowChangeId) }
+    }
+    for ($rowIndex = $logRows.Count - 1; $rowIndex -ge 0; $rowIndex--) {
+        $logRow = $logRows[$rowIndex]
+        $rowStatus = Get-ExactProperty $logRow 'status'
+        $rowLimit = Get-ExactProperty $logRow 'limit'
+        $rowField = Get-RowField $logRow
+        if (-not ($rowStatus -is [string] -and $rowLimit -is [string] -and $rowField -is [string])) { continue }
+        # -cne: PowerShell compares strings case-insensitively by default.
+        if ($rowStatus -cne 'applied' -or $rowLimit -cne $LimitId -or $rowField -cne $FieldName) { continue }
+        $rowChangeId = Get-RowChangeId $logRow
+        if ($rowChangeId -and $notAppliedIds.Contains($rowChangeId)) { continue }
+        $loggedNew = Get-ExactProperty $logRow 'new'
+        if (-not (Test-WholeNumber $loggedNew)) { return $null }
+        return $loggedNew
+    }
+    return $null
+}
+
+# The line limit (GEN-892): the claude-md-lines value in the size-limits file when it is a whole number from 50
+# to 800 and either at or below 200, or above 200 and equal to the last applied claude-md-lines row in the
+# weekly guidelines watch's change log. Anything else, or any read or parse problem, leaves 200, so a hand edit
+# of the limits file can lower the limit but not raise it. Same rules as hooks\guidelines-limits.js: keep the
+# two in step.
+function Get-RulesLineLimit {
+    $lineLimit = $FALLBACK_RULES_LINE_CAP
