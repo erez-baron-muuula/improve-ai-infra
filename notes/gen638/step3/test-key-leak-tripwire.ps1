@@ -70,7 +70,7 @@ try {
 
   # --- inventory ---
   $inv = Get-TripwireInventory (Join-Path $env:USERPROFILE '.claude\scripts\set-claude-key.ps1')
-  Check 'inventory: real helper yields notion, atlassian, slack in order' ($null -ne $inv -and ((@($inv.Keys) -join ',') -eq 'notion,atlassian,slack'))
+  Check 'inventory: real helper yields notion, atlassian, slack, snowflake-reader in order' ($null -ne $inv -and ((@($inv.Keys) -join ',') -eq 'notion,atlassian,slack,snowflake-reader'))
   Check 'inventory: real helper maps notion -> claude-notion-token' ($null -ne $inv -and $inv['notion'] -eq 'claude-notion-token')
   Check 'inventory: missing helper -> $null' ($null -eq (Get-TripwireInventory (Join-Path $tmp 'nope.ps1')))
   # A helper whose parameters share names with the inventory code's locals must not retype them
