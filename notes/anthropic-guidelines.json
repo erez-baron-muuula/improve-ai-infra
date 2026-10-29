@@ -15,7 +15,7 @@
   "limits": [
     {
       "id": "hook-injected-text",
-      "appliesTo": "Each text a hook injects (additionalContext, systemMessage, plain stdout). For ~/.claude/hooks/refs/*.md that is the file text itself: since GEN-825 the header lines live inside each file. Two hooks add a little: inject-edit-refs.js adds a 580-character Code.js pointer on Invoice Automation Code.js edits, and inject-perk-refs.js sends a ~420-character preamble with only the matched perk sections. inject-topic-refs.js cuts a first note above 9,500 characters (its CAP minus POINTER_ROOM), so a topic notes file is at risk from 9,500.",
+      "appliesTo": "Each text a hook injects (additionalContext, systemMessage, plain stdout). For ~/.claude/hooks/refs/*.md that is the file text itself: since GEN-825 the header lines live inside each file. Two hooks add a little: inject-edit-refs.js adds a ~650-character Code.js pointer on Invoice Automation Code.js reads and edits, and inject-perk-refs.js sends a ~420-character preamble with only the matched perk sections. inject-topic-refs.js cuts a first note above 9,500 characters (its CAP minus POINTER_ROOM), so a topic notes file is at risk from 9,500.",
       "measure": "characters",
       "value": 10000,
       "kind": "hard",
