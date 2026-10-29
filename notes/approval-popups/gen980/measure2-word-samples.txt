@@ -1,0 +1,354 @@
+notplain www.wikipedia.org | Opens the English Wikipedia link
+notplain example.com | Marker 1 of 12. LENGTH TEST FOR EREZ, please click Deny. Types x, end of 1
+notplain example.com | Marker 2 of 12. Tell Claude the last marker number you can read. End of 2
+notplain example.com | Marker 3 of 12. Types a single letter on the example page only. End of 3
+notplain example.com | Marker 4 of 12. Still the same length test, nothing real happens. End of 4
+notplain example.com | Marker 5 of 12. Keep reading to see where the text gets cut off. End of 5
+notplain example.com | Marker 6 of 12. Halfway through the length test for the pop-up. End of 6
+notplain example.com | Marker 7 of 12. Types a single letter on the example page only. End of 7
+notplain example.com | Marker 8 of 12. Still the same length test, nothing real happens. End of 8
+notplain example.com | Marker 9 of 12. Keep reading to see where the text gets cut off. End of 9
+notplain example.com | Marker 10 of 12. Almost at the end of the length test now. End of 10
+notplain example.com | Marker 11 of 12. Types a single letter on the example page only. End of 11
+notplain example.com | Marker 12 of 12. LAST MARKER. Please click Deny and report the number. END
+notplain example.com | Test 2 marker 1 of 12. LENGTH TEST FOR EREZ, please click Deny. End of 1
+notplain example.com | Test 2 marker 2 of 12. Tell Claude the last marker number you read. End of 2
+notplain example.com | Test 2 marker 3 of 12. Types one letter on the example page only. End of 3
+notplain example.com | Test 2 marker 4 of 12. Same length test, nothing real happens. End of 4
+notplain example.com | Test 2 marker 5 of 12. Keep reading to find where text is cut. End of 5
+notplain example.com | Test 2 marker 6 of 12. Halfway through the pop-up length test. End of 6
+notplain example.com | Test 2 marker 7 of 12. Types one letter on the example page only. End of 7
+notplain example.com | Test 2 marker 8 of 12. Same length test, nothing real happens. End of 8
+notplain example.com | Test 2 marker 9 of 12. Keep reading to find where text is cut. End of 9
+notplain example.com | Test 2 marker 10 of 12. Almost at the end of the length test. End of 10
+notplain example.com | Test 2 marker 11 of 12. Types one letter on the example page only. End of 11
+notplain example.com | Test 2 marker 12 of 12. LAST MARKER. Click Deny and report the number. END
+notplain en.wikipedia.org | Puts the cursor in the Wikipedia search box
+notplain en.wikipedia.org | Types a sample database command into the search box (test only, no Enter)
+notplain en.wikipedia.org | Clicks an empty white area to the right of the Welcome to Wikipedia heading, which does nothing; this long des
+notplain en.wikipedia.org | Puts the cursor in the Wikipedia search box
+notplain en.wikipedia.org | Types a sample database command into the search box (test only, no Enter)
+notplain simple.wikipedia.org | Puts the cursor in the Wikipedia search box
+notplain simple.wikipedia.org | Types a sample database command into the search box (test only, no Enter)
+notplain play.google.com | Selects the Muuula developer account in the account list
+notplain www.iana.org | Opens the ICANN website link
+notplain play.google.com | Opens the Sep 1–30, 2026 transaction
+notplain play.google.com | Clicks the helper's test button on the Oct 15 payout line
+notplain play.google.com | Clicks the helper's test button on the Oct 15 payout line
+notplain play.google.com | Clicks the helper's test button on the Oct 15 payout line
+notplain admob.google.com | Clicks File this receipt on the Sep 21 AdMob payout row
+notplain snowflake | Runs USE ROLE ACCOUNTADMIN in the worksheet
+notplain snowflake | Runs the read-only check query
+notplain snowflake | Runs the read-only breakdown query
+notplain snowflake | Runs the read-only breakdown query
+notplain snowflake | Runs the read-only version summary query
+notplain snowflake | Runs the read-only dry-run query
+notplain snowflake | Runs the read-only dry-run query
+notplain snowflake | Runs the read-only raw-volume query
+DANGER snowflake | Runs the read-only loss-confirmation query
+DANGER snowflake | Runs the read-only grants snapshot query
+notplain snowflake | Pastes the routine text into the empty editor
+notplain snowflake | Runs CREATE OR REPLACE of the nightly NaN-fix routine in Snowflake
+DANGER snowflake | Runs GRANT OWNERSHIP of the routine back to BI_ENGINEER
+notplain snowflake | Dismisses the "File not found" notice
+notplain snowflake | Runs the read-only after-change check
+notplain snowflake | Runs the read-only rule test count
+notplain snowflake | Runs the read-only morning-check query B as a test
+notplain snowflake | Opens a new SQL file
+notplain snowflake | Runs USE ROLE ACCOUNTADMIN
+notplain snowflake | Runs read-only query A
+notplain snowflake | Runs corrected read-only query A
+notplain snowflake | Runs read-only query B
+notplain snowflake | Runs read-only view-definition query
+notplain snowflake | Runs read-only daily count query
+notplain snowflake | Runs read-only breakdown query
+notplain snowflake | Runs read-only Puzzle-rows query
+notplain snowflake | Starts Snowflake sign-in with Google SSO
+notplain accounts.google.com | Chooses the erez@muuula.com Google account
+notplain snowflake | Closes the "Introducing Python files" popup
+notplain snowflake | Opens a new blank SQL file tab
+notplain snowflake | Creates a new SQL file
+notplain snowflake | Switches to the Untitled.sql tab
+notplain snowflake | Closes the CoCo prompt bar
+notplain snowflake | Runs both statements in the worksheet
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Closes the "Semantic view" tip popup
+notplain snowflake | Closes the "Semantic view" tip popup
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Runs the query
+notplain snowflake | Selects the first result cell
+notplain snowflake | Types a read-only query showing the header and comments of the report-builder procedure
+notplain snowflake | Runs the query
+notplain snowflake | Runs the command
+notplain snowflake | Downloads the live Lexicon code as a CSV file
+notplain snowflake | Closes the download menu
+notplain snowflake | Closes the download menu
+notplain snowflake | Runs the query with the Run button
+notplain snowflake | Narrows the quarter column so counts are visible
+notplain developer.playfab.com | Ticks Arthur Nikogosyan's row checkbox
+DANGER developer.playfab.com | Clicks Delete for the ticked user Arthur Nikogosyan
+DANGER developer.playfab.com | Confirms removing Arthur Nikogosyan from the Muuula Games studio
+notplain admob.google.com | Opens the Payments issue banner's Fix it link
+notplain admob.google.com | Opens the Sep 1–30 transaction details
+DANGER ads.google.com | Clicks Remove access on eden@muuula.com's row
+DANGER ads.google.com | Confirms removing eden@muuula.com's access to Google Ads account 573-310-9186
+DANGER ads.google.com | Clicks Remove access on eden@muuula.com's row
+DANGER ads.google.com | Confirms removing eden@muuula.com's access to Google Ads account 573-310-9186
+DANGER ads.google.com | Clicks Remove access on arthur.nikogosyan@bynet.co.il's row
+DANGER ads.google.com | Confirms removing arthur.nikogosyan@bynet.co.il's access to Google Ads account 573-310-9186
+DANGER admob.google.com | Selects the QA role to view its permissions
+notplain admob.google.com | Selects the qa@muuula.com user row
+DANGER admob.google.com | Clicks Remove for the selected qa@muuula.com user
+DANGER admob.google.com | Confirms removing qa@muuula.com from the AdMob account
+DANGER admin.atlassian.com | Clicks Remove on Eden's jira-software-users-muuula group
+DANGER admin.atlassian.com | Confirms removing Eden from jira-software-users-muuula
+DANGER admin.atlassian.com | Clicks Remove on Eden's jira-workmanagement-users-muuula group
+DANGER admin.atlassian.com | Confirms removing Eden from jira-workmanagement-users-muuula
+DANGER admin.atlassian.com | Clicks Remove on Eden's confluence-users-muuula group
+DANGER admin.atlassian.com | Confirms removing Eden from confluence-users-muuula
+DANGER admin.google.com | Opens the Suspend user dialog for qa@muuula.com
+DANGER admin.google.com | Confirms suspending the qa@muuula.com account
+notplain admin.google.com | Runs the user log events search for the last 7 days
+DANGER console.cloud.google.com | Opens the Export GA Events transfer details
+notplain console.cloud.google.com | Runs the read-only metadata query
+notplain console.cloud.google.com | Runs the read-only ad events count query
+notplain snowflake | Opens Admin → Billing
+notplain snowflake | Closes the Governance menu
+notplain snowflake | Creates a new SQL file (worksheet)
+DANGER snowflake | Runs: removes Yakir's ACCOUNTADMIN role and reads his roles back
+notplain snowflake | Expands the results panel
+DANGER snowflake | Saves invoice emails with erez@muuula.com added
+DANGER snowflake | Saves invoice emails as erez@muuula.com only
+DANGER snowflake | Removes eden@muuula.com from usage statement emails
+DANGER snowflake | Saves usage statement emails as erez@muuula.com only
+DANGER snowflake | Removes eden@muuula.com from payment reminder emails
+DANGER snowflake | Saves payment reminder emails as erez@muuula.com only
+DANGER admob.google.com | Confirms removing eden@muuula.com from AdMob
+DANGER accounts.google.com | Clicks Continue to start the passkey prompt for Erez to approve
+notplain pay.google.com | Closes the profile switcher menu
+notplain portal.azure.com | Closes the Queries hub popup
+notplain portal.azure.com | Dismisses agent tip by choosing Use Query
+notplain portal.azure.com | Dismisses the filters tip
+DANGER portal.azure.com | Switches the editor to KQL mode
+DANGER console.cloud.google.com | Selects the Viewer role for Eden
+DANGER console.cloud.google.com | Saves Eden's role change from Owner to Viewer
+DANGER console.cloud.google.com | Ticks the checkbox for the deleted yakir@muuula.com entry
+DANGER console.cloud.google.com | Opens Remove access for the selected yakir@muuula.com entry
+DANGER console.cloud.google.com | Confirms removing the deleted yakir@muuula.com entry's access
+DANGER console.cloud.google.com | Opens the edit panel for the deleted yakir@muuula.com entry
+DANGER console.cloud.google.com | Saves removal of both roles from the yakir entry
+notplain snowflake | Focuses the empty Username field (test only, types nothing)
+notplain snowflake | Closes the Account Details dialog
+notplain snowflake | Opens the create (+) menu
+notplain snowflake | Creates a new SQL file
+notplain snowflake | Runs the read-only test query
+notplain snowflake | Runs USE ROLE ACCOUNTADMIN in the worksheet
+notplain snowflake | Runs a read-only status query
+notplain snowflake | Runs the read-only status query
+DANGER snowflake | Runs the approved rule update adding GameSelection
+notplain snowflake | Runs the read-only rule verification query
+notplain snowflake | Runs the read-only what-if count on the backup
+DANGER snowflake | Selects the whole routine text in the editor
+notplain snowflake | Runs CREATE OR REPLACE of the reviewed routine
+DANGER snowflake | Transfers routine ownership back to BI_ENGINEER keeping grants
+DANGER snowflake | Runs read-only check of routine grants, owner and text fingerprint
+notplain snowflake | Runs read-only pre-run counts
+DANGER snowflake | Switches the worksheet to role SYSADMIN
+notplain snowflake | Switches the worksheet to warehouse LOADING
+DANGER snowflake | Runs the approved supervised CALL of the updated routine
+DANGER snowflake | Switches the worksheet back to role ACCOUNTADMIN
+DANGER snowflake | Runs the read-only post-run exact-count checks
+notplain snowflake | Runs the read-only query-history lookup
+DANGER snowflake | Runs the read-only save query for the repair tool
+notplain snowflake | Downloads the query result as a .csv file
+DANGER snowflake | Selects the whole repair-tool text in the editor
+notplain snowflake | Runs CREATE OR REPLACE of the fixed repair tool
+DANGER snowflake | Transfers repair-tool ownership back to SYSADMIN keeping grants
+DANGER snowflake | Runs read-only check of repair-tool grants, owner and text fingerprint
+notplain snowflake | Runs the read-only count of NaN-accuracy logs
+notplain snowflake | Closes the autocomplete popup
+notplain snowflake | Runs the read-only query
+notplain snowflake | Runs the list-users query
+notplain snowflake | Runs the users query
+DANGER tableau | Opens the Change Owner dialog
+notplain tableau | Closes the More actions menu
+DANGER tableau | Starts an incremental extract refresh of this workbook now
+DANGER tableau | Opens the Change Owner dialog for Periodic
+DANGER tableau | Selects Erez Baron as the new owner
+DANGER tableau | Opens the Change Owner dialog for Features
+DANGER tableau | Selects Erez Baron as the new owner
+DANGER tableau | Opens the Change Owner dialog for Version Analysis
+DANGER tableau | Selects Erez Baron as the new owner
+DANGER tableau | Opens the Change Owner dialog for Cohort Analysis
+DANGER tableau | Selects Erez Baron as the new owner
+notplain tableau | Opens the Version Analysis - Distribution workbook's More actions menu
+DANGER tableau | Opens the Change Owner dialog for Version Analysis - Distribution
+DANGER tableau | Selects Erez Baron as the new owner
+DANGER tableau | Opens the Change Owner dialog for Data Integrity
+DANGER tableau | Selects Erez Baron as the new owner
+DANGER tableau | Starts a full extract refresh of Periodic now
+DANGER tableau | Starts a full extract refresh of Version Analysis now
+notplain tableau | Opens the Version Analysis - Distribution workbook's More actions menu
+notplain tableau | Opens the Refresh Extracts Now dialog for Version Analysis - Distribution
+DANGER tableau | Starts an incremental extract refresh of Version Analysis - Distribution now
+notplain tableau | Adds Erez as a recipient of the Process Tracking alert
+notplain tableau | Adds Erez as a recipient of the Low Binding rate alert
+DANGER tableau | Opens Change owner for the Process Tracking alert
+DANGER tableau | Selects Erez Baron as the alert's new owner
+DANGER tableau | Opens Change owner for the Low Binding rate alert
+DANGER tableau | Confirms changing the Low Binding rate alert's owner to Erez Baron
+DANGER tableau | Opens Change owner for the Duplication in agg table alert
+DANGER tableau | Selects Erez Baron as the alert's new owner
+notplain tableau | Adds Erez as a recipient of the Log Validation All Users/Releases alert
+notplain tableau | Opens the Actions menu of the Log Validation All Users/Releases alert
+DANGER tableau | Selects Erez Baron as the alert's new owner
+DANGER tableau | Opens Change owner for the Log Validation [>=10] alert
+DANGER tableau | Confirms changing the Log Validation [>=10] alert's owner to Erez
+DANGER tableau | Opens Change owner for the Log Validation >10 v2 alert
+DANGER tableau | Confirms changing the Log Validation >10 v2 alert's owner to Erez
+DANGER tableau | Opens Change owner for the Log Validation >=1 v3 alert
+DANGER tableau | Confirms changing the Log Validation >=1 v3 alert's owner to Erez
+notplain snowflake | Switches to the Untitled 2.sql worksheet used earlier today
+notplain snowflake | Runs the describe-user query
+DANGER snowflake | Types a read-only query for the user's public key fields
+DANGER snowflake | Runs the public key query
+DANGER snowflake | Selects the old public key cell to show its full value
+DANGER snowflake | Copies the selected public key cell to the clipboard
+notplain claude.ai | Opens the Gmail connector's admin details (read-only view)
+notplain claude.ai | Closes the Gmail connector details without changes
+DANGER console.cloud.google.com | Opens Change billing dialog for Memory Pirates
+DANGER console.cloud.google.com | Selects Muuula Games billing account
+DANGER console.cloud.google.com | Moves Memory Pirates to Muuula Games billing
+DANGER console.cloud.google.com | Opens Change billing dialog for ClaudeGGL
+notplain console.cloud.google.com | Clicks the ClaudeGGL actions button
+DANGER console.cloud.google.com | Selects Change billing in the menu
+DANGER console.cloud.google.com | Clicks Change billing for ClaudeGGL
+DANGER console.cloud.google.com | Opens Change billing dialog for CharactersTest
+DANGER console.cloud.google.com | Opens Grant access panel for ClaudeGGL
+DANGER console.cloud.google.com | Selects the Owner role
+DANGER console.cloud.google.com | Saves Owner role for erez on ClaudeGGL
+DANGER console.cloud.google.com | Opens Shut down dialog for ClaudeGGL
+DANGER console.cloud.google.com | Opens Shut down dialog for ClaudeGGL
+DANGER console.cloud.google.com | Dismisses the pending deletion notice
+DANGER console.cloud.google.com | Selects Muuula Games billing
+DANGER console.cloud.google.com | Moves Default Gemini Project to Muuula Games billing
+DANGER console.cloud.google.com | Opens Shut down dialog for CharactersTest
+DANGER console.cloud.google.com | Opens Shut down dialog for CharactersTest
+notplain console.cloud.google.com | Goes to Amount step
+notplain console.cloud.google.com | Adds a fourth threshold row
+DANGER console.cloud.google.com | Saves the new budget alert
+notplain developer.playfab.com | Starts PlayFab sign-in with the existing Microsoft account
+notplain login.microsoftonline.com | Picks the erez@muuula.com work account for PlayFab sign-in
+DANGER developer.playfab.com | Opens the internal title data list view to show values (no save)
+notplain developer.playfab.com | Ticks Arthur's row checkbox
+DANGER developer.playfab.com | Clicks Delete for the selected user (Arthur)
+notplain snowflake | Creates a new SQL file worksheet
+notplain snowflake | Runs all statements in the worksheet
+notplain snowflake | Runs all statements in the worksheet
+DANGER snowflake | Runs the statements removing Yakir's old key
+DANGER tableau | Clicks Run Now on the incremental refresh
+DANGER tableau | Confirms Run Now for the extract refresh
+notplain snowflake | Runs the three backup-clone statements
+notplain snowflake | Runs read-only before-state check
+DANGER snowflake | Runs the approved rule update adding Puzzle
+notplain snowflake | Runs read-only rule verification
+notplain snowflake | Runs read-only rule verification
+notplain snowflake | Pastes the reviewed routine text into the editor
+DANGER snowflake | Selects all editor text
+DANGER snowflake | Runs the approved routine replacement
+DANGER snowflake | Runs the ownership grant back to BI_ENGINEER
+DANGER snowflake | Runs read-only fingerprint and grants check
+DANGER snowflake | Runs read-only grants listing
+notplain snowflake | Selects the three statements
+DANGER snowflake | Runs the approved supervised routine call as SYSADMIN
+notplain snowflake | Selects both statements
+DANGER snowflake | Runs read-only post-run checks
+notplain docs.google.com | Types the property name into the find box
+notplain docs.google.com | Closes the find box
+notplain docs.google.com | Moves the selection to the POSSIBLE_VALUES cell
+notplain docs.google.com | Moves the selection two cells right to column D
+notplain docs.google.com | Moves the selection one cell left to D34
+notplain docs.google.com | Moves selection back to D34 to read its value
+DANGER tableau | Opens the Add saved credential dialog for Snowflake
+DANGER tableau | Selects Key Pair Authentication Credential
+DANGER tableau | Continues to the key-pair credential form (does not save)
+DANGER tableau | Tests the saved Snowflake key-pair login
+DANGER tableau | Cancels the Create Extract Refresh dialog
+DANGER tableau | Creates a temporary refresh task for the test data source only
+DANGER tableau | Chooses Run Now for the test copy's refresh task
+DANGER tableau | Starts the one-off refresh of the test copy
+DANGER tableau | Chooses Delete for the temporary refresh task (not the data source)
+DANGER tableau | Confirms deleting the temporary refresh task of the test copy
+notplain console.cloud.google.com | Selects the eden@muuula.com row checkbox
+DANGER console.cloud.google.com | Opens Remove access dialog for the selected eden@muuula.com
+DANGER console.cloud.google.com | Confirms removing eden@muuula.com from project Memory Pirates
+DANGER console.cloud.google.com | Opens Grant access panel
+DANGER console.cloud.google.com | Selects the Owner role
+DANGER console.cloud.google.com | Saves Owner role for erez@muuula.com on My First Project
+DANGER console.cloud.google.com | Opens Remove access dialog for Eden and Yakir
+DANGER console.cloud.google.com | Confirms removing Eden and Yakir from My First Project
+notplain admin.google.com | Selects Specify range
+DANGER console.cloud.google.com | Opens Shut down dialog for project delta-vial-386909
+DANGER console.cloud.google.com | Confirms shutting down project delta-vial-386909
+DANGER console.cloud.google.com | Opens the 'export firebase_crashlytics' transfer details
+DANGER console.cloud.google.com | Opens the Export GA Events transfer
+DANGER console.cloud.google.com | Clicks Update Credentials on the crash export
+DANGER console.cloud.google.com | Retries the failed October 7 crash export run
+DANGER console.cloud.google.com | Opens How you pay tab
+DANGER console.cloud.google.com | Clicks delete on eden@muuula.com Billing Account Administrator
+DANGER calendly.com | Opens the Change plan menu
+DANGER calendly.com | Opens the Downgrade plan option
+DANGER calendly.com | Continues to the plan change screen
+DANGER calendly.com | Opens the Switch to Free plan flow
+DANGER calendly.com | Cancels the Calendly Essentials subscription
+DANGER calendly.com | Selects "Other reason" in the cancel survey
+DANGER calendly.com | Submits the cancel survey and continues
+notplain calendly.com | Declines the 30% discount offer
+DANGER calendly.com | Confirms cancellation of the Calendly subscription
+notplain snowflake | Creates a new SQL file worksheet
+DANGER github.com | Selects the current primary billing email text
+notplain github.com | Types erez@muuula.com into the primary billing email field
+DANGER github.com | Saves erez@muuula.com as the primary billing email
+DANGER console.cloud.google.com | Opens the Export GA Events transfer details
+notplain admin.google.com | Opens Eden's Admin roles and privileges section
+DANGER admin.google.com | Turns off Eden's Super Admin role toggle
+DANGER admin.google.com | Saves removal of Eden's Super Admin role
+notplain admin.google.com | Opens the Support Agent (info@muuula.com) user page
+DANGER admin.google.com | Turns on Super Admin role for info@muuula.com
+DANGER admin.google.com | Saves Super Admin role for info@muuula.com
+notplain admin.google.com | Runs the OAuth log search for the last 7 days
+notplain admin.google.com | Chooses the Application name filter
+notplain docs.google.com | Closes the open menu
+notplain script.google.com | Closes the options menu without choosing anything
+notplain admin.google.com | Selects Drive log events as the data source
+notplain admin.google.com | Selects Drive log events
+DANGER admin.google.com | Removes the last-7-days date filter
+notplain admin.google.com | Chooses the Document ID filter
+notplain admin.google.com | Chooses the Document ID filter
+DANGER dev.azure.com | Removes the SonarAdmin variable (unsaved)
+DANGER dev.azure.com | Removes the SonarCreds variable (unsaved)
+DANGER dev.azure.com | Removes the SonarPass variable (unsaved)
+DANGER dev.azure.com | Saves deletion of the 3 Sonar variables
+DANGER github.com | Selects Muuula as resource owner
+DANGER github.com | Selects 366-day expiration
+notplain github.com | Chooses Only select repositories
+notplain github.com | Selects Muuula/MemoryPirates
+notplain github.com | Closes the repository picker
+DANGER github.com | Opens the Add permissions menu
+DANGER github.com | Ticks the Contents permission
+DANGER github.com | Sets Contents to Read and write
+notplain portal.azure.com | Opens Eden Poran (eden@muuula.com) user page
+DANGER portal.azure.com | Opens the subscription dropdown
+DANGER portal.azure.com | Selects Microsoft Azure Sponsorship subscription
+notplain portal.azure.com | Runs the query
+notplain portal.azure.com | Enlarges the results pane
+notplain portal.azure.com | Clears the query editor
+DANGER portal.azure.com | Types a read-only subscriptions and vaults query
+notplain portal.azure.com | Runs the query

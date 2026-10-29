@@ -1,0 +1,117 @@
+{
+ "base": 708,
+ "baseline": {
+  "asks": 708,
+  "removed": 0,
+  "pct": "0.0%",
+  "tableau": 0,
+  "snowRun": 0,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "tableau": {
+  "asks": 680,
+  "removed": 28,
+  "pct": "4.0%",
+  "tableau": 28,
+  "snowRun": 0,
+  "snowFill": 0,
+  "lenMismatch": 0,
+  "keptTableau": {
+   "no recognized call": 11,
+   "direct fetch form": 5,
+   "wrapper used other than with a literal m": 1
+  },
+  "keptSnow": {}
+ },
+ "tableau_with_direct": {
+  "asks": 676,
+  "removed": 32,
+  "pct": "4.5%",
+  "tableau": 32,
+  "snowRun": 0,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "snowRun_strict": {
+  "asks": 708,
+  "removed": 0,
+  "pct": "0.0%",
+  "tableau": 0,
+  "snowRun": 0,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "snowRun_projected": {
+  "asks": 702,
+  "removed": 6,
+  "pct": "0.8%",
+  "tableau": 0,
+  "snowRun": 6,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "snowRun_projected_lenient": {
+  "asks": 702,
+  "removed": 6,
+  "pct": "0.8%",
+  "tableau": 0,
+  "snowRun": 6,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "snowFill_projected": {
+  "asks": 701,
+  "removed": 7,
+  "pct": "1.0%",
+  "tableau": 0,
+  "snowRun": 0,
+  "snowFill": 15,
+  "lenMismatch": 0
+ },
+ "both_projected": {
+  "asks": 674,
+  "removed": 34,
+  "pct": "4.8%",
+  "tableau": 28,
+  "snowRun": 6,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "all_projected": {
+  "asks": 667,
+  "removed": 41,
+  "pct": "5.8%",
+  "tableau": 28,
+  "snowRun": 6,
+  "snowFill": 15,
+  "lenMismatch": 0,
+  "keptTableau": {
+   "no recognized call": 11,
+   "direct fetch form": 5,
+   "wrapper used other than with a literal m": 1
+  },
+  "keptSnow": {
+   "editor not read-only": 16,
+   "danger word": 1
+  }
+ },
+ "snowRun_ceiling": {
+  "asks": 687,
+  "removed": 21,
+  "pct": "3.0%",
+  "tableau": 0,
+  "snowRun": 21,
+  "snowFill": 0,
+  "lenMismatch": 0
+ },
+ "all_ceiling": {
+  "asks": 652,
+  "removed": 56,
+  "pct": "7.9%",
+  "tableau": 28,
+  "snowRun": 21,
+  "snowFill": 15,
+  "lenMismatch": 0
+ }
+}
