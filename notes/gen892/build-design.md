@@ -124,9 +124,11 @@ constant, so a missing or broken module means today's numbers.
   file (N) does not match a logged Anthropic change; using 10,000"), and one line when the module cannot
   be loaded or the limits file cannot be read (r2: so a silent fallback is not invisible).
 - skill-restore: "about N tokens each".
-- update-config.ps1: `$RulesLineCap` renamed `$FALLBACK_RULES_LINE_CAP`; `Get-RulesLineLimit` follows the
-  same three rules (same log path, same changeId handling, per-line try/catch). File stays pure ASCII
-  (test asserts it). Tested in step with the JS reader on one fixture log.
+- update-config.ps1: `$RulesLineCap` renamed `$FALLBACK_RULES_LINE_CAP`; `Get-RulesLineLimit` runs
+  `node hooks\guidelines-limits.js print claude-md-lines 200 50 800 <home>` (Erez 2026-10-29: "one shared
+  reader, but in a new session"; replaces the earlier PowerShell copy, which kept disagreeing with the JS one
+  on hand-damaged files). Uses the printed number only for exit 0, exactly one line, 2-3 ASCII digits, 50-800;
+  anything else or any error -> 200; the caller's $LASTEXITCODE is restored. File stays pure ASCII.
 
 ## 4. Release-review skill (separate /vet-rule proposal)
 

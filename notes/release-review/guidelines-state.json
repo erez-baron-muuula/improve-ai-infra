@@ -1,0 +1,36 @@
+{
+  "sinceUtc": "2026-10-29T13:11:42.041Z",
+  "pages": {
+    "memory": {
+      "sha256": "f19bb5aa909fe5588d523cf302a0e15ed5950ca689fbb73bd932c315ec764a49",
+      "size": 55087
+    },
+    "skills": {
+      "sha256": "0a5e9e2e76028fe09ed4c449e0b4dc5bd9a1d641fa673a00bb6dab23eeabd31f",
+      "size": 118611
+    },
+    "hooks": {
+      "sha256": "ffc7195446eb6048fb54e8351b31c00e0280d303c339f4829023a9215d4ecc76",
+      "size": 282369
+    },
+    "sub-agents": {
+      "sha256": "c6af4f0b650d11cdabbd6b6e49d5272ff00cb966580bb4f8d1dc09ec4ae5b3cb",
+      "size": 116070
+    },
+    "large-codebases": {
+      "sha256": "d60127dad71a1fb40989539bd128db8af8f80f0c17a9f8e33d08e28866dfc4fc",
+      "size": 35483
+    },
+    "best-practices": {
+      "sha256": "3a737bc6ffa82ea2aae5c6c19047d1c8e74a517fea82ce809ea92f2f9175c7ba",
+      "size": 52163
+    },
+    "skill-best-practices": {
+      "sha256": "cb3f49125d6716342b369145655ec8a129a2baeaff3dd56b3087758f9674bd54",
+      "size": 42127
+    }
+  },
+  "checkUtc": "2026-10-29T13:11:42.041Z",
+  "applyUtc": "2026-10-29T13:11:42.041Z",
+  "warnings": []
+}

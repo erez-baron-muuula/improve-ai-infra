@@ -1,6 +1,16 @@
 # GEN-892 build — handoff (2026-10-29)
 
-Read this first, then `build-design.md`, `plan.md` (amendments 8-9 at the end).
+**INSTALLED 2026-10-29 (second session). Do not re-install.** update-config.ps1 now calls
+`node hooks\guidelines-limits.js print claude-md-lines 200 50 800 <home>` (ps-reader-block.txt; the old
+function text is in ps-reader-old.txt). Pass A (5 findings, 4 fixed, 1 by design) and Pass B opus
+a516659aeece696ae PASS on that delta. Tests 124/124, live-verify 10/10, 51/51, 44/44. Erez approved the
+install card ("Yes, install (xhigh)"). All 14 targets byte-identical to wc/, 8 passes consumed, none live;
+pre-install copies in rollback/ (made by install-prep.js). First live `guidelines-check --apply`: 0 changes,
+12 unchanged, 7 hashes, no warnings; readout silent. GEN-892 -> Review; scheduled task
+`gen892-weekly-run-check` (2026-11-05 15:00) checks the first unattended weekly run and sets Done.
+Note: test.js check "GEN-969 baseline: the live checker measures ~ as text" now fails by design (live = new).
+
+The rest of this file is the pre-install state, kept for the record.
 
 ## State
 - Everything is built in `notes/gen892/wc/` and NOT installed. GEN-892 is In Progress. Riders: GEN-969 (size-checker YAML fix), GEN-971 (release-review SKILL.md under 4,500 tokens: draft is 4,477).

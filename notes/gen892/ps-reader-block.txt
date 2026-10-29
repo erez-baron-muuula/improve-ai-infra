@@ -1,0 +1,23 @@
+# The line limit (GEN-892), read through the hooks' shared reader hooks\guidelines-limits.js so the gate and
+# the hooks cannot disagree: the claude-md-lines value in the size-limits file when it is a whole number from
+# 50 to 800 and either at or below 200, or above 200 and equal to the last applied claude-md-lines row in the
+# weekly guidelines watch's change log. Anything else, or any problem running node or the reader, leaves 200,
+# so a hand edit of the limits file can lower the limit but not raise it. The reader is a direct child of
+# hooks\, so it is vetting-locked like this script; keep it there (a nested folder is not locked). If node or
+# the reader fails, a value lowered below 200 is not honoured: 200 is the ceiling this gate falls back to.
+function Get-RulesLineLimit {
+    $lineLimit = $FALLBACK_RULES_LINE_CAP
+    # Keep the caller's exit code: the From-Claude sync check after the write reads $LASTEXITCODE.
+    $priorExitCode = $global:LASTEXITCODE
+    try {
+        $printedLines = @(& node $LimitsReader print claude-md-lines $FALLBACK_RULES_LINE_CAP 50 800 $UserHome)
+        if ($LASTEXITCODE -eq 0 -and $printedLines.Count -eq 1) {
+            $printedText = ([string]$printedLines[0]).Trim()
+            if ($printedText -cmatch '^[0-9]{2,3}$') {
+                $printedNumber = [int]$printedText
+                if ($printedNumber -ge 50 -and $printedNumber -le 800) { $lineLimit = $printedNumber }
+            }
+        }
+    } catch { } finally { $global:LASTEXITCODE = $priorExitCode }
+    return $lineLimit
+}

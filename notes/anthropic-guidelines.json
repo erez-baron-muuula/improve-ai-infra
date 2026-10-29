@@ -1,5 +1,5 @@
 {
-  "_about": "Size limits for the files that steer Claude, from Anthropic's published docs plus our own house rules. Read by /suggest check 4b (and so by /vet-rule's approval card) when a proposal creates or grows a file listed under appliesTo, and by the GEN-886 size check (config-health-scan.ps1 -Action size-sweep / size-check, and the scan action's sizeFindings). Every number the scan uses comes from this file. Change it only in an attended session (Erez present), and re-verify each value against its source when you do.",
+  "_about": "Size limits for the files that steer Claude, from Anthropic's published docs plus our own house rules. Read by /suggest check 4b (and so by /vet-rule's approval card) when a proposal creates or grows a file listed under appliesTo, and by the GEN-886 size check (config-health-scan.ps1 -Action size-sweep / size-check, and the scan action's sizeFindings). Every number the scan uses comes from this file, and the hooks and the rules-file gate read the hook-injected-text, skill-after-compaction and claude-md-lines values (GEN-892). A limit with anchors (the exact words around its number on Anthropic's page) is updated automatically by the weekly guidelines watch (release-review-tool.js guidelines-check --apply), which logs each change in release-review/guidelines-changes.jsonl; the hooks and the gate accept a value above their built-in one only when that log carries it. Change anything else only in an attended session (Erez present), and re-verify each value against its source when you do. To stop or undo an automatic change, edit that limit's anchors: a hand edit of an anchored number is redone by the next weekly run.",
   "counting": {
     "lines": "wc -l",
     "characters": "Unicode code points, as Node's [...text].length counts them (the size check counts the same way). By hand in this PC's Git Bash, LC_ALL=C.UTF-8 wc -m is close but counts each emoji as 2 (UTF-16 units: 49,445 vs 49,439 code points on the global CLAUDE.md, 2026-10-20); plain wc -m counts bytes (12,659 vs 12,575 on one skill file, 2026-10-19).",
@@ -21,7 +21,11 @@
       "kind": "hard",
       "overIt": "Claude sees only a file path and a preview of the first 2,000 characters, and is not asked to read the file. No setting raises it.",
       "source": "https://code.claude.com/docs/en/hooks",
-      "verified": "2026-10-19"
+      "verified": "2026-10-19",
+      "anchors": [
+        { "page": "hooks", "before": "plain stdout, are capped at", "after": "characters" },
+        { "page": "hooks", "before": "If a value exceeds", "after": "characters" }
+      ]
     },
     {
       "id": "skill-after-compaction",
@@ -31,7 +35,10 @@
       "kind": "hard",
       "overIt": "After auto-compaction only the first 5,000 tokens are re-attached (enforced as 20,000 characters, see counting.charsPerTokenSource); the rest of the runbook is lost. All re-attached skills share 25,000 tokens, most recent first.",
       "source": "https://code.claude.com/docs/en/skills",
-      "verified": "2026-10-20"
+      "verified": "2026-10-20",
+      "anchors": [
+        { "page": "skills", "before": "keeping the first", "after": "tokens of each" }
+      ]
     },
     {
       "id": "skill-md-lines",
@@ -41,7 +48,11 @@
       "kind": "recommended",
       "overIt": "Move detailed reference material to separate files.",
       "source": "https://code.claude.com/docs/en/skills ; https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
-      "verified": "2026-10-19"
+      "verified": "2026-10-19",
+      "anchors": [
+        { "page": "skills", "before": "Keep `SKILL.md` under", "after": "lines" },
+        { "page": "skill-best-practices", "before": "body under", "after": "lines" }
+      ]
     },
     {
       "id": "skill-description-listing",
@@ -51,7 +62,10 @@
       "kind": "hard",
       "overIt": "Truncated in the skill listing, so the trigger wording past the cap never reaches Claude.",
       "source": "https://code.claude.com/docs/en/skills",
-      "verified": "2026-10-19"
+      "verified": "2026-10-19",
+      "anchors": [
+        { "page": "skills", "before": "is truncated at", "after": "characters in the skill listing" }
+      ]
     },
     {
       "id": "skill-description-portable",
@@ -62,7 +76,10 @@
       "reportAs": "note",
       "overIt": "Over the Agent Skills format maximum; fine in Claude Code, but report it as a note.",
       "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
-      "verified": "2026-10-19"
+      "verified": "2026-10-19",
+      "anchors": [
+        { "page": "skill-best-practices", "before": "`description`: Maximum", "after": "characters" }
+      ]
     },
     {
       "id": "claude-md-lines",
@@ -72,7 +89,11 @@
       "kind": "recommended",
       "overIt": "Consumes more context in every session and reduces adherence. Report characters too: long lines make the line count understate the cost.",
       "source": "https://code.claude.com/docs/en/memory",
-      "verified": "2026-10-19"
+      "verified": "2026-10-19",
+      "anchors": [
+        { "page": "memory", "before": "Files over", "after": "lines consume more context" },
+        { "page": "memory", "before": "target under", "after": "lines per CLAUDE.md file" }
+      ]
     },
     {
       "id": "memory-md-load",
@@ -84,7 +105,11 @@
       "kind": "hard",
       "overIt": "Content past the threshold is not loaded at session start. valueBytes reads the doc's '25KB' as 25,000 bytes, the stricter of the two readings.",
       "source": "https://code.claude.com/docs/en/memory",
-      "verified": "2026-10-20"
+      "verified": "2026-10-20",
+      "anchors": [
+        { "page": "memory", "before": "The first", "after": "lines of `MEMORY.md`", "field": "valueLines" },
+        { "page": "memory", "before": "or the first", "after": "KB", "field": "valueBytes", "scale": 1000 }
+      ]
     },
     {
       "id": "reference-file-toc",
@@ -95,7 +120,10 @@
       "kind": "recommended",
       "overIt": "Over 100 lines, start the file with a table of contents so a partial read still shows its scope. The scan counts a heading or bold line containing the word 'contents' within the first tocWindowLines lines as one.",
       "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
-      "verified": "2026-10-19"
+      "verified": "2026-10-19",
+      "anchors": [
+        { "page": "skill-best-practices", "before": "reference files longer than", "after": "lines" }
+      ]
     }
   ],
   "houseRules": [

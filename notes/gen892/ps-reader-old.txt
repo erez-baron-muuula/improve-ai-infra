@@ -1,0 +1,23 @@
+# The line limit: 200, or the claude-md-lines value in the size-limits file when that is a smaller
+# positive whole number. Any read or parse problem leaves 200, so the file can only lower the limit.
+function Get-RulesLineLimit {
+    $lineLimit = $RulesLineCap
+    try {
+        $limitsJson = [System.IO.File]::ReadAllText($GuidelinesFile, [System.Text.Encoding]::UTF8)
+        if ($limitsJson.Length -gt 0 -and $limitsJson[0] -eq [char]0xFEFF) { $limitsJson = $limitsJson.Substring(1) }
+        foreach ($limitEntry in @(($limitsJson | ConvertFrom-Json).limits)) {
+            if ($limitEntry.id -eq 'claude-md-lines') {
+                $limitValue = $limitEntry.value
+                # Any whole number counts, however JSON wrote it (190, 190.0, 1.9e2), as in the
+                # session-start check's Number.isInteger.
+                if ($limitValue -is [int] -or $limitValue -is [long] -or $limitValue -is [decimal] -or $limitValue -is [double]) {
+                    $limitNumber = [double]$limitValue
+                    if ($limitNumber -eq [Math]::Floor($limitNumber) -and $limitNumber -gt 0 -and $limitNumber -lt $lineLimit) {
+                        $lineLimit = [int]$limitNumber
+                    }
+                }
+            }
+        }
+    } catch { }
+    return $lineLimit
+}
