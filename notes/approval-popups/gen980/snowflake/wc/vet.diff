@@ -1,15 +1,27 @@
-diff --git "a/C:\\Users\\Erez/.claude/hooks/auto-approve.js" b/wc/auto-approve.js
-index 4da8df6..0451990 100644
---- "a/C:\\Users\\Erez/.claude/hooks/auto-approve.js"
-+++ b/wc/auto-approve.js
-@@ -526,6 +526,22 @@ function isSafeNotionTicketLookup(command) {
+diff --git a/C:/Users/Erez/.claude/hooks/auto-approve.js b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/wc/auto-approve.js
+index 4da8df6..d20bc2f 100644
+--- a/C:/Users/Erez/.claude/hooks/auto-approve.js
++++ b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/wc/auto-approve.js	
+@@ -212,6 +212,10 @@ const PROTECTED_FILES = new Set([
+   'c:\\users\\erez\\.claude\\claude.md',
+   'c:\\users\\erez\\.claude\\hooks\\auto-approve.js',
+   'c:\\users\\erez\\.claude\\scripts\\notion-ticket-lookup.ps1',
++  // GEN-980: auto-approved below (isSafeSnowflakeRead) and holds the look-only SQL filter, so like
++  // notion-ticket-lookup.ps1 it changes only through update-config.ps1. Install the script first:
++  // this list is matched on the path whether or not the file exists, so it blocks creating it.
++  'c:\\users\\erez\\.claude\\scripts\\snowflake-read.ps1',
+   // GEN-508 piece 2 adds notion-rest-write.ps1 here, together with the REST arm that pins its bytes.
+   // It is NOT listed while that arm is unwired: protecting a path this hook does not yet depend on
+   // would buy nothing and would block the script's own creation, since PROTECTED_FILES is matched on
+@@ -526,6 +530,23 @@ function isSafeNotionTicketLookup(command) {
    return re.test(command.trim());
  }
  
 +// Exact-match allow for the look-only Snowflake reader (GEN-980 lever e / GEN-953 step 4).
 +// Only `& '<scripts>\snowflake-read.ps1' -SqlFile '<a .sql file under this user's Temp folder>'`
-+// is approved. What makes a run safe is the Snowflake role (CLAUDE_READ can only read), not
-+// this check; this only proves the command is that single call with a plain Temp path (the
++// is approved. What keeps a run look-only is the script's own statement filter plus the
++// Snowflake role (CLAUDE_READ's grants only read, but every role inherits Snowflake's PUBLIC
++// role); this check only proves the command is that single call with a plain Temp path (the
 +// session scratchpad lives there): printable ASCII, letters/digits/space/._-\ only in the path,
 +// no `..`, quotes, backtick, $ or % (no PowerShell interpolation). No `m` flag: ^ and $ anchor
 +// the WHOLE string, so an embedded newline cannot smuggle a second command past this check.
@@ -25,7 +37,7 @@ index 4da8df6..0451990 100644
  // Exact-match allow for the compact-gate marker files (GEN-348). /wrap Step 4
  // releases the gate with `touch "$HOME/.claude/.loggate-ok-$CLAUDE_SESSION_ID"`,
  // and the loggate one-time self-test writes `.loggate-verified`; the auto-mode
-@@ -4572,6 +4588,7 @@ process.stdin.on('end', () => {
+@@ -4572,6 +4593,7 @@ process.stdin.on('end', () => {
      if (isSafeSyncFromClaude(cmd)) return approve('Auto-approved: config-sync (From-Claude)');
      if (isSafeSyncTriageDecide(cmd)) return approve('Auto-approved: backup-triage decision (GEN-460)');
      if (isSafeNotionTicketLookup(cmd)) return approve('Auto-approved: notion-ticket-lookup.ps1 (GEN-316)');
@@ -33,10 +45,10 @@ index 4da8df6..0451990 100644
      if (isSafeLoggateTouch(cmd)) return approve('Auto-approved: compact-gate marker (GEN-348)');
      if (isSafeTicketHash(cmd)) return approve('Auto-approved: shared ticket contentHash CLI (GEN-508)');
      if (isSafeTicketVerify(cmd)) return approve('Auto-approved: ticket reviewer-verdict CLI (GEN-740)');
-diff --git "a/C:\\Users\\Erez/.claude/scripts/set-claude-key.ps1" b/wc/set-claude-key.ps1
+diff --git a/C:/Users/Erez/.claude/scripts/set-claude-key.ps1 b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/wc/set-claude-key.ps1
 index 11e0fbb..c33deb4 100644
---- "a/C:\\Users\\Erez/.claude/scripts/set-claude-key.ps1"
-+++ b/wc/set-claude-key.ps1
+--- a/C:/Users/Erez/.claude/scripts/set-claude-key.ps1
++++ b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/wc/set-claude-key.ps1	
 @@ -30,6 +30,14 @@ $KeyTargets = [ordered]@{
    notion    = 'claude-notion-token'
    atlassian = 'claude-atlassian-token'
@@ -63,12 +75,12 @@ index 11e0fbb..c33deb4 100644
      }
    }
  }
-diff --git a/snowflake-read.ps1 b/snowflake-read.ps1
+diff --git a/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/snowflake-read.ps1 b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/snowflake-read.ps1
 new file mode 100644
-index 0000000..292ab5f
+index 0000000..d33fa5c
 --- /dev/null
-+++ b/snowflake-read.ps1
-@@ -0,0 +1,322 @@
++++ b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen980/snowflake/snowflake-read.ps1	
+@@ -0,0 +1,391 @@
 +#!/usr/bin/env pwsh
 +# snowflake-read.ps1 -- run ONE look-only query in Snowflake as Claude's own login
 +# CLAUDE_READER (role CLAUDE_READ, warehouse CLAUDE_WH), outside the browser.
@@ -78,10 +90,20 @@ index 0000000..292ab5f
 +#
 +# Write the query to a .sql file in the session scratchpad (it is under %TEMP%) first, then run
 +# this with a tool timeout of at least 480000 ms (a slow query may take up to 7 minutes).
-+# What keeps a run safe is the Snowflake side, not this script: role CLAUDE_READ holds only
-+# USAGE/SELECT grants and three SNOWFLAKE viewer roles, and the user has
-+# PREVENT_UNLOAD_TO_INLINE_URL / _INTERNAL_STAGES set. This script adds no statement filter.
-+# (One statement per request is the API default; a scripting block can still hold several.)
++# Two layers keep a run look-only:
++#  1. This script sends only a plain look-up: the statement must start with SELECT, WITH,
++#     SHOW, DESC/DESCRIBE or EXPLAIN; every `->>` step after the first must start with SELECT
++#     (no comment before it); a WITH may not define or call a procedure; and AI/Cortex,
++#     SYSTEM$, IDENTIFIER() and TO_QUERY() are refused (AI functions bill outside CLAUDE_MONITOR;
++#     IDENTIFIER and TO_QUERY can name a function or a query inside a string). Leading comments
++#     are removed and NOT sent, so the first word checked is the first word Snowflake reads;
++#     control characters other than tab and newline are refused (Snowflake ends a -- comment at
++#     a lone carriage return, which would let a comment hide the real first word). Snowflake
++#     decides a statement's type from its first word, and runs one statement per request.
++#  2. Snowflake: role CLAUDE_READ holds USAGE/SELECT grants and three SNOWFLAKE viewer roles,
++#     and the user has PREVENT_UNLOAD_TO_INLINE_URL / _INTERNAL_STAGES set. Every role also
++#     inherits Snowflake's PUBLIC role, which on this account can create schemas in
++#     SNOWFLAKE_LEARNING_DB and use AI functions; layer 1 is what keeps Claude off those.
 +#
 +# How: Snowflake's SQL API (POST /api/v2/statements) with key-pair sign-in. The JWT is signed
 +# here with .NET (RSA, SHA-256); HTTPS uses Windows' own certificate checks, left ON. (The
@@ -117,6 +139,7 @@ index 0000000..292ab5f
 +$CellMax   = 200
 +$PollLimitSeconds = 420
 +$KeepDays  = 7
++$MaxRows   = 2000000
 +$script:Jwt = $null
 +
 +Add-Type -AssemblyName System.Web.Extensions
@@ -141,6 +164,63 @@ index 0000000..292ab5f
 +  $sql = [IO.File]::ReadAllText($full, [Text.Encoding]::UTF8).Trim()
 +  if ([string]::IsNullOrWhiteSpace($sql)) { throw 'The query file is empty.' }
 +  return $sql
++}
++
++# Removes leading whitespace and SQL comments (--, //, /* */) so the first word can be read.
++function Remove-LeadingComments([string]$Text) {
++  $s = $Text
++  while ($true) {
++    $s = $s.TrimStart()
++    if ($s.StartsWith('--') -or $s.StartsWith('//')) {
++      $nl = $s.IndexOf("`n")
++      if ($nl -lt 0) { return '' }
++      $s = $s.Substring($nl + 1)
++      continue
++    }
++    if ($s.StartsWith('/*')) {
++      $end = $s.IndexOf('*/')
++      if ($end -lt 0) { return '' }
++      $s = $s.Substring($end + 2)
++      continue
++    }
++    return $s
++  }
++}
++
++function Get-FirstWord([string]$Text) {
++  $m = [regex]::Match((Remove-LeadingComments $Text), '\A([A-Za-z]+)(?![A-Za-z0-9_$])')
++  if ($m.Success) { return $m.Groups[1].Value.ToUpperInvariant() }
++  return ''
++}
++
++# Whitespace or a comment between two words, as Snowflake reads it once lone carriage returns
++# and other line-break characters are refused (a -- or // comment then ends at a newline).
++$script:Gap = '(?:\s|/\*[\s\S]*?\*/|--[^\n]*\n|//[^\n]*\n)'
++
++# Returns the statement to send (leading comments removed), or throws unless $Sql is a plain
++# look-up (see the header, layer 1).
++function Get-LookOnlySql([string]$Sql) {
++  $refuse = 'Refused before sending: this login only runs plain look-ups (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN). '
++  $text = $Sql.Replace("`r`n", "`n")
++  if ($text -match '[\x00-\x08\x0B-\x1F\x7F\x85  ]') {
++    throw ($refuse + 'The query holds a control character other than tab and newline (for example a lone carriage return). Save it with plain line breaks.')
++  }
++  $body = Remove-LeadingComments $text
++  $steps = $body -split '->>'
++  $first = Get-FirstWord $steps[0]
++  if (@('SELECT', 'WITH', 'SHOW', 'DESC', 'DESCRIBE', 'EXPLAIN') -notcontains $first) {
++    throw ($refuse + 'This statement starts with "' + $first + '". Changes go through Snowsight, with Erez.')
++  }
++  for ($i = 1; $i -lt $steps.Count; $i++) {
++    if ($steps[$i] -notmatch '(?i)\A\s*SELECT(?![A-Za-z0-9_$])') { throw ($refuse + 'Every step after ->> must start with SELECT, with no comment before it.') }
++  }
++  if ($first -eq 'WITH' -and $body -match ('(?i)\bAS' + $script:Gap + '+(PROCEDURE|FUNCTION)\b|\bCALL\b')) {
++    throw ($refuse + 'A WITH may not define or call a procedure or function.')
++  }
++  if ($body -match ('(?i)\bCORTEX\b|\bSYSTEM\$|\b(AI_\w+|IDENTIFIER|TO_QUERY)"?' + $script:Gap + '*\(')) {
++    throw ($refuse + 'AI (Cortex), SYSTEM$, IDENTIFIER() and TO_QUERY() are not allowed here: AI functions cost money outside the spending cap, and the other two can hide which function or query runs. Ask Erez first.')
++  }
++  return $body
 +}
 +
 +function Get-ReaderKeyBytes {
@@ -279,7 +359,7 @@ index 0000000..292ab5f
 +  if ($null -eq $Value) { return '' }
 +  $s = [string]$Value
 +  if ($s.Length -gt $CellMax) { $s = $s.Substring(0, $CellMax) + '...' }
-+  return ($s -replace "[\r\n\t]+", ' ')
++  return ($s -replace '[\x00-\x1F\x7F]+', ' ')
 +}
 +
 +function ConvertTo-CsvField($Value) {
@@ -297,7 +377,7 @@ index 0000000..292ab5f
 +function Invoke-Read {
 +  [Console]::OutputEncoding = [Text.Encoding]::UTF8
 +  [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-+  $sql = Get-SqlText $SqlFile
++  $sql = Get-LookOnlySql (Get-SqlText $SqlFile)
 +  $outDir = Join-Path $env:TEMP 'snowflake-read'
 +  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 +  Remove-OldResults $outDir
@@ -335,6 +415,7 @@ index 0000000..292ab5f
 +    $handle = Get-Handle $r
 +    $names = @($meta['rowType'] | ForEach-Object { [string]$_['name'] })
 +    $expected = [long]$meta['numRows']
++    if ($expected -gt $MaxRows) { throw ('The result has ' + $expected + ' rows, over the ' + $MaxRows + ' limit; nothing was downloaded. Aggregate or add a LIMIT.') }
 +    $partCount = 1
 +    if ($meta.ContainsKey('partitionInfo') -and $meta['partitionInfo']) { $partCount = @($meta['partitionInfo']).Count }
 +

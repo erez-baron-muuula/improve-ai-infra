@@ -40,6 +40,7 @@ for (const d of fs.readdirSync(root)) {
     }
   }
 }
-const out = 'C:/Users/Erez/AppData/Local/Temp/claude/C--Users-Erez-AI-Projects-Improve-AI-Infra/88d16f1c-a32f-4372-b5d7-a53fa190260a/scratchpad/sql-corpus.json';
+const out = process.argv[2];
+if (!out) { console.error('usage: node extract-sql.js <output sql-corpus.json in a scratchpad>'); process.exit(2); }
 fs.writeFileSync(out, JSON.stringify([...seen.values()]));
 console.log('statements=' + seen.size + ' gateWrite=' + [...seen.values()].filter(v => v.gateWrite).length);

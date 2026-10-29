@@ -9,10 +9,14 @@
 # this with a tool timeout of at least 480000 ms (a slow query may take up to 7 minutes).
 # Two layers keep a run look-only:
 #  1. This script sends only a plain look-up: the statement must start with SELECT, WITH,
-#     SHOW, DESC/DESCRIBE or EXPLAIN (after leading comments); every `->>` step after the first
-#     must start with SELECT; a WITH may not define or call a procedure; and AI/Cortex functions
-#     and SYSTEM$ functions are refused (AI functions bill outside CLAUDE_MONITOR). Snowflake
-#     itself decides a statement's type from its first word, and runs one statement per request.
+#     SHOW, DESC/DESCRIBE or EXPLAIN; every `->>` step after the first must start with SELECT
+#     (no comment before it); a WITH may not define or call a procedure; and AI/Cortex,
+#     SYSTEM$, IDENTIFIER() and TO_QUERY() are refused (AI functions bill outside CLAUDE_MONITOR;
+#     IDENTIFIER and TO_QUERY can name a function or a query inside a string). Leading comments
+#     are removed and NOT sent, so the first word checked is the first word Snowflake reads;
+#     control characters other than tab and newline are refused (Snowflake ends a -- comment at
+#     a lone carriage return, which would let a comment hide the real first word). Snowflake
+#     decides a statement's type from its first word, and runs one statement per request.
 #  2. Snowflake: role CLAUDE_READ holds USAGE/SELECT grants and three SNOWFLAKE viewer roles,
 #     and the user has PREVENT_UNLOAD_TO_INLINE_URL / _INTERNAL_STAGES set. Every role also
 #     inherits Snowflake's PUBLIC role, which on this account can create schemas in
@@ -101,28 +105,39 @@ function Remove-LeadingComments([string]$Text) {
 }
 
 function Get-FirstWord([string]$Text) {
-  $m = [regex]::Match((Remove-LeadingComments $Text), '\A([A-Za-z]+)')
+  $m = [regex]::Match((Remove-LeadingComments $Text), '\A([A-Za-z]+)(?![A-Za-z0-9_$])')
   if ($m.Success) { return $m.Groups[1].Value.ToUpperInvariant() }
   return ''
 }
 
-# Throws unless $Sql is a plain look-up (see the header, layer 1).
-function Assert-LookOnly([string]$Sql) {
+# Whitespace or a comment between two words, as Snowflake reads it once lone carriage returns
+# and other line-break characters are refused (a -- or // comment then ends at a newline).
+$script:Gap = '(?:\s|/\*[\s\S]*?\*/|--[^\n]*\n|//[^\n]*\n)'
+
+# Returns the statement to send (leading comments removed), or throws unless $Sql is a plain
+# look-up (see the header, layer 1).
+function Get-LookOnlySql([string]$Sql) {
   $refuse = 'Refused before sending: this login only runs plain look-ups (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN). '
-  $steps = $Sql -split '->>'
+  $text = $Sql.Replace("`r`n", "`n")
+  if ($text -match '[\x00-\x08\x0B-\x1F\x7F\x85  ]') {
+    throw ($refuse + 'The query holds a control character other than tab and newline (for example a lone carriage return). Save it with plain line breaks.')
+  }
+  $body = Remove-LeadingComments $text
+  $steps = $body -split '->>'
   $first = Get-FirstWord $steps[0]
   if (@('SELECT', 'WITH', 'SHOW', 'DESC', 'DESCRIBE', 'EXPLAIN') -notcontains $first) {
     throw ($refuse + 'This statement starts with "' + $first + '". Changes go through Snowsight, with Erez.')
   }
   for ($i = 1; $i -lt $steps.Count; $i++) {
-    if ((Get-FirstWord $steps[$i]) -ne 'SELECT') { throw ($refuse + 'Every step after ->> must be a SELECT.') }
+    if ($steps[$i] -notmatch '(?i)\A\s*SELECT(?![A-Za-z0-9_$])') { throw ($refuse + 'Every step after ->> must start with SELECT, with no comment before it.') }
   }
-  if ($first -eq 'WITH' -and $Sql -match '(?i)\bAS\s+(PROCEDURE|FUNCTION)\b|\bCALL\b') {
+  if ($first -eq 'WITH' -and $body -match ('(?i)\bAS' + $script:Gap + '+(PROCEDURE|FUNCTION)\b|\bCALL\b')) {
     throw ($refuse + 'A WITH may not define or call a procedure or function.')
   }
-  if ($Sql -match '(?i)\bCORTEX\b|\bAI_\w+"?\s*\(|\bSYSTEM\$') {
-    throw ($refuse + 'AI (Cortex) and SYSTEM$ functions are not allowed here: AI functions cost money outside the spending cap. Ask Erez first.')
+  if ($body -match ('(?i)\bCORTEX\b|\bSYSTEM\$|\b(AI_\w+|IDENTIFIER|TO_QUERY)"?' + $script:Gap + '*\(')) {
+    throw ($refuse + 'AI (Cortex), SYSTEM$, IDENTIFIER() and TO_QUERY() are not allowed here: AI functions cost money outside the spending cap, and the other two can hide which function or query runs. Ask Erez first.')
   }
+  return $body
 }
 
 function Get-ReaderKeyBytes {
@@ -279,8 +294,7 @@ function Remove-OldResults([string]$Dir) {
 function Invoke-Read {
   [Console]::OutputEncoding = [Text.Encoding]::UTF8
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-  $sql = Get-SqlText $SqlFile
-  Assert-LookOnly $sql
+  $sql = Get-LookOnlySql (Get-SqlText $SqlFile)
   $outDir = Join-Path $env:TEMP 'snowflake-read'
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null
   Remove-OldResults $outDir

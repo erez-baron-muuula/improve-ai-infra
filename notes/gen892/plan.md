@@ -179,6 +179,11 @@
 6. **Warning text** for an unlogged notes cap above 10,000: "notes cap in the limits file (N) does not match a logged Anthropic change; using 10,000".
 7. **Residual.** The size checker and /suggest read the value without the cross-check, so a hand-edited value shows on approval cards while the gate stays at 200. This mismatch exists today too; it is listed, not fixed.
 
+## Amendments after a re-check against later work (2026-10-29)
+Re-checked before building, against everything built since approval. Still true: all 9 anchor sentences match today's pages with the same numbers (skills.md lines moved to 398/553/611; anchors are text-based); none of the files this plan edits changed since 2026-10-26; the new `browser-site-gate.js` (`TEXT_CAP = 20000`) does not trip the stray-copy test; `/wrap` Step 3j still runs the tool's `readout`.
+8. **No over-limit tickets from this watch.** The weekly size check (GEN-890, installed after this plan) already files "Keep <file> within its <limit> size limit" tickets for any file over a limit, reading the same limits file, and de-duplicates by exact title (`config-health-scan.ps1` ~line 1556; `config-health/size-weekly.md` step 3). This watch therefore files no ticket for files now over a changed limit; it files one only for "text to update" and for candidate keys. It still runs `size-sweep` and records the over-limit names in the log row.
+9. **Silent, no /wrap notice.** Question: "When Anthropic changes a size limit, should /wrap tell you?" (options: keep the 30-day notice, or make it silent like the weekly size check). Erez: "silent." So section 5's 30-day "Anthropic changed a size limit" line is dropped; the readout keeps only failures (page warnings, the 10-day stalled-watch warning, tool errors). An applied change is traced by the `guidelines-changes.jsonl` row, git, and the project-edit report; tickets are still filed when something needs a person. Accepted trade-off: an unexpected raise of the rules-file limit shows only in git and the project-edit report, not at /wrap.
+
 ## Size lines
 Measured 2026-10-26 with the installed size-check. "Proposed" is a target until drafted; the /vet-rule card will show the real lines.
 - `~/.claude/skills/release-review/SKILL.md`:
