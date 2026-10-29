@@ -1,0 +1,643 @@
+### 080b0354 #9 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs USE ROLE ACCOUNTADMIN in the worksheet
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view; v.dispatch({changes:{from:0,to:v.state.doc.length,insert:sql}}); v.focus(); return v.state.doc.length; }; window.__grid = () => [...document.querySelector('iframe').conte
+   prev: computer:key [deny] Runs USE ROLE ACCOUNTADMIN in the worksheet
+   prev: computer:screenshot [none] 
+
+### 080b0354 #13 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only check query
+   prev: computer:key [ask] Runs USE ROLE ACCOUNTADMIN in the worksheet
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] __setSql(`select MEMORY_PIRATES.LEXICON.OBJECT_MERGE(parse_json('{"a":1,"b":1}'), parse_json('{"a":2}'))::string as merge_test ,(select md5(procedure_definition) from DATALAKE.INFORMATION_SCHEMA.PROCEDURES where procedure_name='INVALID_APPLY_AUTOMATIONS' and procedure_schema='PUBLIC') as live_md5 ,(
+   prev: computer:screenshot [none] 
+
+### 080b0354 #21 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only breakdown query
+   prev: javascript_tool:javascript_exec [none] typeof __grid === 'function' ? __grid() : 'nohelper'
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(x, ' ; ') from ( select EVENTDATA:_client_version::string||'/'||nvl(EVENTDATA:A_ClientVersion::string,'noACV')||'/keys:'||array_size(object_keys(INVALID_PROPERTIES))||'/edPA:'||nvl(EVENTDATA:A_PlayerAccuracy::string,'null-or-missing')||'/hasKey:'||array_contains('A_PlayerAcc
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(cv||'/'||acv||'/nkeys:'||nk||'/edPA:'||edpa||'/hasKey:'||haskey||'/'||d0||'..'||d1||'#'||n, ' ; ') within group (order by cv) from ( select EVENTDATA:_client_version::string cv, nvl(EVENTDATA:A_ClientVersion::string,'noACV') acv, array_size(object_keys(INVALID_PROPERTIES)) n
+   prev: computer:screenshot [none] 
+
+### 080b0354 #26 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only breakdown query
+   prev: computer:screenshot [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(cv||'/'||acv||'/nkeys:'||nk||'/edPA:'||edpa||'/hasKey:'||haskey||'/'||d0||'..'||d1||'#'||n, ' ; ') within group (order by cv) from ( select EVENTDATA:_client_version::string cv, nvl(EVENTDATA:A_ClientVersion::string,'noACV') acv, array_size(object_keys(INVALID_PROPERTIES)) n
+   prev: computer:screenshot [none] 
+
+### 080b0354 #31 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only version summary query
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] __grid()
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(rel||'/'||v||'/nk:'||nk||'/'||d0||'..'||d1||'#'||n, ' ; ') within group (order by v) from ( select (EVENTDATA:A_ClientVersion::string rlike '0\\\\.1[2-5]\\\\.[0-9]')::string rel, regexp_substr(EVENTDATA:A_ClientVersion::string,'^[0-9]+\\\\.[0-9]+') v, array_size(object_keys(
+   prev: computer:screenshot [none] 
+
+### 080b0354 #36 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only dry-run query
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] __grid()
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(r, ' ; ') from ( select (nvl(fin:A_PlayerAccuracy::string,'NULL')||','||nvl(fin:A_OpponentAccuracy::string,'NULL')||',PAkey:'||array_contains('A_PlayerAccuracy'::variant,object_keys(fin))||',OAkey:'||array_contains('A_OpponentAccuracy'::variant,object_keys(fin))||',isNullPA:
+   prev: computer:screenshot [none] 
+
+### 080b0354 #41 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only dry-run query
+   prev: computer:screenshot [none] 
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(lbl||'#'||n, ' ; ') from (select lbl, count(*) n from ( select 'PA:'||coalesce(fin:A_PlayerAccuracy::string, iff(is_null_value(fin:A_PlayerAccuracy),'JSONNULL','MISSING'))||',OA:'||coalesce(fin:A_OpponentAccuracy::string, iff(is_null_value(fin:A_OpponentAccuracy),'JSONNULL',
+   prev: computer:screenshot [none] 
+
+### 080b0354 #46 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only raw-volume query
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] __grid()
+   prev: javascript_tool:javascript_exec [none] __setSql(`select listagg(v||':'||n||'/'||d, ' ; ') within group (order by v) from ( select DATA:EventData:A_ClientVersion::string v, count(*) n, count(distinct DATA:Timestamp::timestamp::date) d from DATALAKE.MRR.RAW_EVENTS where DATA:FullName_Name::string='InteractionShow' and DATA:Timestamp::times
+   prev: computer:screenshot [none] 
+
+### 080b0354 #53 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only loss-confirmation query
+   prev: javascript_tool:javascript_exec [none] __grid() || 'empty'
+   prev: javascript_tool:javascript_exec [none] __setSql(`with r as (select DATA:EventId::string id from DATALAKE.MRR.RAW_EVENTS where DATA:FullName_Name::string='InteractionShow' and DATA:Timestamp::timestamp >= dateadd(day,-7,current_date()) and DATA:EventData:A_ClientVersion::string rlike '0\\\\.1[3-5]\\\\.[0-9]' and (DATA:EventData:A_PlayerAc
+   prev: computer:screenshot [none] 
+   prev: computer:screenshot [none] 
+
+### 080b0354 #64 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only grants snapshot query
+   prev: computer:wait [none] 
+   prev: javascript_tool:javascript_exec [none] __grid() || 'empty'
+   prev: javascript_tool:javascript_exec [none] __setSql(`SHOW GRANTS ON PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS() ->> select listagg("privilege"||':'||"grantee_name", ', ') within group (order by "privilege","grantee_name") ||' | md5 '|| (select md5(procedure_definition) from DATALAKE.INFORMATION_SCHEMA.PROCEDURES where procedure_nam
+   prev: computer:screenshot [none] 
+
+### 080b0354 #73 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs CREATE OR REPLACE of the nightly NaN-fix routine in Snowflake
+   prev: computer:key [ask] Pastes the routine text into the empty editor
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] const t = document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view.state.doc.toString(); const h = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b=>b.toString(16).padStart(2,'0')).join(''); [t.length, t.include
+   prev: computer:screenshot [none] 
+
+### 080b0354 #78 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs GRANT OWNERSHIP of the routine back to BI_ENGINEER
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] (__grid() || 'empty') + ' || ' + document.querySelector('iframe').contentDocument.body.innerText.match(/(successfully created|already exists|error[^\n]{0,200}|Statement executed successfully)/gi)?.slice(0,5).join(' / ')
+   prev: javascript_tool:javascript_exec [ask] __setSql("GRANT OWNERSHIP ON PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS() TO ROLE BI_ENGINEER COPY CURRENT GRANTS;")
+   prev: computer:screenshot [none] 
+
+### 080b0354 #109 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only after-change check
+   prev: computer:screenshot [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view; v.dispatch({changes:{from:0,to:v.state.doc.length,insert:sql}}); v.focus(); return v.state.doc.length; }; window.__grid = () => [...document.querySelector('iframe').conte
+   prev: computer:screenshot [none] 
+
+### 080b0354 #115 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only rule test count
+   prev: computer:wait [none] 
+   prev: javascript_tool:javascript_exec [none] __grid() || 'empty'
+   prev: javascript_tool:javascript_exec [none] __setSql(`select count_if(FULLNAME_NAME='InteractionShow' and EVENTDATA:A_ClientVersion rlike '0\\\\.1[2-5]\\\\.[0-9]' and (INVALID_PROPERTIES:A_PlayerAccuracy ilike 'NaN' or INVALID_PROPERTIES:A_OpponentAccuracy ilike 'NaN') and array_size(array_except(object_keys(INVALID_PROPERTIES),['A_PlayerAccu
+   prev: computer:screenshot [none] 
+
+### 080b0354 #120 host=app.snowflake.com causes=word action=key key=ctrl+a ctrl+Return
+   SUM: Runs the read-only morning-check query B as a test
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] __grid() || 'empty'
+   prev: javascript_tool:javascript_exec [none] __setSql(`WITH r AS ( SELECT DATA:EventId::string AS id FROM DATALAKE.MRR.RAW_EVENTS WHERE DATA:FullName_Name::string = 'InteractionShow' AND DATA:Timestamp::timestamp >= '2026-10-25 03:10:00' AND DATA:Timestamp::timestamp < '2026-10-26 00:00:00' AND DATA:EventData:A_ClientVersion::string RLIKE '0\\
+   prev: computer:screenshot [none] 
+
+### 09536171 #11 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs USE ROLE ACCOUNTADMIN
+   prev: javascript_tool:javascript_exec [none] const docs=[document,...[...document.querySelectorAll('iframe')].map(f=>{try{return f.contentDocument}catch(e){return null}}).filter(Boolean)]; docs.map((d,i)=>i+':'+[...d.querySelectorAll('.cm-content')].map(c=>(c.cmView?'view':'noview')+'/'+(c.innerText||'').slice(0,40)).join(' | ')).join(' || ')
+   prev: javascript_tool:javascript_exec [ask] window.__setSql=(sql)=>{const c=document.querySelector('iframe').contentDocument.querySelector('.cm-content');const v=c.cmView.view;v.dispatch({changes:{from:0,to:v.state.doc.length,insert:sql},selection:{anchor:0}});v.focus();return v.state.doc.length;}; window.__setSql('USE ROLE ACCOUNTADMIN;')
+   prev: computer:left_click [deny] Runs USE ROLE ACCOUNTADMIN
+   prev: computer:screenshot [none] 
+
+### 09536171 #16 host=app.snowflake.com causes=follow-up,word action=left_click key=
+   SUM: Runs read-only query A
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql(`SELECT (SELECT COUNT(*) FROM DATALAKE.MRR.MNG_LOG_STORED_PROCEDURES_EXECUTION WHERE SP_NAME = 'SP_LOAD_EVENTS' AND START_DATE = CURRENT_DATE()) AS loader_success_rows_today, (SELECT LISTAGG(NAME || ':' || STATE, ', ') FROM TABLE(DATALAKE.INFORMATION_SCHEMA.TASK_HISTORY(SCHEDULED_TIM
+   prev: computer:left_click [deny] Runs read-only query A
+   prev: computer:screenshot [none] 
+
+### 09536171 #21 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs corrected read-only query A
+   prev: computer:screenshot [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SELECT (SELECT COUNT(*) FROM DATALAKE.MRR.MNG_LOG_STORED_PROCEDURES_EXECUTION WHERE SP_NAME = 'SP_LOAD_EVENTS' AND START_DATE = CURRENT_DATE()) AS loader_success_rows_today, (SELECT LISTAGG(NAME || ':' || STATE, ', ') FROM TABLE(DATALAKE.INFORMATION_SCHEMA.TASK_HISTORY(SCHEDULED_TIM
+   prev: computer:screenshot [none] 
+
+### 09536171 #26 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only query B
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] const d=document.querySelector('iframe').contentDocument; const h=[...d.querySelectorAll('[role=columnheader]')].map(e=>e.innerText.trim()); const c=[...d.querySelectorAll('[role=gridcell]')].map(e=>e.innerText.trim()); JSON.stringify({h,c}).replace(/=/g,'(eq)').replace(/@/g,'(at)')
+   prev: javascript_tool:javascript_exec [ask] window.__setSql(`WITH r AS ( SELECT DATA:EventId::string AS id FROM DATALAKE.MRR.RAW_EVENTS WHERE DATA:FullName_Name::string = 'InteractionShow' AND DATA:Timestamp::timestamp >= '2026-10-25 03:10:00' AND DATA:Timestamp::timestamp < '2026-10-26 00:00:00' AND DATA:EventData:A_ClientVersion::string RLI
+   prev: computer:screenshot [none] 
+
+### 09536171 #38 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only view-definition query
+   prev: computer:wait [none] 
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql=(sql)=>{const c=document.querySelector('iframe').contentDocument.querySelector('.cm-content');const v=c.cmView.view;v.dispatch({changes:{from:0,to:v.state.doc.length,insert:sql},selection:{anchor:0}});v.focus();return v.state.doc.length;}; window.__grid=()=>{const d=document.querySel
+   prev: computer:screenshot [none] 
+
+### 09536171 #44 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only daily count query
+   prev: javascript_tool:javascript_exec [ask] window.__grid()
+   prev: javascript_tool:javascript_exec [none] const d=document.querySelector('iframe').contentDocument; const c=d.querySelector('[role=gridcell]'); const s=c.innerText; s.slice(900,2600).replace(/=/g,'(eq)').replace(/@/g,' at ')
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SELECT LISTAGG(x, ' | ') WITHIN GROUP (ORDER BY x DESC) AS by_day FROM ( SELECT log_date::string || ' ' || is_released || ' logs=' || SUM(logs) || ' ext=' || SUM(logs - internal_logs) AS x FROM (SELECT DISTINCT log_date, log_name, client_version, is_released, invalid_properties, log
+   prev: computer:screenshot [none] 
+
+### 09536171 #49 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only breakdown query
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] document.querySelector('iframe').contentDocument.querySelector('[role=gridcell]').innerText.replace(/=/g,':').replace(/ \| /g,'\n')
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SELECT LISTAGG(x, ' | ') WITHIN GROUP (ORDER BY x) AS breakdown FROM ( SELECT invalid_properties || ' / ' || log_name || ' / v' || client_version || ' = ' || SUM(logs) || ' (' || MIN(log_date)::string || '..' || MAX(log_date)::string || ') ex:' || LEFT(MAX(example_value), 80) AS x F
+   prev: computer:screenshot [none] 
+
+### 09536171 #68 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only Puzzle-rows query
+   prev: computer:wait [none] 
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql=(sql)=>{const c=document.querySelector('iframe').contentDocument.querySelector('.cm-content');const v=c.cmView.view;v.dispatch({changes:{from:0,to:v.state.doc.length,insert:sql},selection:{anchor:0}});v.focus();return v.state.doc.length;}; window.__cell=()=>[...document.querySelector
+   prev: computer:screenshot [none] 
+
+### 0c29abc4 #45 host=app.snowflake.com causes=word action=key key=Escape ctrl+shift+Enter
+   SUM: Runs both statements in the worksheet
+   prev: computer:left_click [none] Places cursor on line 1 of the SQL editor
+   prev: computer:type [deny] Types a read-only query of Yakir's last 30 days of activity
+   prev: javascript_tool:javascript_exec [none] JSON.stringify([...document.querySelectorAll('.cm-content')].map(e=>{const c=e.cmView;const v=c&&(c.view||(c.rootView&&c.rootView.view));return v?v.state.doc.toString():e.innerText}))
+   prev: computer:zoom [none] 
+
+### 0c29abc4 #50 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:wait [none] 
+   prev: computer:screenshot [none] 
+   prev: computer:key [none] Clears the SQL editor
+   prev: computer:type [none] Types a read-only daily summary query of Yakir's activity
+
+### 0c29abc4 #61 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query listing Yakir's most frequent change statements
+
+### 0c29abc4 #71 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query of Yakir's statements since 13 Oct
+
+### 0c29abc4 #80 host=app.snowflake.com causes=deny-loop-stale-tab action=type key=SELECT name, database_name, schema_name, state, COUNT(*) AS runs, COUNT(DISTINCT TO_DATE(scheduled_time)) AS days, MIN(scheduled_time) AS first_run, MAX(scheduled_time) AS last_run FROM SNOWFLAKE.ACCOUNT_USAGE.TASK_HISTORY WHERE scheduled_time >= DATEADD(day,-60,CURRENT_TIMESTAMP()) GROUP BY 1,2,3,4 ORDER BY 1,4;
+   SUM: Types a read-only query of scheduled-task runs in the last 60 days
+   prev: computer:screenshot [none] 
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+
+### 0c29abc4 #81 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query of scheduled-task runs in the last 60 days
+
+### 0c29abc4 #93 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query of daily warehouse credits since 15 Sep
+
+### 0c29abc4 #103 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query checking whether anyone else used the LEXICON tables
+
+### 0c29abc4 #108 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:wait [none] 
+   prev: computer:screenshot [none] 
+   prev: computer:key [none] Clears the SQL editor
+   prev: computer:type [none] Types a read-only query of LEXICON query outcomes since 13 Oct
+
+### 0c29abc4 #123 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [ask] Closes the "Semantic view" tip popup
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query of Yakir's changes outside LEXICON since 15 Sep
+
+### 0c29abc4 #131 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query of the Version Analysis task errors
+
+### 0c29abc4 #141 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query for the end of the first and last error messages
+
+### 0c29abc4 #159 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:screenshot [none] 
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only query listing the procedures, functions and tasks Yakir created
+
+### 0c29abc4 #168 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:key [deny] Copies all result rows to the clipboard
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [ask] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only query showing the header and comments of the report-builder procedure
+
+### 0c29abc4 #197 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:screenshot [none] 
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only query measuring the live Lexicon code
+
+### 0c29abc4 #203 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:zoom [none] 
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only query measuring the latest Lexicon create statements in query history
+
+### 0c29abc4 #210 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the command
+   prev: computer:zoom [none] 
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only command listing current and dropped Lexicon tables
+
+### 0c29abc4 #218 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the command
+   prev: computer:left_click [none] Collapses the expanded results panel
+   prev: computer:left_click [deny] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [ask] Types a read-only command listing Lexicon tasks
+
+### 0c29abc4 #224 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:screenshot [none] 
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only query returning the full Lexicon schema code and its length
+
+### 0c29abc4 #235 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:key [ask] Closes the download menu
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only query returning the latest Lexicon create statements from history
+
+### 0c29abc4 #245 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:key [ask] Closes the download menu
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only query returning the three Lexicon settings tables as JSON rows
+
+### 0c29abc4 #270 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=Escape ctrl+Enter
+   SUM: Runs the query
+   prev: computer:wait [none] 
+   prev: computer:left_click [none] Places cursor in the SQL editor
+   prev: computer:key [deny] Clears the SQL editor
+   prev: computer:type [deny] Types a read-only account-wide inventory query of code objects and tables
+
+### 0c29abc4 #346 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs the query with the Run button
+   prev: computer:key [deny] Runs the raw-table listing query
+   prev: computer:wait [none] 
+   prev: computer:left_click [none] Expands the results panel
+   prev: computer:screenshot [none] 
+
+### 0e799c0b #169 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=ctrl+shift+Return
+   SUM: Runs the worksheet (role switch and read-only query)
+   prev: computer:key [deny] Runs all statements in the worksheet (role switch and read-only query)
+   prev: computer:wait [deny] 
+   prev: get_page_text [deny] 
+   prev: computer:screenshot [none] 
+
+### 0e799c0b #173 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=ctrl+shift+Return
+   SUM: Runs: switches off Eden's Snowflake user and reads it back
+   prev: computer:wait [deny] 
+   prev: computer:left_click [deny] Expands the results panel
+   prev: computer:wait [deny] 
+   prev: computer:screenshot [deny] 
+
+### 0e799c0b #180 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=ctrl+shift+Return
+   SUM: Runs the worksheet (role switch and read-only query)
+   prev: computer:wait [deny] 
+   prev: computer:left_click [deny] Expands the results panel
+   prev: computer:wait [deny] 
+   prev: computer:screenshot [deny] 
+
+### 0e799c0b #183 host=app.snowflake.com causes=deny-loop-stale-tab action=key key=ctrl+shift+Return
+   SUM: Runs the read-only default-role check
+   prev: computer:type [deny] Types a read-only query listing the roles granted to Yakir
+   prev: computer:key [deny] Runs the read-only grants listing
+   prev: computer:wait [deny] 
+   prev: computer:screenshot [deny] 
+
+### 0e799c0b #186 host=app.snowflake.com causes=deny-loop-stale-tab,word action=key key=ctrl+shift+Return
+   SUM: Runs: removes Yakir's ACCOUNTADMIN role and reads his roles back
+   prev: computer:key [deny] Clears the worksheet text
+   prev: computer:type [deny] Types the command removing Yakir's full-admin role, then a read-back
+   prev: computer:key [deny] Dismisses any autocomplete hint
+   prev: computer:zoom [deny] 
+
+### 3df07a58 #40 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the read-only test query
+   prev: computer:left_click [none] Places the cursor in the empty SQL editor
+   prev: computer:screenshot [none] 
+   prev: computer:type [none] Types a read-only test query into the editor
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #47 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs USE ROLE ACCOUNTADMIN in the worksheet
+   prev: javascript_tool:javascript_exec [ask] window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view; v.dispatch({changes: {from: 0, to: v.state.doc.length, insert: sql}, selection: {anchor: 0}}); v.focus(); return v.state.doc.length; }; window.__setSql('USE ROLE ACCOUNTA
+   prev: computer:key [deny] Runs USE ROLE ACCOUNTADMIN in the worksheet
+   prev: computer:screenshot [deny] 
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #51 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Runs a read-only status query
+   prev: javascript_tool:javascript_exec [ask] window.__readGrid = () => { const d = document.querySelector('iframe').contentDocument; const cells = [...d.querySelectorAll('[role=gridcell],[role=columnheader]')].map(c => c.innerText.trim()); return cells.slice(0, 80); }; window.__setSql("SELECT CURRENT_ROLE() AS role_now, CONTAINS(PROPERTY_INFO:
+   prev: computer:key [deny] Runs a read-only status query
+   prev: computer:screenshot [deny] 
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #56 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the read-only status query
+   prev: computer:wait [none] 
+   prev: computer:screenshot [none] 
+   prev: computer:left_click [none] Places cursor at end of the status query
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #60 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the approved rule update adding GameSelection
+   prev: computer:screenshot [ask] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view; v.dispatch({changes: {from: 0, to: v.state.doc.length, insert: sql}, selection: {anchor: sql.length}}); v.focus(); return v.state.doc.toString(); }; window.__setSql("UPDA
+   prev: computer:zoom [none] 
+
+### 3df07a58 #64 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the read-only rule verification query
+   prev: computer:wait [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("SELECT REPLACE((SELECT PROPERTY_INFO:A_NavTo:reg_exp::STRING FROM DATALAKE.BIGQUERY.PLAYFAB_PROPERTY_JSON_BAK_AN1415) || '|(GameSelection)', '', '') = PROPERTY_INFO:A_NavTo:reg_exp::STRING AS after_equals_before_plus_gs, PROPERTY_INFO:A_NavTo:data_type::STRING AS data_type_now, ARRA
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #68 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the read-only what-if count on the backup
+   prev: computer:wait [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`WITH matched AS (SELECT * FROM DATALAKE.MRR.INVALID_EVENTS_BAK_AN1415 WHERE (ARRAY_SIZE(OBJECT_KEYS(INVALID_PROPERTIES)) = 1 AND ARRAY_CONTAINS('A_ClientCoinBalance'::variant, OBJECT_KEYS(INVALID_PROPERTIES)) AND EVENTDATA:_client_version::string RLIKE '0\\\\.([0-9]|1[0-3])\\\\.[0-9
+   prev: computer:zoom [none] 
+
+### 3df07a58 #74 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs CREATE OR REPLACE of the reviewed routine
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("CREATE OR REPLACE PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS()\nCOPY GRANTS\nRETURNS BOOLEAN\nLANGUAGE SQL\nSTRICT\nCOMMENT='this procedure is running pre-decided rules on the invalid logs table'\nEXECUTE AS CALLER\nAS $$\nBEGIN -- TBD handling rules\n let _trigger_client_t
+   prev: computer:screenshot [none] 
+   prev: computer:key [ask] Selects the whole routine text in the editor
+   prev: computer:screenshot [ask] 
+
+### 3df07a58 #78 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Transfers routine ownership back to BI_ENGINEER keeping grants
+   prev: computer:screenshot [ask] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("GRANT OWNERSHIP ON PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS() TO ROLE BI_ENGINEER COPY CURRENT GRANTS;"); 'ok'
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #82 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Runs read-only check of routine grants, owner and text fingerprint
+   prev: computer:wait [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("SHOW GRANTS ON PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS() ->> SELECT LISTAGG(\"privilege\" || '>' || \"grantee_name\", ', ') WITHIN GROUP (ORDER BY \"privilege\", \"grantee_name\") AS grants_now, (SELECT MD5(procedure_definition) FROM DATALAKE.INFORMATION_SCHEMA.PROCEDURE
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #88 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Runs read-only pre-run counts
+   prev: get_page_text [none] 
+   prev: javascript_tool:javascript_exec [none] const d = document.querySelector('iframe').contentDocument; [...d.querySelectorAll('[role=gridcell]')].map(c => c.innerText.trim()).join(' | ').replace(/=/g, '~')
+   prev: javascript_tool:javascript_exec [none] window.__setSql("SELECT (SELECT COUNT(*) FROM DATALAKE.MRR.INVALID_EVENTS) AS invalid_live, (SELECT COUNT(*) FROM DATALAKE.MRR.INVALID_EVENTS_BAK_AN1415) AS invalid_backup, (SELECT COUNT(*) FROM DATALAKE.MRR.EVENTS) AS events_live, (SELECT COUNT(*) FROM DATALAKE.MRR.EVENTS_BAK_AN1415) AS events_back
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #92 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Switches the worksheet to role SYSADMIN
+   prev: computer:screenshot [ask] 
+   prev: javascript_tool:javascript_exec [none] const d = document.querySelector('iframe').contentDocument; [...d.querySelectorAll('[role=gridcell]')].map(c => c.innerText.trim()).join(' | ').replace(/=/g, '~')
+   prev: javascript_tool:javascript_exec [none] window.__setSql("USE ROLE SYSADMIN;"); 'ok'
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #95 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Switches the worksheet to warehouse LOADING
+   prev: computer:key [ask] Switches the worksheet to role SYSADMIN
+   prev: computer:screenshot [ask] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql("USE WAREHOUSE LOADING;"); 'ok'
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #99 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the approved supervised CALL of the updated routine
+   prev: computer:screenshot [ask] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("CALL DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS();"); 'ok'
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #104 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Switches the worksheet back to role ACCOUNTADMIN
+   prev: computer:wait [none] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql("USE ROLE ACCOUNTADMIN;"); 'ok'
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #108 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Runs the read-only post-run exact-count checks
+   prev: computer:screenshot [ask] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`WITH matched AS (SELECT NVL(EVENTID, ID) AS k FROM DATALAKE.MRR.INVALID_EVENTS_BAK_AN1415 WHERE (ARRAY_SIZE(OBJECT_KEYS(INVALID_PROPERTIES)) = 1 AND ARRAY_CONTAINS('A_ClientCoinBalance'::variant, OBJECT_KEYS(INVALID_PROPERTIES)) AND EVENTDATA:_client_version::string RLIKE '0\\\\.([0
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`WITH cutoff AS (SELECT MAX(PROCESSING_TIME) AS t FROM DATALAKE.MRR.EVENTS_BAK_AN1415), matched AS (SELECT NVL(EVENTID, ID) AS k FROM DATALAKE.MRR.INVALID_EVENTS_BAK_AN1415 WHERE (ARRAY_SIZE(OBJECT_KEYS(INVALID_PROPERTIES)) = 1 AND ARRAY_CONTAINS('A_ClientCoinBalance'::variant, OBJEC
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #115 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the read-only query-history lookup
+   prev: javascript_tool:javascript_exec [none] const d = document.querySelector('iframe').contentDocument; [...d.querySelectorAll('[role=gridcell]')].map(c => c.innerText.trim()).join(' | ').replace(/=/g, '~')
+   prev: computer:scroll [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql = (sql) => { const v = document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view; v.dispatch({changes: {from: 0, to: v.state.doc.length, insert: sql}, selection: {anchor: sql.length}}); v.focus(); return 'ok'; }; window.__setSql(`SELECT REGEXP_SUBSTR(U
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #121 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the read-only save query for the repair tool
+   prev: computer:wait [none] 
+   prev: javascript_tool:javascript_exec [none] const d = document.querySelector('iframe').contentDocument; [...d.querySelectorAll('[role=columnheader],[role=gridcell]')].map(c => c.innerText.trim()).join(' | ').replace(/=/g, '~')
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SELECT 'md5' AS kind, MD5(procedure_definition) AS val FROM DATALAKE.INFORMATION_SCHEMA.PROCEDURES WHERE procedure_schema = 'PUBLIC' AND procedure_name = 'INVALID_REMOVE_PROPERTIES' UNION ALL SELECT 'owner', procedure_owner FROM DATALAKE.INFORMATION_SCHEMA.PROCEDURES WHERE procedure
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #130 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs CREATE OR REPLACE of the fixed repair tool
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("CREATE OR REPLACE PROCEDURE DATALAKE.PUBLIC.INVALID_REMOVE_PROPERTIES(PROPERTY_LIST ARRAY)\nCOPY GRANTS\nRETURNS ARRAY\nLANGUAGE SQL\nSTRICT\nCOMMENT='this procedure delete the given invalid properties from the invalid events table. it returns the list of properties that successfull
+   prev: computer:screenshot [none] 
+   prev: computer:key [ask] Selects the whole repair-tool text in the editor
+   prev: computer:screenshot [ask] 
+
+### 3df07a58 #134 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Transfers repair-tool ownership back to SYSADMIN keeping grants
+   prev: computer:screenshot [ask] 
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("GRANT OWNERSHIP ON PROCEDURE DATALAKE.PUBLIC.INVALID_REMOVE_PROPERTIES(ARRAY) TO ROLE SYSADMIN COPY CURRENT GRANTS;"); 'ok'
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #137 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Runs read-only check of repair-tool grants, owner and text fingerprint
+   prev: computer:key [ask] Transfers repair-tool ownership back to SYSADMIN keeping grants
+   prev: computer:screenshot [ask] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql("SHOW GRANTS ON PROCEDURE DATALAKE.PUBLIC.INVALID_REMOVE_PROPERTIES(ARRAY) ->> SELECT LISTAGG(\"privilege\" || '>' || \"grantee_name\", ', ') WITHIN GROUP (ORDER BY \"privilege\", \"grantee_name\") AS grants_now, (SELECT MD5(procedure_definition) FROM DATALAKE.INFORMATION_SCHEMA.PROC
+   prev: computer:screenshot [none] 
+
+### 3df07a58 #142 host=app.snowflake.com causes=follow-up,word action=key key=ctrl+Return
+   SUM: Runs the read-only count of NaN-accuracy logs
+   prev: computer:zoom [none] 
+   prev: javascript_tool:javascript_exec [none] const d = document.querySelector('iframe').contentDocument; const t = [...d.querySelectorAll('[role=gridcell]')].map(c => c.innerText.trim()); (t.length ? t.join(' | ') : 'none: ' + (d.body.innerText.match(/OWNERSHIP>[^\n]*/) || ['?'])[0]).replace(/=/g, '~')
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SELECT DATA:EventData:A_ClientVersion::string AS ver, COUNT(*) AS logs, MIN(DATA:Timestamp::timestamp)::date AS first_day, MAX(DATA:Timestamp::timestamp)::date AS last_day, COUNT(DISTINCT DATA:Timestamp::timestamp::date) AS days FROM DATALAKE.MRR.RAW_EVENTS WHERE DATA:FullName_Name:
+   prev: computer:screenshot [none] 
+
+### 46d40f1e #21 host=app.snowflake.com causes=word action=key key=ctrl+Enter
+   SUM: Runs the read-only query
+   prev: computer:screenshot [none] 
+   prev: computer:screenshot [none] 
+   prev: computer:key [ask] Closes the autocomplete popup
+   prev: computer:zoom [none] 
+
+### 46d40f1e #26 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the list-users query
+   prev: computer:wait [none] 
+   prev: computer:screenshot [none] 
+   prev: computer:key [none] Clears the editor text
+   prev: computer:type [none] Types a read-only list-users query
+
+### 46d40f1e #32 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the users query
+   prev: get_page_text [none] 
+   prev: computer:screenshot [none] 
+   prev: computer:key [none] Clears the editor text
+   prev: computer:type [none] Types a read-only query on the users list
+
+### 46d40f1e #364 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the describe-user query
+   prev: computer:left_click [ask] Switches to the Untitled 2.sql worksheet used earlier today
+   prev: computer:left_click [deny] Focuses the SQL editor
+   prev: computer:key [deny] Clears the editor text
+   prev: computer:type [ask] Types a read-only describe-user query
+
+### 46d40f1e #368 host=app.snowflake.com causes=word action=key key=Escape ctrl+Enter
+   SUM: Runs the public key query
+   prev: computer:key [ask] Runs the describe-user query
+   prev: computer:wait [none] 
+   prev: computer:key [none] Clears the editor text
+   prev: computer:type [ask] Types a read-only query for the user's public key fields
+
+### 5b27e52c #13 host=app.snowflake.com causes=word action=key key=ctrl+shift+Return
+   SUM: Runs all statements in the worksheet
+   prev: computer:key [deny] Adds a new line
+   prev: computer:type [deny] Types read-only user description query
+   prev: computer:key [deny] Dismisses autocomplete
+   prev: computer:screenshot [deny] 
+
+### 5b27e52c #15 host=app.snowflake.com causes=word action=key key=ctrl+shift+Return
+   SUM: Runs all statements in the worksheet
+   prev: computer:key [deny] Adds a new line
+   prev: computer:type [deny] Types a read-only filter on the description result
+   prev: computer:key [deny] Dismisses autocomplete
+   prev: computer:zoom [deny] 
+
+### 5b27e52c #17 host=app.snowflake.com causes=word action=key key=ctrl+shift+Return
+   SUM: Runs the statements removing Yakir's old key
+   prev: computer:key [deny] Adds a new line
+   prev: computer:type [deny] Types the statement removing the old key slot 1
+   prev: computer:key [deny] Dismisses autocomplete
+   prev: computer:zoom [deny] 
+
+### 5b31b801 #7 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs the three backup-clone statements
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql=(sql)=>{const c=document.querySelector('iframe').contentDocument.querySelector('.cm-content');const v=c.cmView.view;v.dispatch({changes:{from:0,to:v.state.doc.length,insert:sql},selection:{anchor:0}});v.focus();return v.state.doc.length;}; window.__cell=()=>{const d=document.querySel
+   prev: javascript_tool:javascript_exec [ask] window.__setSql(`EXECUTE IMMEDIATE $$ BEGIN CREATE TABLE DATALAKE.BIGQUERY.PLAYFAB_PROPERTY_JSON_BAK_AN1415B CLONE DATALAKE.BIGQUERY.PLAYFAB_PROPERTY_JSON; CREATE TABLE DATALAKE.MRR.INVALID_EVENTS_BAK_AN1415B CLONE DATALAKE.MRR.INVALID_EVENTS; CREATE TABLE DATALAKE.MRR.EVENTS_BAK_AN1415B CLONE DATAL
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #11 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only before-state check
+   prev: computer:left_click [ask] Runs the three backup-clone statements
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`WITH p AS (SELECT nvl(EVENTID, EVENTDATA:Id::string) k FROM DATALAKE.MRR.INVALID_EVENTS WHERE ARRAY_SIZE(OBJECT_KEYS(INVALID_PROPERTIES)) = 1 AND INVALID_PROPERTIES:A_ChallengeName::string = 'Puzzle') SELECT (SELECT COUNT(*) FROM DATALAKE.MRR.INVALID_EVENTS) AS inv_live, (SELECT COU
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #18 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs the approved rule update adding Puzzle
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__cell()
+   prev: javascript_tool:javascript_exec [ask] window.__setSql(`UPDATE DATALAKE.BIGQUERY.PLAYFAB_PROPERTY_JSON SET PROPERTY_INFO = OBJECT_INSERT(PROPERTY_INFO, 'A_ChallengeName', OBJECT_INSERT(PROPERTY_INFO:A_ChallengeName, 'reg_exp', PROPERTY_INFO:A_ChallengeName:reg_exp::string || '|(Puzzle)', TRUE), TRUE) WHERE PROPERTY_INFO:A_ChallengeName:r
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #22 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only rule verification
+   prev: computer:left_click [ask] Runs the approved rule update adding Puzzle
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] const r=window.__cell(); window.__setSql(`SELECT n.PROPERTY_INFO:A_ChallengeName::string AS new_rule, (SELECT COUNT(*) FROM TABLE(FLATTEN(n.PROPERTY_INFO)) f WHERE f.key <> 'A_ChallengeName' AND NOT EQUAL_NULL(f.value, b.PROPERTY_INFO[f.key])) AS other_keys_changed, ARRAY_SIZE(OBJECT_KEYS(n.PROPERTY
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #26 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only rule verification
+   prev: computer:left_click [ask] Runs read-only rule verification
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SELECT ANY_VALUE(n.PROPERTY_INFO:A_ChallengeName::string) AS new_rule, COUNT_IF(f.key <> 'A_ChallengeName' AND NOT EQUAL_NULL(f.value, b.PROPERTY_INFO[f.key])) AS other_keys_changed, COUNT(*) AS keys_new, ANY_VALUE(ARRAY_SIZE(OBJECT_KEYS(b.PROPERTY_INFO))) AS keys_bak FROM DATALAKE.
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #38 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the approved routine replacement
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] const v=document.querySelector('iframe').contentDocument.querySelector('.cm-content').cmView.view; const t=v.state.doc.toString(); const h=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)); const hex=[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join(''); hex+' len '
+   prev: computer:key [ask] Selects all editor text
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #42 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs the ownership grant back to BI_ENGINEER
+   prev: computer:key [ask] Runs the approved routine replacement
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [ask] window.__setSql('GRANT OWNERSHIP ON PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS() TO ROLE BI_ENGINEER COPY CURRENT GRANTS;')
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #46 host=app.snowflake.com causes=follow-up,word action=left_click key=
+   SUM: Runs read-only fingerprint and grants check
+   prev: computer:left_click [ask] Runs the ownership grant back to BI_ENGINEER
+   prev: computer:screenshot [none] 
+   prev: javascript_tool:javascript_exec [none] const r=window.__cell(); window.__setSql(`SELECT (SELECT md5(procedure_definition) FROM DATALAKE.INFORMATION_SCHEMA.PROCEDURES WHERE procedure_name = 'INVALID_APPLY_AUTOMATIONS' AND procedure_schema = 'PUBLIC') AS routine_md5, (SELECT procedure_owner FROM DATALAKE.INFORMATION_SCHEMA.PROCEDURES WHERE
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #52 host=app.snowflake.com causes=word action=left_click key=
+   SUM: Runs read-only grants listing
+   prev: computer:wait [none] 
+   prev: javascript_tool:javascript_exec [none] window.__cell()
+   prev: javascript_tool:javascript_exec [none] window.__setSql(`SHOW GRANTS ON PROCEDURE DATALAKE.PUBLIC.INVALID_APPLY_AUTOMATIONS() ->> SELECT LISTAGG("privilege" || ':' || "grantee_name", ', ') WITHIN GROUP (ORDER BY "privilege", "grantee_name") AS grants FROM $1;`)
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #61 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs the approved supervised routine call as SYSADMIN
+   prev: computer:left_click [none] Focuses the SQL editor
+   prev: computer:screenshot [none] 
+   prev: computer:key [ask] Selects the three statements
+   prev: computer:screenshot [none] 
+
+### 5b31b801 #75 host=app.snowflake.com causes=word action=key key=ctrl+Return
+   SUM: Runs read-only post-run checks
+   prev: computer:left_click [none] Focuses the SQL editor
+   prev: computer:screenshot [none] 
+   prev: computer:key [ask] Selects both statements
+   prev: computer:screenshot [none] 

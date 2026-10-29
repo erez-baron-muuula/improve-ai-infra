@@ -1,0 +1,49 @@
+080b0354 #11 snowFill :: fill
+080b0354 #18 snowFill :: fill
+080b0354 #19 snowFill :: fill
+080b0354 #21 snowRun :: key ctrl+a ctrl+Return «Runs the read-only breakdown query» sql: select listagg(cv||'/'||acv||'/nkeys:'||nk||'/edPA:'||edpa||'/hasKey:'||haskey||'/'||d0||'
+080b0354 #24 snowFill :: fill
+080b0354 #26 snowRun :: key ctrl+a ctrl+Return «Runs the read-only breakdown query» sql: select listagg(cv||'/'||acv||'/nkeys:'||nk||'/edPA:'||edpa||'/hasKey:'||haskey||'/'||d0||'
+080b0354 #36 snowRun :: key ctrl+a ctrl+Return «Runs the read-only dry-run query» sql: select listagg(r, ' ; ') from ( select (nvl(fin:A_PlayerAccuracy::string,'NULL')||','||nvl
+080b0354 #41 snowRun :: key ctrl+a ctrl+Return «Runs the read-only dry-run query» sql: select listagg(lbl||'#'||n, ' ; ') from (select lbl, count(*) n from ( select 'PA:'||coale
+080b0354 #46 snowRun :: key ctrl+a ctrl+Return «Runs the read-only raw-volume query» sql: select listagg(v||':'||n||'/'||d, ' ; ') within group (order by v) from ( select DATA:Even
+09536171 #13 snowFill :: fill
+09536171 #19 snowFill :: fill
+0c29abc4 #287 snowFill :: fill
+0c29abc4 #294 snowFill :: fill
+0c29abc4 #308 tableau :: methods getWorkbooks,getDatasources
+0c29abc4 #309 tableau :: methods getWorkbooks,getDatasources,getFlows
+0c29abc4 #310 tableau :: methods getWorkbooks,getDatasources
+0c29abc4 #311 tableau :: methods getDatasources
+0c29abc4 #313 tableau :: methods getFlows,getDataAlerts
+0c29abc4 #325 snowFill :: fill
+0c29abc4 #332 tableau :: methods getDatasources,getSchedules,getExtractTasks
+0c29abc4 #333 tableau :: methods getDatasources,getSchedules,getExtractTasks
+0c29abc4 #351 snowFill :: fill
+0c29abc4 #355 snowFill :: fill
+0c29abc4 #364 snowFill :: fill
+0c29abc4 #371 snowFill :: fill
+0c29abc4 #379 snowFill :: fill
+3df07a58 #62 snowFill :: fill
+3df07a58 #64 snowRun :: key ctrl+Return «Runs the read-only rule verification query» sql: SELECT REPLACE((SELECT PROPERTY_INFO:A_NavTo:reg_exp::STRING FROM DATALAKE.BIGQUERY.PLAYFA
+46d40f1e #74 tableau :: methods getExtractTasks
+46d40f1e #75 tableau :: methods getExtractTasks,getWorkbooks
+46d40f1e #87 tableau :: methods getWorkbooks,getUsers,getExtractTasks
+46d40f1e #88 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #98 tableau :: methods getBackgroundJobs
+46d40f1e #169 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #170 tableau :: methods getDatasources
+46d40f1e #173 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #188 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #200 tableau :: methods getExtractTasks
+46d40f1e #209 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #224 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #226 tableau :: methods getWorkbooks,getExtractTasks
+46d40f1e #280 tableau :: methods getDataAlerts
+46d40f1e #281 tableau :: methods getDataAlerts
+46d40f1e #318 tableau :: methods getDataAlerts
+46d40f1e #353 tableau :: methods getDataAlerts
+79219a99 #12 tableau :: methods getWorkbooks,getDatasources
+79219a99 #13 tableau :: methods getDatasources,getExtractTasks
+79219a99 #14 tableau :: methods getDatasources,getExtractTasks
+79219a99 #16 tableau :: methods getDatasources,getWorkbooks,getExtractTasks

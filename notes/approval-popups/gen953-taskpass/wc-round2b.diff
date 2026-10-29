@@ -1,0 +1,709 @@
+diff --git a/C:/Users/Erez/.claude/hooks/browser-site-gate.js b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen953-taskpass/wc/browser-site-gate.js
+index 6f72efa..2cded9b 100644
+--- a/C:/Users/Erez/.claude/hooks/browser-site-gate.js
++++ b/C:/Users/Erez/AI Projects/Improve AI Infra/notes/approval-popups/gen953-taskpass/wc/browser-site-gate.js	
+@@ -49,12 +49,22 @@
+  * the site, then for each cause a sentence at least as strong as the earlier wording; what the gate itself
+  * reads in a typed command or a page script can only add a sharper line from a closed list of serious
+  * kinds. Claude's own summaries, marked unverified, follow the first sentence; "Undo not guaranteed; allow
+  * only if expected." ends it. Text only: it is built after the decision is made and logged, and any error
+  * building it falls back to the earlier wording (legacyReasonFor).
+  *
++ * Task approval (GEN-953): before a multi-step job Claude ends its message to Erez with a "Browser task:"
++ * block (one site, each step's exact action_summary, exact texts it will type) and asks "Ready?". In
++ * the turn Erez's own reply starts, the first card on that site says allowing it also approves the listed
++ * task; once that call has run (he allowed it), a click, key, typing, drag or form fill on that site whose
++ * only causes are 'word' / 'typed-write' goes ahead without a card if its summary is a listed step with no
++ * stop word (sends, deletes, payments, access) and any text it types is a listed text. Same turn only, at
++ * most TASK_TTL_MS and TASK_MAX_ACTIONS; never on high-stakes sites; first visits, follow-ups, pastes,
++ * uploads and page scripts still ask. Read from the transcript as the PC-control task pass does
++ * (windows-mcp-approval.js, GEN-908); anything unreadable means no task.
++ *
+  * Signals: each ask/deny is logged (cause + site, no page text) to browser-gate-asks.jsonl, and each
+  * interaction that went ahead on an ordinary approved site is logged as its site + the first six words
+  * of Claude's summary ("pass": a sampling aid for wording the rules don't know, read at the live check
+  * and whenever the alert below fires). After 30 browser actions in a session (each batch item counts),
+  * if non-site asks exceed 1 per 10 actions, Claude is told once (added context) to report it to Erez
+  * in its next For-you block.
+@@ -77,12 +87,21 @@ const LOG_PRUNE_BYTES = 1024 * 1024;
+ const LOCK_WAIT_MS = 3000;
+ const LOCK_STALE_MS = 15000;
+ const PENDING_TTL_MS = 6 * 60 * 60 * 1000;
+ const SHAPE_LOG_MAX = 20;
+ const TEXT_CAP = 20000; // characters of a script or typed text the pop-up text reads (GEN-953)
+ 
++// Task approval (GEN-953): how long and for how many items one approval lasts, and how much of the
++// transcript's end is read for the "Browser task:" block (once per turn).
++const TASK_TTL_MS = 10 * 60 * 1000;
++const TASK_MAX_ACTIONS = 30;
++const TASK_READ_CAP = 32 * 1024 * 1024; // as the PC-control pass (screenshots make browser transcripts large)
++// The pop-up shows about 3 lines of about 63 characters (Erez's screenshot, GEN-953 step 2): an offer that
++// would end past that is not made.
++const CARD_LINE = 63, CARD_LINES = 3;
++
+ // Erez's choice (GEN-924): admin consoles get the same once-per-site + word rules as ordinary sites.
+ const ADMIN_CONSOLES_HIGH_STAKES = false;
+ 
+ const READ_COMPUTER = new Set(['screenshot', 'wait', 'scroll', 'zoom', 'scroll_to', 'hover']);
+ const INTERACT_COMPUTER = new Set(['left_click', 'right_click', 'double_click', 'triple_click', 'type', 'key', 'left_click_drag']);
+ const CLICKS = new Set(['left_click', 'right_click', 'double_click', 'triple_click', 'left_click_drag']);
+@@ -273,15 +292,268 @@ const WRITE_WORD = /(^|[^a-z])(delete|drop|truncate|update|insert|merge|alter|cr
+ const helperArgsOk = t => !strayQuote(t) && !/\\["'`]|\$\{/.test(String(t)) && quotedTexts(t).every(s => { if (!/[\s\\]/.test(s.trim())) return !WRITE_WORD.test(s); const st = statementsOf(s); return st.length > 0 && st.every(x => READ_START.test(x)); });
+ const callsHelper = (text, helpers) => helperCalls(text, helpers).length > 0;
+ // Each helper asks the first time it is called on each site in a session (Erez then sees which site and helper);
+ // after that, calls to it go ahead unless they carry a database write or a risky pattern themselves.
+ const HELPER_ONCE = true;
+ 
++// ---------------------------------------------------------------- task approval (GEN-953)
++
++// A listed step still asks when its summary names any of these: every danger word of WORDS_EN except
++// "confirm" and "save" (the commit of almost any listed job), the Hebrew list, the access nouns, who can
++// see it, and creating keys, users or links. A test keeps STOP_EN equal to WORDS_EN minus those two.
++const STOP_EN = /\b(send|sent|resend|post(s|ed|ing)?|submit|delet|remov|buy|bought|pays?\b|paying|paid|payment (is )?(made|sent)|makes? (a )?payment|purchas|order(s|ed|ing)? (the|a|an|now)\b|places? (the |an |your )?order|upload|share|sharing|accept|agree(s|d|ing)?\b|grant|allow|publish|transfer|invit|approv|repl(y|ies|ied|ying)\b|forward(s|ed|ing)?\b|e-?mails? (the|a|an|it|them|this|him|her)\b|messages? (the|a|an|him|her|them)\b|merg|terminat|archiv|trash|discard|revok|cancel|unsubscrib|install|authori[sz]|signs?\b(?![ -]?(in|up|out|on)\b)|signed|signing\b(?![ -]?(in|up|out|on)\b)|reset|disabl|deactivat|suspend|block(s|ed|ing)?\b|ban(s|ned)?\b|wipe|erase|empty (the )?trash|leave(s)? (the )?(channel|group|workspace|team)|\b(plans?|tiers?|subscriptions?)\b|charg(e|es|ed|ing)\b)/i;
++const STOP_MORE = new RegExp([
++  '\\b(drop|truncat|purg|generat)', '\\bclears? (all|the )?(site|browsing|cache|cookies|data|history)', '\\bpast(e|es|ed|ing)\\b', 'clipboard',
++  '\\b(changes?|resets?) (the )?password', '\\bupdates? (the )?credentials?', '\\bshuts? down\\b',
++  '\\bstops?\\b[^\\n]{0,40}\\b(instance|server|service|vm|project|job|task)\\b', 'subscrib', '\\bupgrad', '\\bdowngrad',
++  '\\bcomments? (on|to)\\b', '\\b(billing|invoices?|checkout)\\b',
++  // (WORDS_ACCESS's first family: setting who can do what)
++  '\\b(sets?|changes?|moves?|assigns?|adds?|makes?|gives?|switch(es)?|transfers?|selects?|chooses?|picks?|ticks?|checks?|turns? (on|off)|toggles?|enables?|grants?|enters?)\\b[^\\n]{0,80}\\b(roles?|permissions?|access|billing|owners?|admins?|read and write|editors?|members?|credentials?|passwords?|tokens?|api keys?|expiration|scopes?)\\b',
++  '\\bcreates?\\b[^\\n]{0,60}\\b(tokens?|keys?|users?|accounts?|credentials?|invites?|links?|secrets?|webhooks?|integrations?)\\b',
++  '\\b(anyone|everyone|public(ly)?|private|visibility|restricted|can (view|edit|comment)|view[- ]only|viewers?|commenters?)\\b',
++  // (undoing a share or publish, giving money, checking out, booking, closing an account)
++  '\\bun(shar|publish|list|invit|link)', 'donat', '\\bchecks? ?out\\b', '\\bbook(s|ed|ing)?\\b', '\\bcloses? (the |my |your |this )?account'
++].join('|'), 'i');
++const taskStop = s => [String(s), normStep(s)].some(x => STOP_EN.test(x) || WORDS_HE.test(x) || DANGER_NOUN.test(x) || STOP_MORE.test(x));
++// What a listed typed text may not do, read by the gate itself (sqlKind labels).
++const STOP_KINDS = new Set(['deletes data or database objects', 'changes who has access', 'sends data out of the database to outside storage']);
++// Key presses a task may let through: each space-separated press is a named key, optionally with Shift
++// or Ctrl/Cmd (not Delete or Backspace, which can clear data; not Alt, which with F4 closes the window), or
++// Ctrl/Cmd with A, C or F (select all, copy, find). Plain letters would type text that was never listed;
++// other chords close tabs or cut text; a paste (Ctrl+V, Shift+Insert ...) inserts text the gate cannot see.
++const NAMED_KEY = /^(return|enter|kp_enter|tab|escape|esc|up|down|left|right|home|end|page_?up|page_?down|prior|next|space)$/i;
++const MODIFIER = /^(ctrl|control|shift|cmd|command|meta)$/i;
++const PASTE_KEY = /(^|[\s+])(ctrl|control|cmd|command|meta|super)\+(shift\+)?v($|\s)|(^|[\s+])shift\+(insert|ins)($|\s)/i;
++function keysListable(text) {
++  const s = String(text || '').trim();
++  if (!s || PASTE_KEY.test(s)) return false;
++  return s.split(/\s+/).every(press => {
++    const parts = press.split('+');
++    const key = parts.pop();
++    if (!parts.every(m => MODIFIER.test(m))) return false;
++    if (NAMED_KEY.test(key)) return true;
++    return /^[acf]$/i.test(key) && parts.length === 1 && !/^shift$/i.test(parts[0]);
++  });
++}
++// Step wording is compared ignoring case, spacing (any kind) and one trailing period, after Unicode
++// compatibility folding (a Kelvin sign is a K). The stop words are checked on this form as well as on
++// the summary as written, so spacing or look-alike letters cannot dodge them.
++const normStep = s => String(s).normalize('NFKC').replace(/\s+/g, ' ').trim().replace(/\.$/, '').toLowerCase();
++
++// The block, as its own lines in Claude's message:
++//   Browser task: <the job, one line>
++//   Site: <one host>
++//   Step: <the exact action_summary of a step>     (1-20)
++//   Text: "<an exact text a step types or fills in>"   (0-10)
++// It ends at the first blank line or line of another shape. Returns null (no block), { error } or { value }.
++const TASK_START = /^\s*Browser task:\s*(.*?)\s*$/i;
++const TASK_FIELD = /^\s*(Site|Step|Text)\s*:/i;
++const HIDDEN = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}\u2028\u2029]/u;
++function parseBrowserTask(text) {
++  if (typeof text !== 'string' || !text) return null;
++  const lines = text.split('\n').map(l => l.replace(/\r$/, ''));
++  const start = lines.findIndex(l => TASK_START.test(l));
++  if (start < 0) return null;
++  if (lines.slice(start + 1).some(l => TASK_START.test(l))) return { error: 'more than one "Browser task:" line' };
++  // What Erez reads must be what the gate reads: anything that can hide text when the message is shown (an
++  // HTML comment or tag such as <details> anywhere in the message, or hidden or control characters) rejects
++  // the block.
++  if (/<[A-Za-z!\/?]|-->/.test(text)) return { error: 'the message holds HTML-like text, which can hide part of the list' };
++  if (/[\p{Cf}\p{Default_Ignorable_Code_Point}\u2028\u2029]|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u.test(text)) return { error: 'the message holds hidden or control characters' };
++  const task = TASK_START.exec(lines[start])[1];
++  let site = null;
++  const steps = [], texts = [];
++  for (let i = start + 1; i < lines.length; i++) {
++    const l = lines[i];
++    if (!TASK_FIELD.test(l)) break;
++    const field = TASK_FIELD.exec(l)[1].toLowerCase();
++    const val = l.slice(l.indexOf(':') + 1).trim();
++    if (HIDDEN.test(val)) return { error: 'a line has hidden or control characters' };
++    if (field === 'site') {
++      if (site !== null) return { error: 'more than one "Site:" line' };
++      site = hostOf(val);
++      if (!site) return { error: 'the "Site:" line is not a web address' };
++    } else if (field === 'step') {
++      if (!val || Array.from(val).length > 160) return { error: 'a "Step:" line is empty or longer than 160 characters' };
++      steps.push(normStep(val));
++    } else {
++      const m = /^"(.*)"$/.exec(val);
++      if (!m || !m[1] || Array.from(m[1]).length > 2000) return { error: 'a "Text:" line is not one quoted text of 1-2000 characters' };
++      // (a backslash, backtick or asterisk is shown differently from how it is typed once the message
++      // renders, so the text typed could differ from the text Erez read)
++      if (/[\\`*]/.test(m[1])) return { error: 'a "Text:" line holds a backslash, backtick or asterisk, which display differently' };
++      texts.push(m[1]);
++    }
++  }
++  if (!task || Array.from(task).length > 200 || HIDDEN.test(task)) return { error: 'the task line is empty, longer than 200 characters or has hidden characters' };
++  if (!site) return { error: 'no "Site:" line' };
++  if (isHigh(site, { adminConsolesHighStakes: ADMIN_CONSOLES_HIGH_STAKES })) return { error: site + ' is a high-stakes site, where every action asks' };
++  if (!steps.length || steps.length > 20) return { error: 'it needs 1 to 20 "Step:" lines' };
++  if (texts.length > 10) return { error: 'more than 10 "Text:" lines' };
++  return { value: { task, site, steps, texts } };
++}
++
++// A turn starts on a top-level user entry that is not a tool result or a meta note and carries its
++// origin; Erez's own messages have origin.kind "human". Twin of windows-mcp-approval.js isTurnStart /
++// priorDeclaration (GEN-908): a transcript-format fix in one belongs in the other.
++function isTurnStart(e) {
++  if (!e || e.type !== 'user' || e.isSidechain === true || e.isMeta === true || !e.message) return false;
++  const c = e.message.content;
++  if (Array.isArray(c) && c.some(b => b && b.type === 'tool_result')) return false;
++  return !!(e.origin && typeof e.origin === 'object') || typeof e.turnOrigin === 'string';
++}
++const fromErez = e => !!(e.origin && typeof e.origin === 'object' && e.origin.kind === 'human');
++const FILE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
++
++function readTail(p, cap) {
++  const size = fs.statSync(p).size;
++  const from = Math.max(0, size - cap);
++  const buf = Buffer.alloc(size - from);
++  const fd = fs.openSync(p, 'r');
++  try { fs.readSync(fd, buf, 0, buf.length, from); } finally { fs.closeSync(fd); }
++  const lines = buf.toString('utf8').split('\n');
++  if (from > 0) lines.shift(); // cut at the read edge
++  return { lines, cut: from > 0 };
++}
++
++// The "Browser task:" block for turn pid: the last text block holding a valid one (else the last one
++// found, so its error can be shown), written after Erez's previous own message and before the message
++// that started this turn, with no browser call after it and no file edit after it in its own turn; and
++// only when this turn was started by Erez himself. Returns the parse result, null when there is none,
++// or { error } when the transcript cannot be read.
++function priorTask(tp, pid) {
++  try {
++    if (typeof tp !== 'string' || !tp || !pid) return null;
++    const { lines, cut } = readTail(tp, TASK_READ_CAP);
++    const entries = [];
++    for (const line of lines) {
++      // Only Claude's messages and the user entries that can start a turn are parsed: tool results
++      // (screenshots run to megabytes) cannot start a turn and hold no Claude text.
++      if (!line || !(line.indexOf('"assistant"') >= 0 || (line.indexOf('"user"') >= 0 && line.indexOf('"origin"') >= 0 && line.indexOf('"tool_result"') < 0))) continue;
++      try { entries.push(JSON.parse(line)); } catch (e) { /* partial or other line */ }
++    }
++    let cur = -1;
++    for (let i = entries.length - 1; i >= 0; i--) if (isTurnStart(entries[i]) && entries[i].promptId === pid) { cur = i; break; }
++    // (the transcript is written asynchronously, so this turn's own entry may not be there yet: then
++    // nothing is recorded and a later call of the turn reads again)
++    if (cur < 0) return { notYet: true };
++    if (!fromErez(entries[cur])) return null;
++    let prev = -1;
++    for (let i = cur - 1; i >= 0; i--) if (isTurnStart(entries[i]) && fromErez(entries[i])) { prev = i; break; }
++    if (prev < 0 && cut) return null; // Erez's previous message is outside what was read
++    const flat = [], turnOf = [];
++    let turn = 0;
++    for (let i = prev + 1; i < cur; i++) {
++      const e = entries[i];
++      if (isTurnStart(e)) { turn++; continue; }
++      if (!e || e.type !== 'assistant' || e.isSidechain === true || !e.message || !Array.isArray(e.message.content)) continue;
++      if (e.isApiErrorMessage === true || e.message.model === '<synthetic>') continue;
++      for (const b of e.message.content) if (b) { flat.push(b); turnOf.push(turn); }
++    }
++    const found = [];
++    flat.forEach((b, k) => {
++      if (b.type !== 'text' || typeof b.text !== 'string') return;
++      const r = parseBrowserTask(b.text);
++      if (!r) return;
++      if (flat.some((x, j) => j > k && x.type === 'tool_use' && (PREFIX.test(String(x.name || '')) ||
++        (turnOf[j] === turnOf[k] && FILE_TOOLS.has(String(x.name || '')))))) return;
++      found.push(r);
++    });
++    // The last block found counts, accepted or not: a corrected block that fails is not silently replaced
++    // by an older one (Claude is told why it failed).
++    return found.length ? found[found.length - 1] : null;
++  } catch (e) {
++    return { error: 'the conversation could not be read', readError: true };
++  }
++}
++
++// The turn id from the hook input, only when it is a plain id (it names the task record).
++const turnId = s => typeof s === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(s) ? s : '';
++
++// This turn's task record from priorTask's result. A transcript that could not be read is no task, not
++// a rejected list (there may have been no block at all).
++function taskRecord(pid, decl) {
++  if (!decl || decl.readError) return { pid, status: 'none' };
++  if (decl.error || !decl.value) return { pid, status: 'invalid', error: String(decl.error || 'not accepted').slice(0, 200) };
++  const v = decl.value;
++  // Only steps with no stop word are kept for matching, so a stop step can never match however its
++  // summary is written; the others are kept only to tell Claude they still ask.
++  const steps = v.steps.filter(s => !taskStop(s)), stopSteps = v.steps.filter(s => taskStop(s));
++  if (!steps.length) return { pid, status: 'invalid', error: 'every step names a send, delete, payment or access change, so each still asks' };
++  // Texts the gate reads, together (joined in list order and in reverse, so a statement split over two
++  // texts, even mid-word, is read whole; other orders are an accepted limit), as a delete, an access
++  // change or a send out are none of them typed without a card; a text whose own words name one is dropped.
++  const joined = [v.texts.join(''), v.texts.slice().reverse().join('')].map(t => ({ kind: 'typed', text: t })).concat(v.texts.map(t => ({ kind: 'typed', text: t })));
++  const bad = v.texts.length && sqlKind(joined).kinds.some(k => STOP_KINDS.has(k));
++  const texts = bad ? [] : v.texts.filter(t => !taskStop(t));
++  return { pid, status: 'ready', site: v.site, task: v.task, steps, stopSteps, texts, textsDropped: texts.length < v.texts.length };
++}
++
++// Line (from 1) of a card's character position, wrapped at CARD_LINE characters on spaces; a word longer
++// than a line takes as many lines as it fills. (Characters count as one width each: wide characters can
++// make this read short, an accepted limit.)
++function cardLineOf(text, at) {
++  let line = 1, len = 0, pos = 0;
++  for (const w of String(text).split(' ')) {
++    const need = len ? len + 1 + w.length : w.length;
++    if (len && need > CARD_LINE) { line++; len = w.length; } else len = need;
++    while (len > CARD_LINE) { line++; len -= CARD_LINE; }
++    if (pos + w.length >= at) return line;
++    pos += w.length + 1;
++  }
++  return line;
++}
++// Whether the offer sentence ends within the card's visible lines.
++function offerFits(card, res) {
++  const s = taskLine(res).trim();
++  const i = card.indexOf(s);
++  return i >= 0 && cardLineOf(card, i + s.length) <= CARD_LINES;
++}
++
++// The offer on a card, right after its first sentence. Kept short: the pop-up shows about 3 lines (GEN-953
++// step 2) and the call's own reason must still show; the site, the steps and what still asks are in
++// Claude's "Ready?" message that Erez has just answered.
++function taskLine(res) {
++  if (!res || !res.offerTask) return '';
++  const n = res.offerTask.steps;
++  return 'Allowing also approves Claude\'s listed ' + n + '-step task here for 10 min. ';
++}
++
++// The task approval in force for this call, or null.
++function activeTask(state, pid, now) {
++  const t = state.task;
++  if (!t || !pid || t.pid !== pid || t.status !== 'active') return null;
++  if (typeof t.start !== 'number' || now < t.start || now - t.start > TASK_TTL_MS || t.used >= TASK_MAX_ACTIONS) return null;
++  return t;
++}
++
+ function newState() {
+   return { approved: {}, tabs: {}, pending: {}, helpers: [], streak: { cause: null, n: 0 },
+-    counts: { calls: 0, actions: 0, asked: 0, nonSiteAsked: 0, denied: 0, ask: {}, deny: {} }, alerted: false };
++    counts: { calls: 0, actions: 0, asked: 0, nonSiteAsked: 0, denied: 0, ask: {}, deny: {} }, alerted: false, task: null };
++}
++
++// This turn's task record, or null when anything in it is odd (then no task applies).
++const TASK_STATUS = new Set(['none', 'invalid', 'ready', 'offered', 'active', 'ended']);
++function normalizeTask(t) {
++  if (!t || typeof t !== 'object' || Array.isArray(t)) return null;
++  if (typeof t.pid !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(t.pid) || !TASK_STATUS.has(t.status)) return null;
++  const out = { pid: t.pid, status: t.status, told: t.told === true, textsDropped: t.textsDropped === true, skipLogged: t.skipLogged === true };
++  if (t.status === 'invalid') out.error = typeof t.error === 'string' ? t.error.slice(0, 200) : 'not accepted';
++  if (['ready', 'offered', 'active', 'ended'].includes(t.status)) {
++    const strs = (a, n, len) => Array.isArray(a) && a.length <= n && a.every(x => typeof x === 'string' && x.length <= len);
++    if (typeof t.site !== 'string' || !t.site || typeof t.task !== 'string' || !strs(t.steps, 20, 2000) || !t.steps.length || !strs(t.texts, 10, 4000)) return null;
++    // (a stop step stored by mistake is dropped again, so it can never match)
++    Object.assign(out, { site: t.site, task: t.task.slice(0, 400), steps: t.steps.filter(s => !taskStop(s)), texts: t.texts.slice(),
++      stopSteps: strs(t.stopSteps, 20, 2000) ? t.stopSteps.slice() : [] });
++    if (!out.steps.length) return null;
++    if (t.status === 'active') {
++      if (!Number.isFinite(t.start) || !Number.isInteger(t.used) || t.used < 0) return null;
++      out.start = t.start; out.used = t.used;
++    }
++  }
++  return out;
+ }
+ 
+ // Coerce a loaded state into the expected shape; anything odd becomes empty (every site new).
+ function normalizeState(s) {
+   const d = newState();
+   if (!s || typeof s !== 'object') return d;
+@@ -295,12 +567,15 @@ function normalizeState(s) {
+     for (const k of ['calls', 'actions', 'asked', 'nonSiteAsked', 'denied']) if (typeof s.counts[k] === 'number') d.counts[k] = s.counts[k];
+     d.counts.ask = obj(s.counts.ask) || {};
+     d.counts.deny = obj(s.counts.deny) || {};
+   }
+   d.alerted = s.alerted === true;
+   if (s.lostRecords === true) d.lostRecords = true;
++  d.task = normalizeTask(s.task);
++  if (s.taskWait && typeof s.taskWait === 'object' && typeof s.taskWait.pid === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(s.taskWait.pid) &&
++    Number.isInteger(s.taskWait.n) && s.taskWait.n >= 0) d.taskWait = { pid: s.taskWait.pid, n: s.taskWait.n };
+   return d;
+ }
+ 
+ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+ 
+ // Tab ids in one form: a whole number or a digit string becomes its plain digits, the form tab reports
+@@ -366,33 +641,40 @@ const SWITCHES_BROWSER = new Set(['select_browser', 'switch_browser']);
+ // 'none' means this hook has no objection; it never approves.
+ function decide(state, tool, input, opts) {
+   opts = opts || {};
+   const name = shortName(tool);
+   if (!name) return { decision: 'none', causes: [], hosts: [], notes: [], actions: 0 };
+   const items = itemsOf(name, input);
+-  if (!items) return { decision: 'ask', causes: ['unreadable-batch'], hosts: [], notes: [], actions: 1, interactive: 1, moved: [], allMoved: true };
++  if (!items) return { decision: 'ask', causes: ['unreadable-batch'], hosts: [], notes: [], actions: 1, interactive: 1, moved: [], allMoved: true, sites: ['?'], taskWaived: 0 };
+   const tabs = {};
+   for (const k of Object.keys(state.tabs)) tabs[k] = Object.assign({}, state.tabs[k]);
+   const asks = [], denies = [], newHosts = [], notes = [], moved = new Set(), tainted = new Set(), untainted = new Set(), passed = [];
+   // For the pop-up text only (GEN-953): what an asking script or typed text says, and Claude's summaries.
+   const texts = [], claims = [], where = [];
+   let actions = 0, interactive = 0, allMoved = false;
++  // Task approval (GEN-953): the approval in force (or null), items it let through, and the sites this
++  // call acts on (a task is offered only on a call that acts on its site alone).
++  const task = opts.task || null;
++  let waived = 0;
++  const sites = [];
+   const mode = opts.mode || SUMMARY_MODE;
+   let helpers = Array.isArray(state.helpers) ? state.helpers : [];
+   // After a browser switch inside a batch, the old browser's approvals and helpers no longer apply.
+   let switched = false;
+   const approved = h => (!switched && has(state.approved, h)) || newHosts.includes(h);
+   const siteNote = id => { const t = has(tabs, String(id)) ? tabs[id] : null; const h = t && hostOf(t.url); if (h) notes.push(h); };
+   // One item; its effect on the simulated tabs is applied after it, by markMoves.
+   const check = it => {
+     const n = it.name, inp = it.input;
+-    if (ALWAYS.has(n)) { asks.push('always-' + n); siteNote(inp.tabId); return; }
+-    if (n === 'gif_creator') { if (inp.action === 'export' && inp.coordinate) { asks.push('always-gif-drop'); siteNote(inp.tabId); } return; }
++    const tabSite = () => { const st = has(tabs, String(inp.tabId)) ? tabs[inp.tabId] : null; return (st && hostOf(st.url)) || '?'; };
++    if (ALWAYS.has(n)) { asks.push('always-' + n); siteNote(inp.tabId); sites.push(tabSite()); return; }
++    if (n === 'gif_creator') { if (inp.action === 'export' && inp.coordinate) { asks.push('always-gif-drop'); siteNote(inp.tabId); sites.push(tabSite()); } return; }
+     if (n === 'javascript_tool') {
+       const t = String(inp.text || '');
+       const jsBefore = asks.length;
++      sites.push(tabSite());
+       if (RISKY_SCRIPT.test(t)) asks.push('risky-script');
+       else {
+         // Approved per site: a helper of the same name on another site is another function.
+         const st = has(tabs, String(inp.tabId)) ? tabs[inp.tabId] : null;
+         const site = (st && hostOf(st.url)) || '?';
+         const hc = helperCalls(t, helpers).map(x => 'helper:' + site + ':' + x);
+@@ -408,25 +690,28 @@ function decide(state, tool, input, opts) {
+       return;
+     }
+     if (n === 'computer' && READ_COMPUTER.has(inp.action)) return;
+     if (READ_TOOLS.has(n)) return;
+     if (n === 'navigate') {
+       interactive++;
+-      if (isHistory(inp.url)) { asks.push('nav-history'); return; }
++      if (isHistory(inp.url)) { asks.push('nav-history'); sites.push('?'); return; }
+       const h = hostOf(inp.url);
++      sites.push(h || '?');
+       if (h === null) { asks.push('unreadable-url'); return; }
+       if (h === '') { asks.push('non-web-url'); return; }
+       if (!approved(h)) { asks.push('new-site'); newHosts.push(h); notes.push(h); }
+       return;
+     }
+     if (!(n === 'form_input' || (n === 'computer' && INTERACT_COMPUTER.has(inp.action)))) {
+       asks.push('unknown-tool:' + (n || '?') + (n === 'computer' ? ':' + inp.action : ''));
++      sites.push('?');
+       return;
+     }
+     interactive++;
+     const t = has(tabs, String(inp.tabId)) ? tabs[inp.tabId] : null;
++    sites.push((t && hostOf(t.url)) || '?');
+     if (!t || !t.url) { denies.push('unknown-tab'); return; }
+     if (t.stale) { denies.push('stale-tab'); const lh = hostOf(t.url); if (lh) notes.push(lh); return; }
+     const h = hostOf(t.url);
+     // A tab on a page that is not a web site (about:blank, a file, a data address): re-reading cannot
+     // make it known, so ask instead of sending Claude back to read it.
+     // The same for a browser-internal page (settings, extensions, new tab): nothing checks it, so ask.
+@@ -441,12 +726,30 @@ function decide(state, tool, input, opts) {
+     else if (!high && summaryAsks(sum, h, mode)) { asks.push('word'); notes.push('"' + sum.slice(0, 80) + '"'); }
+     const typed = n === 'computer' && inp.action === 'type' ? inp.text : (n === 'form_input' ? inp.value : null);
+     if (!high && typed != null && typedWrite(typed)) { asks.push('typed-write'); texts.push({ kind: 'typed', text: String(typed).slice(0, TEXT_CAP), cut: String(typed).length > TEXT_CAP }); }
+     // A typed newline is an Enter, which can submit a form; only a query editor or a search box is a look.
+     if (!high && n === 'computer' && inp.action === 'type' && /[\r\n]/.test(String(inp.text || '')) &&
+       !asks.slice(before).includes('word') && !/^\s*types (a |the )?(read-only|search)\b/i.test(String(sum || ''))) asks.push('typed-enter');
++    // Under a task approval: an item whose only causes are 'word' / 'typed-write', on the task's site, whose
++    // summary is a listed step with no stop word, typing only a listed text with no line break that the
++    // gate does not read as a delete, access change or send out, pressing only listable keys.
++    if (task && !switched && !high && h === task.site && (task.used || 0) + waived < TASK_MAX_ACTIONS &&
++      asks.length > before && asks.slice(before).every(c => c === 'word' || c === 'typed-write') &&
++      typeof sum === 'string' && task.steps.includes(normStep(sum)) && !taskStop(sum) &&
++      !(n === 'computer' && inp.action === 'key' && !keysListable(inp.text)) &&
++      (typed == null || (typeof typed === 'string' && !/[\r\n]/.test(typed) && task.texts.includes(typed) &&
++        !sqlKind([{ kind: 'typed', text: typed }]).kinds.some(k => STOP_KINDS.has(k))))) {
++      asks.length = before;
++      // (this item's own typed-write entry is the last one; earlier items' entries stay on the card)
++      if (texts.length && texts[texts.length - 1].kind === 'typed' && texts[texts.length - 1].text === String(typed).slice(0, TEXT_CAP)) texts.pop();
++      waived++;
++      passed.push({ host: h, words: sum.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 80), task: true });
++      // (no follow-up mark to clear or set: a marked tab asks 'follow-up', and an access noun is a stop word)
++      const qn = '"' + sum.slice(0, 80) + '"'; const qi = notes.lastIndexOf(qn); if (qi >= 0) notes.splice(qi, 1);
++      return;
++    }
+     const askedHere = asks.slice(before).some(c => c !== 'new-site');
+     if ((high || askedHere) && typeof sum === 'string' && sum.trim()) { claims.push({ text: sum.trim().slice(0, 2000), danger: wordHit(sum) || asks.slice(before).includes('word') }); where.push(h); }
+     if (!high && !askedHere && typeof sum === 'string') passed.push({ host: h, words: sum.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 80) });
+     // Follow-up: a control naming a danger noun makes the next interaction on the tab ask, even when this
+     // one asked too (Erez approving the toggle has not seen the click that applies it), unless this one
+     // asked and is itself the commit (confirm, save, apply ...): then Erez approved the change itself.
+@@ -470,13 +773,13 @@ function decide(state, tool, input, opts) {
+   // Helpers this call's scripts store on window (recorded before the call runs, see applyDecision).
+   const newHelpers = [];
+   for (const it of items) if (it.name === 'javascript_tool') for (const hn of helperNames(it.input.text || '')) if (!newHelpers.includes(hn)) newHelpers.push(hn);
+   const res = { actions, interactive, hosts: newHosts, notes: [...new Set(notes)], moved: [...moved], allMoved,
+     tainted: [...tainted], untainted: [...untainted], passed, newHelpers,
+     texts, claims: claims.reduce((a, c) => { const o = a.find(x => x.text === c.text); if (o) o.danger = o.danger || c.danger; else a.push(c); return a; }, []), where: [...new Set(where)],
+-    switchesBrowser: items.some(it => SWITCHES_BROWSER.has(it.name)) };
++    switchesBrowser: items.some(it => SWITCHES_BROWSER.has(it.name)), taskWaived: waived, sites: [...new Set(sites)] };
+   if (denies.length) {
+     const cause = denies[0];
+     const streak = state.streak.cause === cause ? state.streak.n : 0;
+     if (streak >= 2) { res.decision = 'ask'; res.causes = [...new Set(['deny-loop-' + cause].concat(asks))]; }
+     else { res.decision = 'deny'; res.causes = [...new Set(denies)]; res.denyCause = cause; }
+   } else if (asks.length) { res.decision = 'ask'; res.causes = [...new Set(asks)]; }
+@@ -743,12 +1046,15 @@ function plainReason(res) {
+   else if (unnamed.length) {
+     seenLine = lastSeen.length ? 'Last seen on ' + listOf(lastSeen) + '.' : '';
+     const rest = others.filter(h => !(next && next.host === h));
+     also = rest.length ? 'Sites in this request: ' + listOf(rest) + '.' : '';
+   }
+   if (first.length) out.push(first[0]);
++  // A task offer (GEN-953) comes right after the first sentence: the call's own reason still leads, and
++  // the offer reads as the exception to "changes still ask".
++  if (res.offerTask) put([taskLine(res).trim()]);
+   put(first.slice(1));
+   if (stuck) {
+     for (const g of groups.slice(1)) if (stuckCause(g)) put(g);
+     put(next || []);
+   }
+   put([seenLine]);
+@@ -781,12 +1087,13 @@ function legacyReasonFor(res) {
+     else if (c === 'deny-loop-no-summary') parts.push('Claude did not say what this action does (no action summary), so the gate could not check it.');
+     else if (c.startsWith('deny-loop-')) parts.push('Claude could not confirm which page this tab is on' + (sites.length ? ' (last seen: ' + sites.join(', ') + ')' : '') + '.');
+     else if (ASK_TEXT[c]) parts.push(ASK_TEXT[c]());
+     else parts.push('A browser action the gate cannot classify (' + c + ').');
+   }
+   const where = sites.length ? ' Site: ' + [...new Set(sites)].join(', ') + '.' : '';
++  // (no task offer here: offerFits then finds no offer sentence on the card, so none is made)
+   return [...new Set(parts)].join(' ') + where + ' (browser gate, GEN-924)';
+ }
+ 
+ // Tab pages a result reports, or null if it reports none the gate can trust.
+ // Only the "Tab Context:" block the extension appends (exactly one per result: page text, a script's
+ // return value or a title could hold a look-alike, and two blocks means one is not genuine). Its
+@@ -861,22 +1168,26 @@ function markStale(state, ids, all) {
+ function applyDecision(state, res) {
+   if (res.decision === 'deny') return;
+   // Tab ids and approvals belong to one browser: forget them before the switch runs (a lost
+   // PostToolUse must not carry them over to the other browser). Helper NAMES are kept, and this call's
+   // are added: they only ever make a later script ask (their approvals are per site and are dropped).
+   if (res.switchesBrowser) {
+-    state.tabs = {}; state.approved = {};
++    state.tabs = {}; state.approved = {}; endTask(state);
+     rememberHelpers(state, res.newHelpers);
+     return;
+   }
+   markStale(state, res.moved || [], !!res.allMoved);
+   for (const id of res.tainted || []) if (id !== '__proto__' && has(state.tabs, id)) state.tabs[id].taint = true;
+   if (res.decision !== 'ask') unmark(state, res.untainted);
+   // A helper is remembered as soon as a script that stores it may run (a lost PostToolUse must not forget it).
+   rememberHelpers(state, res.newHelpers);
+ }
++// A browser switch ends a task approval (offered or in force), as it ends site approvals.
++function endTask(state) {
++  if (state.task && (state.task.status === 'offered' || state.task.status === 'active')) state.task.status = 'ended';
++}
+ // Remember helper names a script stores on window (the newest 200).
+ function rememberHelpers(state, names) {
+   for (const hn of names || []) if (!state.helpers.includes(hn)) state.helpers.push(hn);
+   if (state.helpers.length > 200) state.helpers = state.helpers.slice(-200);
+ }
+ function unmark(state, ids) {
+@@ -892,13 +1203,13 @@ function record(state, tool, input, resultText, pendingHosts, failed, pendingUnm
+   for (const h of pendingHosts || []) if (typeof h === 'string' && h && h !== '__proto__') state.approved[h] = true;
+   unmark(state, pendingUnmark);
+   const items = itemsOf(name, input) || [];
+   // Tab ids and site approvals belong to one browser (and its signed-in accounts), also inside a batch;
+   // helper names are kept (and this call's added), since they only ever make a later script ask.
+   if (items.some(it => SWITCHES_BROWSER.has(it.name))) {
+-    state.tabs = {}; state.approved = {};
++    state.tabs = {}; state.approved = {}; endTask(state);
+     for (const it of items) if (it.name === 'javascript_tool') rememberHelpers(state, helperNames(it.input.text || ''));
+     return;
+   }
+   const lastMove = {}, lastAny = {};
+   let noTabMove = -1;
+   items.forEach((it, i) => {
+@@ -928,13 +1239,14 @@ function record(state, tool, input, resultText, pendingHosts, failed, pendingUnm
+ }
+ 
+ function countCall(state, res) {
+   const c = state.counts;
+   // Actions count only for a call that goes ahead: a denied call's actions run later, once, when Claude
+   // resends it (counting them twice would flatter the per-action bar and make its alert late).
+-  c.calls++; if (res.decision !== 'deny') c.actions += res.actions || 0;
++  // (items a task approval let through are not counted: they would dilute the per-action bar)
++  c.calls++; if (res.decision !== 'deny') c.actions += (res.actions || 0) - (res.taskWaived || 0);
+   if (res.decision === 'ask') {
+     c.asked++;
+     if (!res.causes.every(x => x === 'new-site')) c.nonSiteAsked++;
+     for (const x of res.causes) c.ask[x] = (c.ask[x] || 0) + 1;
+   } else if (res.decision === 'deny') {
+     c.denied++;
+@@ -1067,30 +1379,73 @@ function denyOut(reason) { out({ hookSpecificOutput: { hookEventName: 'PreToolUs
+ function handlePre(input) {
+   const tool = input.tool_name;
+   if (!shortName(tool)) return; // not a browser tool: no opinion
+   fs.mkdirSync(STATE_DIR, { recursive: true });
+   if (Math.random() < 0.02) pruneStateDir();
+   const file = stateFile(input.session_id);
++  // A sub-agent's calls (agent_id set) never use or start a task approval: Erez does not see its messages.
++  const pid = typeof input.agent_id === 'string' && input.agent_id ? '' : turnId(input.prompt_id);
++  // This turn's "Browser task:" block is read once per turn, before the lock is taken (the read can take
++  // a moment, and every browser call waits on the lock): skipped when the records already hold this turn.
++  let decl;
++  if (pid) {
++    let peek = null;
++    try { peek = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { /* no records yet */ }
++    if (!(peek && peek.task && peek.task.pid === pid)) decl = priorTask(input.transcript_path, pid);
++  }
+   const release = lock(file);
+   const loaded = release ? loadState(file) : null;
+   // No records this call (no lock, or the file is held by another program): decide on an empty state,
+   // save nothing, and keep the file as it is.
+   const noRecords = !loaded;
+   const state = loaded || newState();
+-  let res;
++  let res, tk = null;
++  const events = [];
+   try {
+-    res = decide(state, tool, input.tool_input, { adminConsolesHighStakes: ADMIN_CONSOLES_HIGH_STAKES });
++    // (decl is undefined only when the peek saw this turn recorded and the records no longer hold it: then
++    // this call goes without a task rather than read the transcript while holding the lock)
++    // (a turn whose own entry is not in the transcript yet is read again on its next 2 calls, then
++    // recorded as no task, so a lasting mismatch cannot make every call re-read the transcript)
++    if (pid && !noRecords && decl && decl.notYet && !(state.task && state.task.pid === pid)) {
++      state.taskWait = state.taskWait && state.taskWait.pid === pid ? { pid, n: state.taskWait.n + 1 } : { pid, n: 1 };
++      if (state.taskWait.n >= 3) { state.task = { pid, status: 'none' }; events.push({ event: 'task-read-error', session: input.session_id, error: 'this turn was not found in the conversation' }); }
++    } else if (pid && !noRecords && decl !== undefined && !(state.task && state.task.pid === pid)) {
++      state.task = taskRecord(pid, decl);
++      if (decl && decl.error) events.push({ event: decl.readError ? 'task-read-error' : 'task-invalid', session: input.session_id, error: decl.error });
++    }
++    tk = state.task && pid && state.task.pid === pid ? state.task : null;
++    res = decide(state, tool, input.tool_input, { adminConsolesHighStakes: ADMIN_CONSOLES_HIGH_STAKES, task: activeTask(state, pid, Date.now()) });
+     // Without its records the gate cannot know which page-script helpers exist, so a script asks; and
+     // without saving its deny count is never kept, so a deny would repeat forever: ask instead.
+     if (((noRecords || state.lostRecords) && res.decision === 'none' && (itemsOf(shortName(tool), input.tool_input) || []).some(it => it.name === 'javascript_tool')) ||
+       (noRecords && res.decision === 'deny')) {
+       res.decision = 'ask'; res.causes = ['no-state'];
+     }
++    // Task approval: offered on the turn's first card for a call that acts on the task's site alone (it
++    // comes into force once that call has run, in handlePost); items it let through count toward its limit.
++    // (steps naming a send, delete, payment or access change always ask, so they are not kept or counted)
++    const usable = tk ? (tk.steps || []).filter(s => !taskStop(s)).length : 0;
++    const callSites = res.sites || [];
++    if (tk && res.decision === 'ask' && tk.status === 'ready' && usable && input.tool_use_id && callSites.length && callSites.every(s => s === tk.site)) {
++      res.offerTask = { site: tk.site, steps: usable };
++      // Offered only when the call's own first sentence and the offer both show without scrolling;
++      // otherwise this card is as today and a later card on the site may carry the offer.
++      const card = reasonFor(res);
++      if (offerFits(card, res)) {
++        tk.status = 'offered'; res.card = card;
++        events.push({ event: 'task-offer', session: input.session_id, site: tk.site, steps: usable });
++      } else {
++        delete res.offerTask;
++        if (!tk.skipLogged) { tk.skipLogged = true; events.push({ event: 'task-offer-skipped', session: input.session_id, site: tk.site }); }
++      }
++    }
++    if (tk && tk.status === 'active' && res.decision !== 'deny' && res.taskWaived) tk.used += res.taskWaived;
+     countCall(state, res);
+-    if (res.decision === 'ask' && (res.hosts.length || (res.untainted || []).length) && input.tool_use_id) {
++    if (res.decision === 'ask' && (res.hosts.length || (res.untainted || []).length || res.offerTask) && input.tool_use_id) {
+       state.pending[String(input.tool_use_id)] = { hosts: res.hosts, unmark: res.untainted || [], ts: Date.now() };
++      if (res.offerTask) state.pending[String(input.tool_use_id)].task = pid;
+     }
+     // A call that goes ahead may move tabs while it runs: other calls running at the same time must
+     // not act on those tabs' old pages. Its own PostToolUse makes them sure again if it can.
+     applyDecision(state, res);
+     if (!noRecords) {
+       try { saveState(file, state); } catch (e) {
+@@ -1099,34 +1454,58 @@ function handlePre(input) {
+         const changesNothing = res.decision === 'none' && !res.interactive && !(res.moved || []).length && !res.allMoved &&
+           !(res.newHelpers || []).length && !res.switchesBrowser;
+         if (!changesNothing) throw e;
+       }
+     }
+   } finally { if (release) release(); }
++  for (const ev of events) logLine(ev);
+   if (res.decision !== 'none') logLine({ event: res.decision, session: input.session_id, tool: shortName(tool), causes: res.causes, hosts: res.notes.filter(x => !x.startsWith('"')) });
+   // What went ahead on an ordinary approved site without its own ask: site + the first six words of
+   // Claude's own summary (no page text). A sampling aid, read at the live check, not a live watch.
++  // Items a task approval let through carry task: true.
+   if (res.decision !== 'deny' && res.passed && res.passed.length) logLine({ event: 'pass', session: input.session_id, items: res.passed.slice(0, 10) });
+-  if (res.decision === 'ask') return askOut(reasonFor(res));
++  if (res.decision === 'ask') return askOut(res.card || reasonFor(res));
+   if (res.decision === 'deny') return denyOut(DENY_TEXT[res.denyCause] || 'Browser gate (GEN-924): repeat the action after reading the tab.');
+ }
+ 
+ function handlePost(input, event) {
+   const tool = input.tool_name;
+   if (!shortName(tool)) return;
+   fs.mkdirSync(STATE_DIR, { recursive: true });
+   const file = stateFile(input.session_id);
+   const release = lock(file);
+   if (!release) return; // a lost update only means an extra ask later
+   let alert = null;
++  const notes = [], events = [];
+   try {
+     const state = loadState(file);
+     if (!state) return; // held by another program: keep the file; a lost update only means an extra ask later
+     const id = String(input.tool_use_id || '');
+     const pend = id && has(state.pending, id) ? state.pending[id] : null;
+     if (pend) delete state.pending[id];
++    // The call that offered the task has run, so Erez allowed it: the task approval comes into force
++    // (before record(), so a browser switch in this same call ends it again). This rests on nothing else
++    // allowing a browser call for him: a PermissionRequest hook that auto-allowed a browser tool able to
++    // carry an offer (today only planmode-readonly-answer.js matches one, tabs_context_mcp, a read that
++    // never carries one) would activate a task he never saw.
++    const tk = state.task;
++    if (pend && typeof pend.task === 'string' && tk && tk.pid === pend.task && tk.status === 'offered') {
++      tk.status = 'active'; tk.start = Date.now(); tk.used = 0; tk.told = true;
++      events.push({ event: 'task-on', session: input.session_id, site: tk.site, steps: tk.steps.length });
++      notes.push('Browser task approval (GEN-953) is on for ' + tk.site + ' for 10 minutes or ' + TASK_MAX_ACTIONS + ' actions, this turn only. ' +
++        'An action goes ahead without a pop-up only when its action_summary is exactly one of your Step lines, has no send, delete, ' +
++        'payment or access wording, and types only a listed Text; pastes, uploads, page scripts and first visits still ask.' +
++        (tk.textsDropped ? ' Some of your Text lines name or make a delete, an access change, a send or a payment (read together), so ' +
++          (tk.texts.length ? 'only these are typed without a pop-up: ' + tk.texts.map(t => '"' + t.slice(0, 40) + '"').join(', ') + '.' : 'none of them is typed without a pop-up.') : '') +
++        ((tk.stopSteps || []).length ? ' These Step lines still ask, since their wording counts as a send, delete, payment or access change (words such as "approved" count): ' +
++          tk.stopSteps.map(s => '"' + s.slice(0, 60) + '"').join(', ') + '.' : '') +
++        ' In your next For-you block, list which steps went ahead without a pop-up.');
++    } else if (tk && tk.status === 'invalid' && !tk.told && tk.pid === turnId(input.prompt_id)) {
++      tk.told = true;
++      notes.push('Your "Browser task:" block was not accepted (' + tk.error + '), so every step asks as usual. Tell Erez in one line before the next pop-up, or fix the block in a new "Ready?" message.');
++    }
+     const failed = event !== 'PostToolUse';
+     const resp = failed ? (input.error != null ? input.error : input.tool_response) : input.tool_response;
+     const text = responseText(resp);
+     logShape(event, resp, text);
+     record(state, tool, input.tool_input, text, pend && Array.isArray(pend.hosts) ? pend.hosts : [], failed,
+       pend && Array.isArray(pend.unmark) ? pend.unmark : []);
+@@ -1138,13 +1517,15 @@ function handlePost(input, event) {
+         ' browser actions for reasons other than a new site (' + top + '), above the bar of 1 per 10 actions. Tell Erez in ' +
+         'your next For-you block, with these causes, so the browser gate\'s rules can be revisited.';
+       logLine({ event: 'over-bar', session: input.session_id, calls: c.calls, actions: c.actions, nonSiteAsked: c.nonSiteAsked, causes: c.ask });
+     }
+     saveState(file, state);
+   } finally { release(); }
+-  if (alert) out({ hookSpecificOutput: { hookEventName: event, additionalContext: alert } });
++  for (const ev of events) logLine(ev);
++  if (alert) notes.push(alert);
++  if (notes.length) out({ hookSpecificOutput: { hookEventName: event, additionalContext: notes.join('\n') } });
+ }
+ 
+ function main() {
+   let raw = '';
+   process.stdin.setEncoding('utf8');
+   process.stdin.on('data', d => { raw += d; });
+@@ -1165,7 +1546,9 @@ function main() {
+   });
+ }
+ 
+ if (require.main === module) main();
+ module.exports = { PREFIX, shortName, hostOf, decide, record, countCall, reasonFor, DENY_TEXT, newState, normalizeState,
+   tabsFromText, responseText, overBar, BAR, wordHit, harmless, summaryAsks, RISKY_SCRIPT, typedWrite, isHigh, applyDecision,
+-  ADMIN_CONSOLES_HIGH_STAKES, SUMMARY_MODE, plainReason, legacyReasonFor, sqlKind, scriptKinds };
++  ADMIN_CONSOLES_HIGH_STAKES, SUMMARY_MODE, plainReason, legacyReasonFor, sqlKind, scriptKinds,
++  WORDS_EN, STOP_EN, taskStop, PASTE_KEY, keysListable, normStep, offerFits, parseBrowserTask, priorTask, activeTask, normalizeTask, taskRecord, taskLine,
++  TASK_TTL_MS, TASK_MAX_ACTIONS };
