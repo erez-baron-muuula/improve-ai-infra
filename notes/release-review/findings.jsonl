@@ -33,3 +33,5 @@
 {"ts":"2026-10-26T09:45:00Z","run":"202610260909","key":"server-classifier-compacts-long-conversation","versions":["2.1.302"],"target":"GEN-423","kind":"ticket","status":"unverified","ticket":null,"docs":"https://code.claude.com/docs/en/errors"}
 {"ts":"2026-10-26T09:45:00Z","run":"202610260909","key":"grep-glob-error-on-search-failure","versions":["2.1.301"],"target":"GEN-297","kind":"ticket","status":"unverified","ticket":null,"docs":null}
 {"ts":"2026-10-26T09:45:00Z","run":"202610260909","key":"gen892-blocker-supervised-run","versions":[],"target":"GEN-892","kind":"proposal","status":"proposed","ticket":"GEN-959","docs":null}
+{"ts":"2026-10-29T07:14:30Z","run":"202610290709","key":"digest-section","versions":[],"target":"GEN-959","kind":"digest","status":"pending","change":"append 2026-10-29 run section (insert_content, end of body)"}
+{"ts":"2026-10-29T07:14:35Z","run":"202610290709","key":"digest-section","versions":[],"target":"GEN-959","kind":"digest","status":"appended","ticket":"GEN-959","docs":null}
