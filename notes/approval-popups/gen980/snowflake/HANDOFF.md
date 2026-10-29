@@ -1,5 +1,17 @@
 # GEN-980 lever (e) + GEN-953 step 4 — look-only Snowflake login: HAND-OVER (2026-10-29)
 
+## INSTALLED 2026-10-29 ~11:05 UTC (Erez: "Install it (xhigh)") — don't re-install
+- `~/.claude/scripts/snowflake-read.ps1` (new, sha256 a230c99d3ceb…), `hooks/auto-approve.js` (normalized sha 34e25d337df4…, pass consumed, node --check OK), `scripts/set-claude-key.ps1` (3d8d5b490bb3…, pass consumed); all three match their records; no live pass left. The installed hook approves the exact command ("Auto-approved: look-only Snowflake reader (GEN-980)"); a real look-up ran as CLAUDE_READER; key-leak tripwire tests 72/72.
+- Step 3a (measurement, T = 2026-10-29 11:05 UTC) added to `~/.claude/scheduled-tasks/gen924-browser-gate-noise-check/SKILL.md`; its exact query runs through the installed script.
+- Next: steps 3 (notes lines; drafts + size lines below), 4 (8 Nov AN-1416 check → script), 5 (Erez's PUBLIC decision), 6 (tickets) in "Remaining steps".
+
+## UPDATE — session 46494249 (2026-10-29, later): review done, install card shown to Erez
+- Probes as CLAUDE_READER found real filter bypasses (a lone CR ends a `--` comment in Snowflake; IDENTIFIER()/TO_QUERY()/comment-before-paren dodged the AI check; SUMMARIZE_AGG, SNOWFLAKE.ML.BULK_PROCESS_DOCUMENT, SNOWFLAKE.MODELS + `m!"PREDICT"(...)` reachable via PUBLIC). All fixed in `snowflake-read.ps1`; the script now SENDS the leading-comment-stripped text, refuses control/format chars, has a 450 s overall limit, and clearer key errors.
+- Design /check re-run in THIS session (6 reviewers, converged in 3 rounds); vetting records `~/.claude-staging/vetting-passes/gen980-*.record.json` (3 targets, passBAgentIds filled). Pass A x2, Pass B (Opus) x2 — 2nd REVISE item was already fixed (tests use its exact inputs).
+- Tests: `tests/filter-test.ps1` 75/75; `tests/filter-realism.ps1` over 154 real statements (rebuild the corpus with `node tests/extract-sql.js <scratchpad>\sql-corpus.json`): 26/26 writes refused, 0 look-ups refused; `tests/test-hook.js` 29/29 (fixtures, PROTECTED_FILES, pass consumption, 28,580-command replay, 0 new approvals).
+- NEW install item: measurement step 6 for `~/.claude/scheduled-tasks/gen924-browser-gate-noise-check/SKILL.md` — draft in `tests/gen924-section.md` (its query alone, with T = 2026-10-28, is `tests/gen980-measure.sql`); fill in T (go-live UTC) and reword its step 5 to run after step 6. Size lines for the notes step: browser.md 8,967 → 9,299 (hard cap 10,000, but the injector skips the file above 9,500 — 201 left); Memory Islands CLAUDE.md 39 → 40 / 200.
+- Remaining after install: steps 3-6 below unchanged.
+
 Read this first. Approved plan: `C:\Users\Erez\.claude\plans\piped-shimmying-octopus.md` (Erez approved it 2026-10-28; converged /check, 2 rounds). Tickets: GEN-980 (In Progress), GEN-953 step 4. Neither ticket has this build recorded yet.
 
 ## What exists now

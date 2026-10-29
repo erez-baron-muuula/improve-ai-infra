@@ -1,0 +1,7 @@
+{
+  "subject": "GEN-892 build design (notes/gen892/build-design.md), /check run 2026-10-29",
+  "checkVerdict": "converged",
+  "rounds": 2,
+  "checkReviewerAgentIds": ["a8c5157610c54f900", "a51d7086e01eac920", "a0b50c2f37147399b", "afd0c6645113cc44d", "aa1709fda65fac09c", "adcf213f7076d8f6b"],
+  "capturedVerdicts": "Round 1: pre-mortem REVISE (false project-edit-report trace; candidate keys never re-armed; plain runs mask a stalled watch), holistic REVISE (no 4b size lines; false 4a trace), soundness REVISE (permanent candidate key; false trace). Round 2: all three PASS, every prior finding RESOLVED, none new. Advisories adopted: shortest-span anchor matching; named install-date field; content type with parameters; re-arm fetch failure treated as open; warnings replaced each run; no-op-week digest line (skill proposal); skill files not part of the code approval."
+}
