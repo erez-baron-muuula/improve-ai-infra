@@ -1,0 +1,6 @@
+[
+  { "version": "2.1.304", "text": "Added `/auto-mode-setup`: a guided setup that reads your project and recent sessions" },
+  { "version": "2.1.302", "text": "a conversation too long for the safety check is now compacted, instead of every checked tool call being denied" },
+  { "version": "2.1.301", "text": "Fixed Grep and Glob reporting no matches when the search program failed unexpectedly" },
+  { "version": "2.1.307", "text": "Added the `claude_code.safety_event` OpenTelemetry event" }
+]

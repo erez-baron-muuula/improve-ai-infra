@@ -1,0 +1,603 @@
+diff --git a/notes/gen889/live-before/hooks/browser-site-gate.js b/notes/gen889/wc/hooks/browser-site-gate.js
+index 6f72efa..9f22c1d 100644
+--- a/notes/gen889/live-before/hooks/browser-site-gate.js
++++ b/notes/gen889/wc/hooks/browser-site-gate.js
+@@ -1135,8 +1135,8 @@ function handlePost(input, event) {
+       const c = state.counts;
+       const top = Object.entries(c.ask).filter(([k]) => k !== 'new-site').sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => k + ' ' + v).join(', ');
+       alert = 'Browser gate (GEN-924): this session has asked Erez ' + c.nonSiteAsked + ' times in ' + c.actions +
+-        ' browser actions for reasons other than a new site (' + top + '), above the bar of 1 per 10 actions. Tell Erez in ' +
+-        'your next For-you block, with these causes, so the browser gate\'s rules can be revisited.';
++        ' browser actions for reasons other than a new site (' + top + '), above the bar of 1 per 10 actions. Erez has ' +
++        'not been told; with these causes in the next For-you block, he can decide whether the browser gate\'s rules need revisiting.';
+       logLine({ event: 'over-bar', session: input.session_id, calls: c.calls, actions: c.actions, nonSiteAsked: c.nonSiteAsked, causes: c.ask });
+     }
+     saveState(file, state);
+diff --git a/notes/gen889/live-before/hooks/inject-browser-refs.js b/notes/gen889/wc/hooks/inject-browser-refs.js
+index a8c3108..0c3a5d8 100644
+--- a/notes/gen889/live-before/hooks/inject-browser-refs.js
++++ b/notes/gen889/wc/hooks/inject-browser-refs.js
+@@ -9,6 +9,10 @@
+ //    them), or after the first browser call (fallback). Marker claude-refs-browser-<session_id>
+ //    in the temp dir, so inject-topic-refs.js --reset-after-compact (SessionStart "compact")
+ //    clears it and the notes come back after a compaction.
++//    Part 2 (GEN-990): Claude Code caps each injected string at 10,000 characters, so the site
++//    notes live in hooks/refs/browser-sites.md and go with a LATER qualifying call than part 1
++//    (never the same one), under marker claude-refs-browser-part2-<session_id> (also cleared
++//    after a compaction). Each part gets the same fit-or-defer test.
+ // 2. Diagnosis: when a browser call reports that no browser is connected -- the tool's own
+ //    failure phrases (matched on a failure's error text, or on a short result that STARTS with
+ //    the tool's banner, so page text containing "not connected" never trips it), or
+@@ -226,7 +230,7 @@ function profileLabel(labels, acct) {
+ // The diagnosis. Returns { reason, text, short } -- short is the one-line reminder for repeats.
+ function diagnose(state, labels, headOverride) {
+   const head = headOverride || 'browser-diagnose (GEN-883): no browser is answering. ';
+-  const tail = ' Tell Erez this in one line instead of the tool\'s generic install/sign-in list. In a scheduled task: follow the task\'s own steps for a browser that is not connected (its retry count, and its could-not-run or alert step if it has one) and put this fix in whatever it reports; never report a browser step as passed. If the task treats the browser as optional, just note it.';
++  const tail = ' For Erez, this one line is the useful report, not the tool\'s generic install/sign-in list. A scheduled task\'s own steps for a browser that is not connected (its retry count, and its could-not-run or alert step if it has one) still apply, and this fix belongs in whatever it reports; a browser step that did not run is not a pass. If the task treats the browser as optional, a note is enough.';
+   const restart = 'ask Erez first, since it stops every Claude session that is mid-task: fully quit the Claude app from its system-tray icon and reopen it, so the link reconnects on the app\'s current account';
+   const openFix = (acct) => 'open ' + profileLabel(labels, acct) + ' (a minimized window is enough for the connection) and check that its Claude extension still shows ' + label(labels, acct) + '; if it shows the other account, sign it in to this one';
+   if (!state.readable || !state.linkAcct) {
+@@ -335,7 +339,7 @@ function handle(data, opts) {
+       // Already diagnosed for this link in this bucket: a one-line reminder, which also survives
+       // a compaction that dropped the earlier paragraph.
+       const d = diagnose(state, loadLabels(opts.hooksDir));
+-      parts.push('browser-diagnose (GEN-883): still not connected -- ' + d.short + ' Tell Erez; in a scheduled task, keep following its own retry count and not-connected steps.');
++      parts.push('browser-diagnose (GEN-883): still not connected -- ' + d.short + ' Erez needs this one line; in a scheduled task, its own retry count and not-connected steps still apply.');
+     } else {
+       const d = diagnose(state, loadLabels(opts.hooksDir));
+       const events = path.join(opts.hooksDir, 'browser-events.jsonl');
+@@ -348,32 +352,44 @@ function handle(data, opts) {
+       let text = d.text;
+       const n = outageCount(events, opts.now);
+       if (n >= BAR_OUTAGES) {
+-        text += ' Re-evaluate bar reached: ' + n + ' separate browser outages in the last ' + BAR_DAYS + ' days, any cause (hooks/browser-events.jsonl, see each line\'s reason). Tell Erez the browser is still not reliable with the two-profile setup and GEN-883 needs another look (in a scheduled task, put this in its report).';
++        text += ' Re-evaluate bar reached: ' + n + ' separate browser outages in the last ' + BAR_DAYS + ' days, any cause (hooks/browser-events.jsonl, see each line\'s reason). So the browser is still not reliable with the two-profile setup and GEN-883 needs another look; Erez has not been told (in a scheduled task, this belongs in its report).';
+       }
+       parts.push(text);
+       pruneMarkers(mdir, opts.now);
+     }
+   }
+   if (wantsNotes(data)) {
+-    let refText = '';
+-    try { refText = fs.readFileSync(path.join(opts.hooksDir, 'refs', 'browser.md'), 'utf8'); } catch (e) { refText = ''; }
+-    const notes = refText && refText.trim()
+-      ? refText
+-      : 'inject-browser-refs: refs/browser.md missing or empty -- browser notes were NOT loaded; flag this to Erez.';
+-    // Claude Code shows only a path + preview for injected text over 10,000 characters: if the
+-    // notes would push this call over the line, leave them for the next browser call.
+-    const used = parts.reduce((s, p) => s + p.length + SEP.length, 0);
+-    if (notes.length > INJECT_CAP) {
+-      if (claimOnce(opts.tmpDir, 'claude-refs-browser-' + safeId, opts.now) === 'claimed') {
+-        parts.push('inject-browser-refs: refs/browser.md is ' + notes.length + ' characters, over the ' + INJECT_CAP + ' that fit in one injection -- read it with the Read tool (' + path.join(opts.hooksDir, 'refs', 'browser.md') + ') and tell Erez it needs splitting.');
+-      }
+-    } else if (used + notes.length <= INJECT_CAP && claimOnce(opts.tmpDir, 'claude-refs-browser-' + safeId, opts.now) === 'claimed') {
+-      parts.push(notes);
+-    }
++    // Part 2 only on a call AFTER the one that delivered part 1 (its marker already existed
++    // when this call started), so the two never share one injected string.
++    const part1Done = fs.existsSync(path.join(opts.tmpDir, 'claude-refs-browser-' + safeId));
++    if (!part1Done) addNotes(parts, opts, safeId, 'browser.md', 'claude-refs-browser-', 'browser notes (part 1 of 2)');
++    else addNotes(parts, opts, safeId, 'browser-sites.md', 'claude-refs-browser-part2-', 'browser site notes (part 2 of 2)');
+   }
+   return parts.length ? parts.join(SEP) : null;
+ }
+ 
++// One notes part: claims its once-per-session marker and adds the notes to parts -- or, if the
++// file is over the cap, a one-line note with its size and path; if it is missing or empty, a
++// one-line note saying so. Claude Code shows only a path + preview for injected text over
++// 10,000 characters: if the notes would push this call over the line, they wait (unclaimed) for
++// the next browser call.
++function addNotes(parts, opts, safeId, file, markerPrefix, what) {
++  const refFile = path.join(opts.hooksDir, 'refs', file);
++  let refText = '';
++  try { refText = fs.readFileSync(refFile, 'utf8'); } catch (e) { refText = ''; }
++  const notes = refText && refText.trim()
++    ? refText
++    : 'inject-browser-refs: refs/' + file + ' is missing or empty, so the ' + what + ' are not in this session; Erez has not been told.';
++  const used = parts.reduce((s, p) => s + p.length + SEP.length, 0);
++  if (notes.length > INJECT_CAP) {
++    if (claimOnce(opts.tmpDir, markerPrefix + safeId, opts.now) === 'claimed') {
++      parts.push('inject-browser-refs: refs/' + file + ' is ' + notes.length + ' characters, over the ' + INJECT_CAP + ' that fit in one injection, so it was not injected; its full text is at ' + refFile + ', and the file needs splitting (Erez has not been told).');
++    }
++  } else if (used + notes.length <= INJECT_CAP && claimOnce(opts.tmpDir, markerPrefix + safeId, opts.now) === 'claimed') {
++    parts.push(notes);
++  }
++}
++
+ function main() {
+   if (process.argv[2] === '--explain') {
+     let text;
+diff --git a/notes/gen889/live-before/hooks/inject-deployment-refs.js b/notes/gen889/wc/hooks/inject-deployment-refs.js
+index 704c29d..b5b625d 100644
+--- a/notes/gen889/live-before/hooks/inject-deployment-refs.js
++++ b/notes/gen889/wc/hooks/inject-deployment-refs.js
+@@ -57,7 +57,7 @@ process.stdin.on('end', () => {
+         // written on this branch too, so the warning is once-per-session.
+         if (!fs.existsSync(refFile)) {
+           fs.writeFileSync(marker, new Date().toISOString());
+-          additionalContext = 'inject-deployment-refs: refs/deployment.md missing or empty — deployment reference notes were NOT loaded; flag this to Erez.';
++          additionalContext = 'inject-deployment-refs: refs/deployment.md is missing or empty, so the deployment reference notes are not in this session; Erez has not been told.';
+         } else {
+           const refText = fs.readFileSync(refFile, 'utf8');
+           if (refText && refText.trim()) {
+@@ -67,7 +67,7 @@ process.stdin.on('end', () => {
+             additionalContext = refText;
+           } else {
+             fs.writeFileSync(marker, new Date().toISOString());
+-            additionalContext = 'inject-deployment-refs: refs/deployment.md missing or empty — deployment reference notes were NOT loaded; flag this to Erez.';
++            additionalContext = 'inject-deployment-refs: refs/deployment.md is missing or empty, so the deployment reference notes are not in this session; Erez has not been told.';
+           }
+         }
+       }
+diff --git a/notes/gen889/live-before/hooks/inject-edit-refs.js b/notes/gen889/wc/hooks/inject-edit-refs.js
+index 2dd62ee..7b92873 100644
+--- a/notes/gen889/live-before/hooks/inject-edit-refs.js
++++ b/notes/gen889/wc/hooks/inject-edit-refs.js
+@@ -41,19 +41,24 @@ const path = require('path');
+ // GEN-342: the pointer injected for edits to the Invoice Automation Code.js. Deliberately
+ // a POINTER (grep anchor to the function) and NOT a copy of the contract — the single
+ // source of truth is fileHeldInvoiceManually_'s own header comment in Code.js.
++// GEN-710/GEN-889: worded as facts, because it also fires on a Read -- including a read-only
++// reviewer sub-agent's -- where an order to edit was flagged as a suspected prompt injection.
+ const INVOICE_CODEJS_POINTER =
+-  'Editing Invoice Automation Code.js: some functions here feed `fileHeldInvoiceManually_`, ' +
+-  'the rare Gemini-outage hand-file backup that runs ONLY during outages — so a break in what ' +
+-  'it depends on stays silent until the next outage. Before finishing this edit, find ' +
+-  '`function fileHeldInvoiceManually_` and read its header comment; make sure your change ' +
+-  'preserves — or updates that comment to match — the input contract it documents (required ' +
+-  'vs optional field names, enum values, and argument ORDER) for the shared helpers it calls.';
++  'Invoice Automation Code.js (this file): some functions here feed `fileHeldInvoiceManually_`, ' +
++  'the rare Gemini-outage hand-file backup that runs ONLY during outages, so a break in what ' +
++  'it depends on stays silent until the next outage. The header comment of ' +
++  '`function fileHeldInvoiceManually_` documents the input contract (required vs optional ' +
++  'field names, enum values, and argument ORDER) of the shared helpers it calls; a change to ' +
++  'one of those helpers either keeps that contract or updates the comment to match. This note ' +
++  'is background for any edit of this file and asks nothing of a read.';
+ 
+ // GEN-342: normalized project-qualified tail of the Invoice Automation Code.js path. Matched
+ // as a suffix so it survives drive-letter/casing differences while staying project-scoped
+ // (never a bare "code.js", which would misfire across projects).
+ const INVOICE_CODEJS_TAIL = 'ai projects/invoiceautomation/code.js';
+ 
++const MISSING_NOTE = 'inject-edit-refs: refs/editing.md is missing or empty, so the file-editing reference notes are not in this session; Erez has not been told.';
++
+ let input = '';
+ process.stdin.on('data', c => (input += c));
+ process.stdin.on('end', () => {
+@@ -78,7 +83,7 @@ process.stdin.on('end', () => {
+         // The marker is written on this branch too, so the warning is once-per-session.
+         if (!fs.existsSync(refFile)) {
+           fs.writeFileSync(marker, new Date().toISOString());
+-          parts.push('inject-edit-refs: refs/editing.md missing or empty — file-editing reference notes were NOT loaded; flag this to Erez.');
++          parts.push(MISSING_NOTE);
+         } else {
+           const refText = fs.readFileSync(refFile, 'utf8');
+           if (refText && refText.trim()) {
+@@ -88,7 +93,7 @@ process.stdin.on('end', () => {
+             parts.push(refText);
+           } else {
+             fs.writeFileSync(marker, new Date().toISOString());
+-            parts.push('inject-edit-refs: refs/editing.md missing or empty — file-editing reference notes were NOT loaded; flag this to Erez.');
++            parts.push(MISSING_NOTE);
+           }
+         }
+       }
+diff --git a/notes/gen889/live-before/hooks/inject-jira-refs.js b/notes/gen889/wc/hooks/inject-jira-refs.js
+index 2778978..4224260 100644
+--- a/notes/gen889/live-before/hooks/inject-jira-refs.js
++++ b/notes/gen889/wc/hooks/inject-jira-refs.js
+@@ -44,13 +44,13 @@ process.stdin.on('end', () => {
+       // Explicit missing/empty check -- a distinguished, expected condition that
+       // warns instead of the outer catch-all's silent fail-open.
+       if (!fs.existsSync(refFile)) {
+-        additionalContext = 'inject-jira-refs: refs/jira.md missing or empty — Jira reference notes were NOT loaded; flag this to Erez.';
++        additionalContext = 'inject-jira-refs: refs/jira.md is missing or empty, so the Jira reference notes are not in this session; Erez has not been told.';
+       } else {
+         const refText = fs.readFileSync(refFile, 'utf8');
+         if (refText && refText.trim()) {
+           additionalContext = refText;
+         } else {
+-          additionalContext = 'inject-jira-refs: refs/jira.md missing or empty — Jira reference notes were NOT loaded; flag this to Erez.';
++          additionalContext = 'inject-jira-refs: refs/jira.md is missing or empty, so the Jira reference notes are not in this session; Erez has not been told.';
+         }
+       }
+     }
+diff --git a/notes/gen889/live-before/hooks/inject-notion-refs.js b/notes/gen889/wc/hooks/inject-notion-refs.js
+index d47600a..950eb0a 100644
+--- a/notes/gen889/live-before/hooks/inject-notion-refs.js
++++ b/notes/gen889/wc/hooks/inject-notion-refs.js
+@@ -91,13 +91,13 @@ process.stdin.on('end', () => {
+       // No marker for this hook, so the warning repeats on each matching prompt
+       // (deliberate: louder while broken, self-clears once the file is fixed).
+       if (!fs.existsSync(refFile)) {
+-        additionalContext = 'inject-notion-refs: refs/notion.md missing or empty — Notion reference notes were NOT loaded; flag this to Erez.';
++        additionalContext = 'inject-notion-refs: refs/notion.md is missing or empty, so the Notion reference notes are not in this session; Erez has not been told.';
+       } else {
+         const refText = fs.readFileSync(refFile, 'utf8');
+         if (refText && refText.trim()) {
+           additionalContext = fitToCap(refText, refFile, refText.length > CAP && claimOversizeFlag(sessionId));
+         } else {
+-          additionalContext = 'inject-notion-refs: refs/notion.md missing or empty — Notion reference notes were NOT loaded; flag this to Erez.';
++          additionalContext = 'inject-notion-refs: refs/notion.md is missing or empty, so the Notion reference notes are not in this session; Erez has not been told.';
+         }
+       }
+     }
+diff --git a/notes/gen889/live-before/hooks/inject-perk-refs.js b/notes/gen889/wc/hooks/inject-perk-refs.js
+index 933654f..ba32725 100644
+--- a/notes/gen889/live-before/hooks/inject-perk-refs.js
++++ b/notes/gen889/wc/hooks/inject-perk-refs.js
+@@ -158,7 +158,7 @@ process.stdin.on('end', () => {
+         // One marker per distinct warning, so a different problem later in the session still surfaces.
+         const wkey = crypto.createHash('sha1').update(warnings.join(' ')).digest('hex').slice(0, 12);
+         if (claimMarker(markerBase + '-warn-' + wkey)) {
+-          out.push('inject-perk-refs: ' + warnings.join(' ') + ' Flag this to Erez.');
++          out.push('inject-perk-refs: ' + warnings.join(' ') + ' Erez has not been told.');
+         }
+       }
+ 
+@@ -175,8 +175,8 @@ process.stdin.on('end', () => {
+       if (fresh.length) {
+         out.push(
+           'Perk reminder (from ~/.claude/hooks/refs/perks.md): Erez holds the perk(s) below, and this message mentions what they cover. ' +
+-          'If this is a decision about buying, choosing or paying for something they cover, mention the perk to Erez (say its validity is unconfirmed unless checked). ' +
+-          'If he uses or turns one down, update its "- Status:" line in that file in the same turn.\n\n' +
++          'At a decision about buying, choosing or paying for something they cover, the perk is worth mentioning to him, with its validity unconfirmed unless checked. ' +
++          'When he uses or turns one down, its "- Status:" line in that file is updated in the same turn.\n\n' +
+           fresh.map(p => p.text).join('\n\n')
+         );
+       }
+diff --git a/notes/gen889/live-before/hooks/inject-shell-refs.js b/notes/gen889/wc/hooks/inject-shell-refs.js
+index d3de48f..c637ac1 100644
+--- a/notes/gen889/live-before/hooks/inject-shell-refs.js
++++ b/notes/gen889/wc/hooks/inject-shell-refs.js
+@@ -86,7 +86,7 @@ process.stdin.on('end', () => {
+         // The marker is written on this branch too, so the warning is once-per-session.
+         if (!fs.existsSync(refFile)) {
+           fs.writeFileSync(marker, new Date().toISOString());
+-          additionalContext = 'inject-shell-refs: refs/shell.md missing or empty — shell reference notes were NOT loaded; flag this to Erez.';
++          additionalContext = 'inject-shell-refs: refs/shell.md is missing or empty, so the shell reference notes are not in this session; Erez has not been told.';
+         } else {
+           const refText = fs.readFileSync(refFile, 'utf8');
+           if (refText && refText.trim()) {
+@@ -97,7 +97,7 @@ process.stdin.on('end', () => {
+             additionalContext = fitToCap(refText, refFile, true);
+           } else {
+             fs.writeFileSync(marker, new Date().toISOString());
+-            additionalContext = 'inject-shell-refs: refs/shell.md missing or empty — shell reference notes were NOT loaded; flag this to Erez.';
++            additionalContext = 'inject-shell-refs: refs/shell.md is missing or empty, so the shell reference notes are not in this session; Erez has not been told.';
+           }
+         }
+       }
+diff --git a/notes/gen889/live-before/hooks/inject-topic-refs.js b/notes/gen889/wc/hooks/inject-topic-refs.js
+index 78b39dd..e99fb78 100644
+--- a/notes/gen889/live-before/hooks/inject-topic-refs.js
++++ b/notes/gen889/wc/hooks/inject-topic-refs.js
+@@ -183,7 +183,7 @@ function injectTopics(topicNames, data) {
+   const parts = [];
+   for (const name of topicNames) {
+     if (!Object.prototype.hasOwnProperty.call(TOPICS, name)) {
+-      parts.push('inject-topic-refs: unknown topic "' + name + '" in its settings.json registration -- no notes loaded for it; flag this to Erez.');
++      parts.push('inject-topic-refs: its settings.json registration names an unknown topic "' + name + '", so no notes are loaded for it; Erez has not been told.');
+     }
+   }
+   const safeId = safe(data.session_id);
+@@ -202,7 +202,7 @@ function injectTopics(topicNames, data) {
+     try { refText = fs.readFileSync(refFile, 'utf8'); } catch (e) { refText = ''; }
+     const missing = !refText.trim();
+     const text = missing
+-      ? 'inject-topic-refs: refs/' + topic.file + ' missing or empty -- ' + name + ' reference notes were NOT loaded; flag this to Erez.'
++      ? 'inject-topic-refs: refs/' + topic.file + ' is missing or empty, so the ' + name + ' reference notes are not in this session; Erez has not been told.'
+       : refText;
+     const used = parts.length ? parts.join(SEP).length + SEP.length : 0;
+     const room = CAP - POINTER_ROOM - used;
+diff --git a/notes/gen889/live-before/hooks/inject-windows-mcp-refs.js b/notes/gen889/wc/hooks/inject-windows-mcp-refs.js
+index a9f55e7..14e18a5 100644
+--- a/notes/gen889/live-before/hooks/inject-windows-mcp-refs.js
++++ b/notes/gen889/wc/hooks/inject-windows-mcp-refs.js
+@@ -1,19 +1,25 @@
+-// PostToolUse hook -- injects hooks/refs/windows-mcp.md (lessons for driving Erez's PC
+-// through the Windows-MCP add-on) once per session, at the moment a session reaches for
+-// the add-on (GEN-840):
++// PostToolUse hook -- injects the PC-control notes (lessons for driving Erez's PC through the
++// Windows-MCP add-on) at the moment a session reaches for the add-on (GEN-840):
+ //  - after a ToolSearch whose query or result names the add-on's tools (they are deferred
+ //    tools, so a session normally loads them this way before its first call -- this is the
+ //    point where the choice to use PC control is being made); or
+-//  - after the first Windows-MCP call that actually ran (fallback for a session where the
+-//    tools were not deferred).
++//  - after a Windows-MCP call that actually ran (fallback for a session where the tools were
++//    not deferred).
+ // settings.json matcher: ToolSearch|mcp__windows-mcp__.*
+ //
++// Two parts (GEN-958): Claude Code caps each injected string at 10,000 characters, so the notes
++// are split. Part 1 (refs/windows-mcp.md, the rules needed before the first action) goes with
++// the first qualifying call; part 2 (refs/windows-mcp-troubleshooting.md) with the next one.
++// One part per call, each with its own once-per-session marker claude-refs-windows-mcp-part<N>-
++// <session_id>, so inject-topic-refs.js --reset-after-compact (SessionStart "compact") clears
++// both and the notes come back after a compaction. A part over the cap is not injected; a
++// one-line note gives its size and path instead (same rule as inject-browser-refs.js).
++//
+ // Sub-agent calls (agent_id present) are skipped: sub-agents may not use PC control
+ // (windows-mcp-approval.js blocks them), and injecting there would spend the session's
+-// once-only marker where the main session never sees it.
++// once-only markers where the main session never sees them.
+ //
+-// Once-per-session marker in the OS temp dir, written only when a note is injected. Never
+-// blocks the tool call. A missing/empty refs file injects a one-line warning instead of
++// Never blocks the tool call. A missing/empty notes file injects a one-line note instead of
+ // silence (GEN-336); any other error fails open silently.
+ 
+ const fs = require('fs');
+@@ -21,6 +27,18 @@ const os = require('os');
+ const path = require('path');
+ 
+ const PREFIX = 'mcp__windows-mcp__';
++const PARTS = [
++  { n: 1, file: 'windows-mcp.md', what: 'PC-control notes (part 1 of 2)' },
++  { n: 2, file: 'windows-mcp-troubleshooting.md', what: 'PC-control troubleshooting notes (part 2 of 2)' },
++];
++// 500 under Claude Code's per-string limit on injected text, read through guidelines-limits.js
++// (notes/anthropic-guidelines.json, hook-injected-text), as in inject-browser-refs.js.
++const FALLBACK_NOTES_CAP = 10000;
++let INJECT_CAP = FALLBACK_NOTES_CAP - 500;
++try {
++  const c = require('./guidelines-limits.js').readLimit('hook-injected-text', { fallback: FALLBACK_NOTES_CAP, min: 2000, max: 100000 }).value;
++  if (Number.isInteger(c)) INJECT_CAP = c - 500;
++} catch (e) { /* missing or broken reader: keep the fallback */ }
+ 
+ function shouldInject(data) {
+   const tool = typeof data.tool_name === 'string' ? data.tool_name : '';
+@@ -33,6 +51,39 @@ function shouldInject(data) {
+   return /windows-mcp/i.test(query) || response.indexOf(PREFIX) >= 0;
+ }
+ 
++function markerPath(tmpDir, n, safeId) { return path.join(tmpDir, 'claude-refs-windows-mcp-part' + n + '-' + safeId); }
++
++// The text one part injects: the notes, or a one-line note when the file is missing, empty or
++// over the cap.
++function partText(part, hooksDir) {
++  const refFile = path.join(hooksDir, 'refs', part.file);
++  let refText = '';
++  try { refText = fs.readFileSync(refFile, 'utf8'); } catch (e) { refText = ''; }
++  if (!refText || !refText.trim()) {
++    return 'inject-windows-mcp-refs: refs/' + part.file + ' is missing or empty, so the ' + part.what + ' are not in this session; Erez has not been told.';
++  }
++  if (refText.length > INJECT_CAP) {
++    return 'inject-windows-mcp-refs: refs/' + part.file + ' is ' + refText.length + ' characters, over the ' + INJECT_CAP + ' that fit in one injection, so it was not injected; its full text is at ' + refFile + ', and the file needs splitting (Erez has not been told).';
++  }
++  return refText;
++}
++
++// Pure core, exported for tests. opts: { tmpDir, hooksDir }. Returns the text to inject or null.
++// Delivers the first part whose marker this call claims; a later part waits for a later call.
++function handle(data, opts) {
++  const safeId = (typeof data.session_id === 'string' ? data.session_id : '').replace(/[^A-Za-z0-9_-]/g, '');
++  if (!safeId || !shouldInject(data)) return null;
++  for (const part of PARTS) {
++    const marker = markerPath(opts.tmpDir, part.n, safeId);
++    if (fs.existsSync(marker)) continue;
++    // Exclusive create claims this part's one injection, even when two calls arrive together;
++    // marker first, so a crash after this point can only under-inject, never repeat.
++    try { fs.writeFileSync(marker, new Date().toISOString(), { flag: 'wx' }); } catch (e) { return null; }
++    return partText(part, opts.hooksDir);
++  }
++  return null;
++}
++
+ function main() {
+   let input = '';
+   process.stdin.on('data', (c) => (input += c));
+@@ -40,22 +91,7 @@ function main() {
+     let additionalContext = null;
+     try {
+       const data = JSON.parse(input || '{}');
+-      const safeId = (typeof data.session_id === 'string' ? data.session_id : '').replace(/[^A-Za-z0-9_-]/g, '');
+-      if (safeId && shouldInject(data)) {
+-        const marker = path.join(os.tmpdir(), 'claude-windows-mcp-refs-' + safeId);
+-        let claimed = false;
+-        // Exclusive create claims the one injection, even when two calls arrive together;
+-        // marker first, so a crash after this point can only under-inject, never repeat.
+-        try { fs.writeFileSync(marker, new Date().toISOString(), { flag: 'wx' }); claimed = true; } catch (e) { claimed = false; }
+-        if (claimed) {
+-          const refFile = path.join(__dirname, 'refs', 'windows-mcp.md');
+-          let refText = '';
+-          try { refText = fs.readFileSync(refFile, 'utf8'); } catch (e) { refText = ''; }
+-          additionalContext = refText && refText.trim()
+-            ? refText
+-            : 'inject-windows-mcp-refs: refs/windows-mcp.md missing or empty -- PC-control lessons were NOT loaded; flag this to Erez.';
+-        }
+-      }
++      additionalContext = handle(data, { tmpDir: os.tmpdir(), hooksDir: __dirname });
+     } catch (e) {
+       // fail open -- inject nothing
+     }
+@@ -67,4 +103,4 @@ function main() {
+ }
+ 
+ if (require.main === module) main();
+-module.exports = { shouldInject };
++module.exports = { shouldInject, handle, PARTS };
+diff --git a/notes/gen889/live-before/hooks/sessionstart-backup-surfacer.js b/notes/gen889/wc/hooks/sessionstart-backup-surfacer.js
+index 8d85793..d3ecf28 100644
+--- a/notes/gen889/live-before/hooks/sessionstart-backup-surfacer.js
++++ b/notes/gen889/wc/hooks/sessionstart-backup-surfacer.js
+@@ -305,7 +305,7 @@ function sessionBackupStaleLine(claudeDir, now) {
+   return (
+     `SESSION BACKUP — the automatic copy of Claude sessions to the Drive backup has not succeeded ${since}, ` +
+     `but sessions changed after that (newest change ${fmt(newest)}). Recent sessions may be missing from the backup. ` +
+-    'Relay this to Erez at the top of your first response. Run log: ~/.claude/session-backup-state/runs.log.'
++    'Erez has not seen this yet; it belongs at the top of the first response. Run log: ~/.claude/session-backup-state/runs.log.'
+   );
+ }
+ 
+@@ -347,7 +347,7 @@ function readLimitSafe(id, opts) {
+   }
+ }
+ const MAX_CONTEXT_CHARS = readLimitSafe('hook-injected-text', NOTES_CAP_OPTS).value - 1000;
+-const CUT_NOTE = '\n…(list cut to stay under the hook-text limit; the full list is in ~/.claude/backup-sweep-failures.jsonl). Relay this to Erez at the top of your first response.';
++const CUT_NOTE = '\n…(list cut to stay under the hook-text limit; the full list is in ~/.claude/backup-sweep-failures.jsonl). Erez has not seen this yet; it belongs at the top of the first response.';
+ function repoKeyOf(repoPath) {
+   return require('crypto').createHash('sha1').update(repoPath.toLowerCase(), 'utf8').digest('hex').toUpperCase().slice(0, 16);
+ }
+@@ -433,7 +433,7 @@ function projectBackupStaleLine(claudeDir, now) {
+   return (
+     `PROJECT BACKUP — ${stale.length === 1 ? 'this project has' : 'these projects have'} gone more than 24 h without a successful ` +
+     `backup to GitHub, while backups kept being postponed or failing for over a day: ${stale.join('; ')}. Committed work still reaches GitHub ` +
+-    'at each /wrap. Relay this to Erez at the top of your first response. Details: ~/.claude/backup-sweep-failures.jsonl.'
++    'at each /wrap. Erez has not seen this yet; it belongs at the top of the first response. Details: ~/.claude/backup-sweep-failures.jsonl.'
+   );
+ }
+ 
+@@ -461,7 +461,7 @@ function accountSyncStaleLine(claudeDir, now) {
+     return (
+       `ACCOUNT SESSION SYNC — switched OFF since ${fmt(off.mtimeMs)} (~/.claude/account-session-sync/disabled exists), ` +
+       "so sessions from one Claude account are not being copied to the other account's list. " +
+-      'Relay this to Erez at the top of your first response.'
++      'Erez has not seen this yet; it belongs at the top of the first response.'
+     );
+   }
+   let lastSuccess = 0;
+@@ -495,7 +495,7 @@ function accountSyncStaleLine(claudeDir, now) {
+   return (
+     `ACCOUNT SESSION SYNC — the copy that keeps both Claude accounts' session lists matched has not completed ${since}, ` +
+     `but the lists changed after that (newest change ${fmt(newest)}). Sessions may be missing after switching accounts. ` +
+-    'Relay this to Erez at the top of your first response. Run log: ~/.claude/account-session-sync/changes.log.'
++    'Erez has not seen this yet; it belongs at the top of the first response. Run log: ~/.claude/account-session-sync/changes.log.'
+   );
+ }
+ 
+@@ -522,7 +522,7 @@ function rulesFileSizeLine(claudeDir, now) {
+   } catch (e) {
+     return (
+       `RULES-FILE SIZE — could not read ~/.claude/CLAUDE.md to check its size (${(e && (e.code || e.message)) || 'unknown error'}). ` +
+-      'Tell Erez in the 📌 For you block of your first reply.'
++      'Erez has not been told; it belongs in the 📌 For you block of the first reply.'
+     );
+   }
+   const text = stripBomText(buf.toString('utf8'));
+@@ -549,17 +549,17 @@ function rulesFileSizeLine(claudeDir, now) {
+     const quote = clean(rec.quote, 200) || '(no words recorded)';
+     const line =
+       `RULES-FILE SIZE — your always-loaded rules file ~/.claude/CLAUDE.md is now ${lines} lines, over its ${limit}-line limit. ` +
+-      `On ${when} Claude recorded this growth with Erez's OK, quoted as: "${quote}". Tell Erez once, in the 📌 For you block ` +
+-      `of your first reply, in plain words with that quote, and ask whether it is what he agreed; if not, offer to bring the ` +
+-      `file back to ${limit} lines or fewer.`;
++      `On ${when} Claude recorded this growth with Erez's OK, quoted as: "${quote}". Erez is told once, in the 📌 For you block ` +
++      `of the first reply, in plain words with that quote, and asked whether it is what he agreed; if not, the offer is to bring ` +
++      `the file back to ${limit} lines or fewer.`;
+     // Marked shown after emission, and only if this exact line survived the length trim.
+     pendingRulesAck = { file: recordFile, sha, line };
+     return line;
+   }
+   return (
+     `RULES-FILE SIZE — your always-loaded rules file ~/.claude/CLAUDE.md is ${lines} lines, over its ${limit}-line limit, ` +
+-    'with no OK from Erez on record for its current text. Tell Erez in the 📌 For you block of your first reply, ' +
+-    `in plain words, and offer to bring it back to ${limit} lines or fewer.`
++    'with no OK from Erez on record for its current text. Erez has not been told; it belongs in the 📌 For you block of the first reply, ' +
++    `in plain words, with an offer to bring it back to ${limit} lines or fewer.`
+   );
+ }
+ 
+@@ -579,7 +579,7 @@ function guidelinesLimitsLine(claudeDir) {
+   if (rules.warning) out.push(`GUIDELINES LIMITS — rules-file limit in the limits file (${rules.warning.value}) ${why(rules.warning)}; using ${FALLBACK_RULES_LINE_CAP}.`);
+   if (notes.warning) out.push(`GUIDELINES LIMITS — notes cap in the limits file (${notes.warning.value}) ${why(notes.warning)}; using ${fmtNum(FALLBACK_NOTES_CAP)}.`);
+   if (!out.length) return null;
+-  return out.join(' ') + ' Tell Erez in the 📌 For you block of your first reply, in plain words.';
++  return out.join(' ') + ' Erez has not been told; it belongs in the 📌 For you block of the first reply, in plain words.';
+ }
+ 
+ // GEN-674: one line when the size stop itself looks removed; else null. It checks that update-config.ps1
+@@ -630,7 +630,7 @@ function sizeStopIntactLine(claudeDir, now, driveDir) {
+   if (!problems.length) return null;
+   return (
+     `RULES-FILE SIZE STOP — the stop that keeps ~/.claude/CLAUDE.md under its line limit looks changed: ${problems.join('; ')}. ` +
+-    'Tell Erez in the 📌 For you block of your first reply, in plain words, and offer to restore it (GEN-674).'
++    'Erez has not been told; it belongs in the 📌 For you block of the first reply, in plain words, with an offer to restore it (GEN-674).'
+   );
+ }
+ 
+@@ -711,8 +711,8 @@ function buildMessage(allRecs) {
+ 
+   const footer =
+     secretCount > 0
+-      ? 'ACTION: Relay this to Erez immediately at the top of your first response. For each SUSPECTED SECRET, the repo was NOT pushed anywhere; Erez must rule on the flagged content before it can be backed up.'
+-      : 'Relay this to Erez at the top of your first response so a failed backup is not missed. Most kinds retry automatically next sweep.';
++      ? 'Erez has not seen this yet; it belongs at the very top of the first response. For each SUSPECTED SECRET, the repo was NOT pushed anywhere, and it stays unbacked-up until Erez rules on the flagged content.'
++      : 'Erez has not seen this yet; it belongs at the top of the first response, so a failed backup is not missed. Most kinds retry automatically next sweep.';
+ 
+   return `${header}\n${lines.join('\n')}\n${footer}`;
+ }
+diff --git a/notes/gen889/live-before/hooks/sessionstart-configunlock-reaper.js b/notes/gen889/wc/hooks/sessionstart-configunlock-reaper.js
+index 2a38710..7e2f88a 100644
+--- a/notes/gen889/live-before/hooks/sessionstart-configunlock-reaper.js
++++ b/notes/gen889/wc/hooks/sessionstart-configunlock-reaper.js
+@@ -162,16 +162,17 @@ function hasValidToken(tokenDir) {
+ // The ONLY user-facing output: a plain-language alarm relayed at the top of the first
+ // response. Fired only when an unaccountable sentinel could NOT be reaped (still present
+ // after the delete attempt). No jargon; states what happened, why it matters, and the one
+-// action to take.
++// fix. Worded as facts, not orders (GEN-889: Anthropic's hooks guidance -- an out-of-band
++// "ACTION:" order can read as a prompt injection and be ignored).
+ function buildAlarm(sentinelPath) {
+   return (
+-    'SAFETY SWITCH STUCK ON — relay this to Erez at the top of your first response.\n' +
+-    'A break-glass switch (' + sentinelPath + ') is present but is NOT accounted for by any ' +
+-    'valid authorization, and this hook could not remove it (it may be locked open by another ' +
+-    'process). While it exists, the config/hook/script safety reviews are DISABLED — protected ' +
+-    'edits are being auto-approved without the usual check. ACTION: delete the file to re-arm the ' +
+-    'safety checks —\n' +
++    'Safety switch stuck on (sessionstart-configunlock-reaper): a break-glass switch (' + sentinelPath +
++    ') is present but is NOT accounted for by any valid authorization, and this hook could not remove ' +
++    'it (it may be locked open by another process). While it exists, the config/hook/script safety ' +
++    'reviews are DISABLED, so protected edits are auto-approved without the usual check. Deleting the ' +
++    'file re-arms them:\n' +
+     '  rm "' + sentinelPath + '"\n' +
+-    'unless you are deliberately in the middle of an emergency recovery that needs it open.'
++    'The only reason to keep it is an emergency recovery that is deliberately under way. Erez has not ' +
++    'been told; this is the first thing he needs to hear in the session.'
+   );
+ }
+diff --git a/notes/gen889/live-before/hooks/windows-mcp-approval.js b/notes/gen889/wc/hooks/windows-mcp-approval.js
+index 70146ec..2e93c6b 100644
+--- a/notes/gen889/live-before/hooks/windows-mcp-approval.js
++++ b/notes/gen889/wc/hooks/windows-mcp-approval.js
+@@ -184,7 +184,7 @@ const STUCK_STEPS =
+   'Alt and the Windows key once, then Esc, and keep his hands off for 10 seconds; ask whether he is ready, then run ' +
+   'ControlStatus once more. (3) If that does not help, the work can continue in a new session, which starts its own ' +
+   'add-on. Other PC-control calls in this session are refused without a window until ControlStatus shows "ready" or a ' +
+-  'different generation, or 30 minutes pass. Details: "Stuck add-on" in C:/Users/Erez/.claude/hooks/refs/windows-mcp.md.';
++  'different generation, or 30 minutes pass. Details: "Stuck add-on" in C:/Users/Erez/.claude/hooks/refs/windows-mcp-troubleshooting.md.';
+ 
+ const ANNOUNCE_MSG =
+   'Automatic check, not a denial: PC control needs a heads-up first. Before this Windows-MCP ' +
+diff --git a/notes/gen889/live-before/hooks/windows-mcp-approval.test.js b/notes/gen889/wc/hooks/windows-mcp-approval.test.js
+index 0be1d84..8db9003 100644
+--- a/notes/gen889/live-before/hooks/windows-mcp-approval.test.js
++++ b/notes/gen889/wc/hooks/windows-mcp-approval.test.js
+@@ -639,7 +639,7 @@ test('ref injector: fires for a ToolSearch naming the add-on or returning its to
+   assert.strictEqual(injector.shouldInject({ tool_name: 'Bash', tool_input: { command: 'windows-mcp' } }), false);
+ });
+ 
+-test('process: ref injector injects the ref once per session', () => {
++test('process: ref injector injects part 1, then part 2 on the next call, then nothing', () => {
+   const INJ = path.join(__dirname, 'inject-windows-mcp-refs.js');
+   const sid = 'wmcp-test-' + process.pid + '-' + Date.now();
+   const inp = JSON.stringify({ session_id: sid, tool_name: 'ToolSearch', tool_input: { query: 'select:mcp__windows-mcp__Clipboard' } });
+@@ -649,10 +649,15 @@ test('process: ref injector injects the ref once per session', () => {
+     const out = JSON.parse(r1.stdout);
+     assert.strictEqual(out.hookSpecificOutput.hookEventName, 'PostToolUse');
+     assert.match(out.hookSpecificOutput.additionalContext, /Last resort/);
++    assert.doesNotMatch(out.hookSpecificOutput.additionalContext, /Stuck add-on \(GEN/);
+     const r2 = spawnSync(process.execPath, [INJ], { input: inp, encoding: 'utf8' });
+-    assert.strictEqual(r2.stdout, '');
++    assert.match(JSON.parse(r2.stdout).hookSpecificOutput.additionalContext, /Stuck add-on \(GEN/);
++    const r3 = spawnSync(process.execPath, [INJ], { input: inp, encoding: 'utf8' });
++    assert.strictEqual(r3.stdout, '');
+   } finally {
+-    try { fs.unlinkSync(path.join(os.tmpdir(), 'claude-windows-mcp-refs-' + sid)); } catch (e) { /* none */ }
++    for (const n of [1, 2]) {
++      try { fs.unlinkSync(path.join(os.tmpdir(), 'claude-refs-windows-mcp-part' + n + '-' + sid)); } catch (e) { /* none */ }
++    }
+   }
+ });
+ 

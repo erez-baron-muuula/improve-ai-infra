@@ -1,3 +1,6 @@
+// SUPERSEDED (GEN-889/GEN-990, 2026-10-29): the browser notes are now two files (refs/browser.md +
+// refs/browser-sites.md, part 2 on the next call); this build-time test still expects one file. The
+// current tests are notes/gen889/test.js. Kept as the GEN-883 build record.
 // Smoke test for the working-copy hook: pure core + one real stdin run.
 const { spawnSync } = require('child_process');
 const fs = require('fs');
