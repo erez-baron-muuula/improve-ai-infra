@@ -1,0 +1,17 @@
+{
+  "sinceUtc": "2026-10-29T11:03:33.579Z",
+  "pages": {},
+  "checkUtc": "2026-10-29T11:21:09.056Z",
+  "warnings": [
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-browser-refs.js:71 INJECT_CAP = 9500 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-notion-refs.js:40 CAP = 10000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-notion-refs.js:41 KEEP = 9000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-shell-refs.js:40 CAP = 10000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-shell-refs.js:41 KEEP = 9000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-topic-refs.js:50 CAP = 10000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\inject-topic-refs.js:51 KEEP = 9000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\sessionstart-backup-surfacer.js:333 MAX_CONTEXT_CHARS = 9000 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: C:\\Users\\Erez\\.claude\\hooks\\sessionstart-backup-surfacer.js:498 RULES_LINE_CAP = 200 (read the limits file, or name it FALLBACK_*)",
+    "stray copy of a limit: G:\\My Drive\\AI Projects\\_Tooling\\Claude\\update-config.ps1:90 RulesLineCap = 200 (read the limits file, or name it FALLBACK_*)"
+  ]
+}

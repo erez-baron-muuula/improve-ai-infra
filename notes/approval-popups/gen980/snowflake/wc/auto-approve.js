@@ -212,6 +212,10 @@ const PROTECTED_FILES = new Set([
   'c:\\users\\erez\\.claude\\claude.md',
   'c:\\users\\erez\\.claude\\hooks\\auto-approve.js',
   'c:\\users\\erez\\.claude\\scripts\\notion-ticket-lookup.ps1',
+  // GEN-980: auto-approved below (isSafeSnowflakeRead) and holds the look-only SQL filter, so like
+  // notion-ticket-lookup.ps1 it changes only through update-config.ps1. Install the script first:
+  // this list is matched on the path whether or not the file exists, so it blocks creating it.
+  'c:\\users\\erez\\.claude\\scripts\\snowflake-read.ps1',
   // GEN-508 piece 2 adds notion-rest-write.ps1 here, together with the REST arm that pins its bytes.
   // It is NOT listed while that arm is unwired: protecting a path this hook does not yet depend on
   // would buy nothing and would block the script's own creation, since PROTECTED_FILES is matched on
@@ -528,8 +532,9 @@ function isSafeNotionTicketLookup(command) {
 
 // Exact-match allow for the look-only Snowflake reader (GEN-980 lever e / GEN-953 step 4).
 // Only `& '<scripts>\snowflake-read.ps1' -SqlFile '<a .sql file under this user's Temp folder>'`
-// is approved. What makes a run safe is the Snowflake role (CLAUDE_READ can only read), not
-// this check; this only proves the command is that single call with a plain Temp path (the
+// is approved. What keeps a run look-only is the script's own statement filter plus the
+// Snowflake role (CLAUDE_READ's grants only read, but every role inherits Snowflake's PUBLIC
+// role); this check only proves the command is that single call with a plain Temp path (the
 // session scratchpad lives there): printable ASCII, letters/digits/space/._-\ only in the path,
 // no `..`, quotes, backtick, $ or % (no PowerShell interpolation). No `m` flag: ^ and $ anchor
 // the WHOLE string, so an embedded newline cannot smuggle a second command past this check.

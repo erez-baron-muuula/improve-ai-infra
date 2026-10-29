@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+#Requires -PSEdition Desktop
 # snowflake-read.ps1 -- run ONE look-only query in Snowflake as Claude's own login
 # CLAUDE_READER (role CLAUDE_READ, warehouse CLAUDE_WH), outside the browser.
 # GEN-980 lever e / GEN-953 step 4. Windows PowerShell 5.1 only (uses the Windows key store).
@@ -6,13 +6,20 @@
 #   & 'C:\Users\Erez\.claude\scripts\snowflake-read.ps1' -SqlFile '<a .sql file under %TEMP%>'
 #
 # Write the query to a .sql file in the session scratchpad (it is under %TEMP%) first, then run
-# this with a tool timeout of at least 480000 ms (a slow query may take up to 7 minutes).
+# this with a tool timeout of at least 480000 ms (the script stops itself within 7.5 minutes:
+# up to 6 waiting for the query, the rest for downloading the result).
 # Two layers keep a run look-only:
 #  1. This script sends only a plain look-up: the statement must start with SELECT, WITH,
-#     SHOW, DESC/DESCRIBE or EXPLAIN (after leading comments); every `->>` step after the first
-#     must start with SELECT; a WITH may not define or call a procedure; and AI/Cortex functions
-#     and SYSTEM$ functions are refused (AI functions bill outside CLAUDE_MONITOR). Snowflake
-#     itself decides a statement's type from its first word, and runs one statement per request.
+#     SHOW, DESC/DESCRIBE or EXPLAIN; every `->>` step after the first must start with SELECT
+#     (no comment before it); a WITH may not define or call a procedure; and AI/Cortex (AI_*,
+#     SUMMARIZE_AGG, anything naming CORTEX), SYSTEM$, IDENTIFIER() and TO_QUERY() are refused
+#     (AI functions bill outside CLAUDE_MONITOR;
+#     IDENTIFIER and TO_QUERY can name a function or a query inside a string). Leading comments
+#     are removed and NOT sent, so the first word checked is the first word Snowflake reads;
+#     control and invisible formatting characters other than tab and newline are refused
+#     (Snowflake ends a -- comment at a lone carriage return, which would let a comment hide the
+#     real first word; an invisible character could split a function name from its bracket). Snowflake
+#     decides a statement's type from its first word, and runs one statement per request.
 #  2. Snowflake: role CLAUDE_READ holds USAGE/SELECT grants and three SNOWFLAKE viewer roles,
 #     and the user has PREVENT_UNLOAD_TO_INLINE_URL / _INTERNAL_STAGES set. Every role also
 #     inherits Snowflake's PUBLIC role, which on this account can create schemas in
@@ -50,7 +57,9 @@ $Warehouse = 'CLAUDE_WH'
 $TimeZone  = 'UTC'
 $ShowRows  = 50
 $CellMax   = 200
-$PollLimitSeconds = 420
+$PollLimitSeconds = 360
+$TotalLimitSeconds = 450   # whole run, under the 480 s tool timeout callers are told to use
+$script:Deadline = $null
 $KeepDays  = 7
 $MaxRows   = 2000000
 $script:Jwt = $null
@@ -80,18 +89,21 @@ function Get-SqlText([string]$Path) {
 }
 
 # Removes leading whitespace and SQL comments (--, //, /* */) so the first word can be read.
+# SAFETY: the caller SENDS this function's result, never the original text. This reading of
+# comments need not match Snowflake's exactly: whatever it strips is not sent, so the first word
+# checked is always the first word Snowflake reads. Sending the original text would undo that.
 function Remove-LeadingComments([string]$Text) {
   $s = $Text
   while ($true) {
     $s = $s.TrimStart()
-    if ($s.StartsWith('--') -or $s.StartsWith('//')) {
-      $nl = $s.IndexOf("`n")
+    if ($s.StartsWith('--', [StringComparison]::Ordinal) -or $s.StartsWith('//', [StringComparison]::Ordinal)) {
+      $nl = $s.IndexOf("`n", [StringComparison]::Ordinal)
       if ($nl -lt 0) { return '' }
       $s = $s.Substring($nl + 1)
       continue
     }
-    if ($s.StartsWith('/*')) {
-      $end = $s.IndexOf('*/')
+    if ($s.StartsWith('/*', [StringComparison]::Ordinal)) {
+      $end = $s.IndexOf('*/', 2, [StringComparison]::Ordinal)
       if ($end -lt 0) { return '' }
       $s = $s.Substring($end + 2)
       continue
@@ -101,38 +113,80 @@ function Remove-LeadingComments([string]$Text) {
 }
 
 function Get-FirstWord([string]$Text) {
-  $m = [regex]::Match((Remove-LeadingComments $Text), '\A([A-Za-z]+)')
+  $m = [regex]::Match((Remove-LeadingComments $Text), '\A([A-Za-z]+)(?![A-Za-z0-9_$])')
   if ($m.Success) { return $m.Groups[1].Value.ToUpperInvariant() }
   return ''
 }
 
-# Throws unless $Sql is a plain look-up (see the header, layer 1).
-function Assert-LookOnly([string]$Sql) {
+# Whitespace or a comment between two words, as Snowflake reads it once lone carriage returns
+# and other line-break characters are refused (a -- or // comment then ends at a newline).
+# Each alternative starts differently and a block comment stops at its first */, so a long run
+# of comments cannot make the pattern backtrack; Test-LookPattern also caps each match at 2 s.
+$script:Gap = '(?:\s|/\*(?:[^*]|\*(?!/))*\*/|--[^\n]*\n|//[^\n]*\n)'
+
+# Case-insensitive match with a time limit; running out of time refuses the query.
+function Test-LookPattern([string]$Text, [string]$Pattern) {
+  try {
+    $opts = [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [Text.RegularExpressions.RegexOptions]::CultureInvariant
+    return [regex]::IsMatch($Text, $Pattern, $opts, [TimeSpan]::FromSeconds(2))
+  } catch [Text.RegularExpressions.RegexMatchTimeoutException] {
+    throw 'Refused before sending: the look-only check could not read this query in time. Simplify it (fewer comments), or run it in Snowsight with Erez.'
+  }
+}
+
+# Returns the statement to send (leading comments removed), or throws unless $Sql is a plain
+# look-up (see the header, layer 1).
+function Get-LookOnlySql([string]$Sql) {
   $refuse = 'Refused before sending: this login only runs plain look-ups (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN). '
-  $steps = $Sql -split '->>'
+  $text = $Sql.Replace("`r`n", "`n")
+  if ($text -match '[\x00-\x08\x0B-\x1F\x7F-\x9F\u2028\u2029\p{Cf}]') {
+    throw ($refuse + 'The query holds a control or invisible formatting character other than tab and newline (for example a lone carriage return or a zero-width space). Save it as plain text with plain line breaks.')
+  }
+  $body = Remove-LeadingComments $text
+  $steps = $body -split '->>'
   $first = Get-FirstWord $steps[0]
   if (@('SELECT', 'WITH', 'SHOW', 'DESC', 'DESCRIBE', 'EXPLAIN') -notcontains $first) {
     throw ($refuse + 'This statement starts with "' + $first + '". Changes go through Snowsight, with Erez.')
   }
   for ($i = 1; $i -lt $steps.Count; $i++) {
-    if ((Get-FirstWord $steps[$i]) -ne 'SELECT') { throw ($refuse + 'Every step after ->> must be a SELECT.') }
+    if ($steps[$i] -notmatch '(?i)\A\s*SELECT(?![A-Za-z0-9_$])') { throw ($refuse + 'Every step after ->> must start with SELECT, with no comment before it.') }
   }
-  if ($first -eq 'WITH' -and $Sql -match '(?i)\bAS\s+(PROCEDURE|FUNCTION)\b|\bCALL\b') {
+  # An anonymous procedure is `WITH p AS PROCEDURE ... CALL p()`. "AS PROCEDURE/FUNCTION" is
+  # refused in every statement (in case one can be nested); CALL only after a leading WITH,
+  # because refusing it everywhere wrongly refused 2 of 122 real past look-ups.
+  if ((Test-LookPattern $body ('\bAS' + $script:Gap + '+(PROCEDURE|FUNCTION)\b')) -or ($first -eq 'WITH' -and (Test-LookPattern $body '\bCALL\b'))) {
     throw ($refuse + 'A WITH may not define or call a procedure or function.')
   }
-  if ($Sql -match '(?i)\bCORTEX\b|\bAI_\w+"?\s*\(|\bSYSTEM\$') {
-    throw ($refuse + 'AI (Cortex) and SYSTEM$ functions are not allowed here: AI functions cost money outside the spending cap. Ask Erez first.')
+  if (Test-LookPattern $body ('\bCORTEX\b|\bSYSTEM\$|\bBULK_PROCESS_DOCUMENT\b|\b(AI_\w+|SUMMARIZE_AGG|IDENTIFIER|TO_QUERY)"?' + $script:Gap + '*\(')) {
+    throw ($refuse + 'AI (Cortex), SYSTEM$, IDENTIFIER() and TO_QUERY() are not allowed here: AI functions cost money outside the spending cap, and the other two can hide which function or query runs. Ask Erez first.')
   }
+  # Snowflake's own ML, hosted-model (SNOWFLAKE.MODELS), notification, Snowpark Connect and
+  # container-service objects (reachable through the PUBLIC role) can bill, send or change state;
+  # so can model and service methods such as model!PREDICT(...) or m!"predict"(...).
+  if (Test-LookPattern $body ('\bSNOWFLAKE"?' + $script:Gap + '*\.' + $script:Gap + '*"?(ML|MODELS|NOTIFICATION|SNOWPARK_CONNECT|SPCS)\b|!' + $script:Gap + '*"?[A-Za-z_]\w*"?' + $script:Gap + '*\(')) {
+    throw ($refuse + 'Snowflake ML, hosted models, notification, Snowpark Connect and container functions, and model or service methods (name!METHOD), are not allowed here. Ask Erez first.')
+  }
+  return $body
 }
 
 function Get-ReaderKeyBytes {
-  $vault = [Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]::new()
+  try {
+    $vault = [Windows.Security.Credentials.PasswordVault,Windows.Security.Credentials,ContentType=WindowsRuntime]::new()
+  } catch {
+    throw ('Could not open Windows Credential Manager (' + $_.Exception.GetType().Name + '). Run this in Windows PowerShell 5.1. The stored key was not touched; do not re-run the setup script.')
+  }
   try {
     $c = $vault.Retrieve($Resource, $Resource)
     $c.RetrievePassword()
     $b64 = $c.Password
   } catch {
-    throw 'The Snowflake reader key is not stored on this PC. Erez runs once, in his own PowerShell window: powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Erez\AI Projects\Improve AI Infra\notes\approval-popups\gen980\snowflake\snowflake-reader-setup.ps1"'
+    $inner = $_.Exception
+    while ($inner.InnerException) { $inner = $inner.InnerException }
+    # 0x80070490 = element not found: the only case where the key is really missing.
+    if ($inner.HResult -eq -2147023728) {
+      throw 'The Snowflake reader key is not stored on this PC. Erez runs once, in his own PowerShell window: powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\Erez\AI Projects\Improve AI Infra\notes\approval-popups\gen980\snowflake\snowflake-reader-setup.ps1"'
+    }
+    throw ('Could not read the Snowflake reader key from Windows Credential Manager (HRESULT 0x' + $inner.HResult.ToString('X8') + '). The key is probably still stored: retry, and do not re-run the setup script.')
   } finally {
     Remove-Variable -Name c -ErrorAction SilentlyContinue
   }
@@ -207,8 +261,13 @@ function Invoke-SnowflakeApi([string]$Method, [string]$PathAndQuery, [string]$Js
   $req.Method = $Method
   $req.Accept = 'application/json'
   $req.UserAgent = 'claude-snowflake-read/1.0'
-  $req.Timeout = 120000
-  $req.ReadWriteTimeout = 300000
+  $leftMs = 120000
+  if ($null -ne $script:Deadline) {
+    $leftMs = [int][Math]::Floor(($script:Deadline - (Get-Date)).TotalMilliseconds)
+    if ($leftMs -lt 1000) { throw ('Stopped after ' + $TotalLimitSeconds + ' seconds without a complete result (slow query or very large result). Aggregate, add a LIMIT, or narrow the query.') }
+  }
+  $req.Timeout = [Math]::Min(120000, $leftMs)
+  $req.ReadWriteTimeout = [Math]::Min(300000, $leftMs)
   $req.AllowAutoRedirect = $false
   $req.AutomaticDecompression = [Net.DecompressionMethods]::GZip -bor [Net.DecompressionMethods]::Deflate
   $req.Headers.Add('Authorization', 'Bearer ' + $script:Jwt)
@@ -261,7 +320,9 @@ function Format-Cell($Value) {
   if ($null -eq $Value) { return '' }
   $s = [string]$Value
   if ($s.Length -gt $CellMax) { $s = $s.Substring(0, $CellMax) + '...' }
-  return ($s -replace '[\x00-\x1F\x7F]+', ' ')
+  # Control, line-separator and invisible format characters (bidi overrides, zero-width) could
+  # hide or reorder what is read on screen; the CSV keeps the exact values.
+  return ($s -replace '[\x00-\x1F\x7F-\x9F\p{Zl}\p{Zp}\p{Cf}]+', ' ')
 }
 
 function ConvertTo-CsvField($Value) {
@@ -279,8 +340,8 @@ function Remove-OldResults([string]$Dir) {
 function Invoke-Read {
   [Console]::OutputEncoding = [Text.Encoding]::UTF8
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-  $sql = Get-SqlText $SqlFile
-  Assert-LookOnly $sql
+  $sql = Get-LookOnlySql (Get-SqlText $SqlFile)
+  $script:Deadline = (Get-Date).AddSeconds($TotalLimitSeconds)
   $outDir = Join-Path $env:TEMP 'snowflake-read'
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null
   Remove-OldResults $outDir
@@ -302,12 +363,14 @@ function Invoke-Read {
     }
     $r = Invoke-SnowflakeApi 'POST' ('/api/v2/statements?requestId=' + [guid]::NewGuid().ToString()) ($ser.Serialize($req))
 
+    # Stop polling early enough that the cancel request still fits inside the overall limit.
     $deadline = (Get-Date).AddSeconds($PollLimitSeconds)
+    if ($deadline -gt $script:Deadline.AddSeconds(-15)) { $deadline = $script:Deadline.AddSeconds(-15) }
     while ($r.Status -eq 202) {
       $handle = Get-Handle $r
       if ((Get-Date) -gt $deadline) {
         try { [void](Invoke-SnowflakeApi 'POST' ('/api/v2/statements/' + $handle + '/cancel') '{}') } catch { }
-        throw 'The query was still running after 7 minutes; stopped waiting and asked Snowflake to cancel it.'
+        throw 'The query was still running after 6 minutes; stopped waiting and asked Snowflake to cancel it.'
       }
       Start-Sleep -Seconds 2
       $r = Invoke-SnowflakeApi 'GET' ('/api/v2/statements/' + $handle) $null
@@ -328,7 +391,7 @@ function Invoke-Read {
     $sb = New-Object Text.StringBuilder
     try {
       $w.WriteLine((@($names | ForEach-Object { ConvertTo-CsvField $_ }) -join ','))
-      Write-Output ($names -join "`t")
+      Write-Output ((@($names | ForEach-Object { Format-Cell $_ })) -join "`t")
       for ($p = 0; $p -lt $partCount; $p++) {
         if ($p -eq 0) { $data = $r.Json['data'] } else {
           $pr = Invoke-SnowflakeApi 'GET' ('/api/v2/statements/' + $handle + '?partition=' + $p) $null

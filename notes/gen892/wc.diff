@@ -1,0 +1,1049 @@
+### hooks/guidelines-limits.js (live: C:/Users/Erez/.claude/hooks/guidelines-limits.js, NEW FILE)
+diff --git "a/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\guidelines-limits.js" "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\guidelines-limits.js"
+new file mode 100644
+index 0000000..2ecdc10
+--- /dev/null
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\guidelines-limits.js"	
+@@ -0,0 +1,83 @@
++// guidelines-limits.js -- shared reader for the size limits in notes/anthropic-guidelines.json (GEN-892).
++// Not a hook: required by inject-notion-refs.js, inject-shell-refs.js, inject-topic-refs.js,
++// inject-browser-refs.js, sessionstart-backup-surfacer.js and sessionstart-skill-restore.js. Each keeps its
++// own FALLBACK_* number and requires this file inside try/catch, so a missing or broken copy means today's
++// numbers. update-config.ps1 (Get-RulesLineLimit) applies the same rules in PowerShell: keep the two in step.
++//
++// The weekly guidelines watch (release-review-tool.js guidelines-check --apply) updates a limit's number when
++// Anthropic's docs change it, and appends a row to notes/release-review/guidelines-changes.jsonl. Rules here:
++//   1. Unreadable limits file, unknown id, a value that is not a whole number, or one outside [min, max]
++//      -> the caller's fallback.
++//   2. A value at or below the fallback is used (lowering a limit is always safe).
++//   3. A value above the fallback is used only when the last applied row in the change log for that limit
++//      and field carries the same value (rows whose changeId was later marked not-applied are ignored).
++//      Otherwise the fallback, plus a warning the session-start surfacer reports. So a hand edit of the
++//      limits file can lower a limit but cannot raise one.
++// Never throws.
++'use strict';
++const fs = require('fs');
++const os = require('os');
++const path = require('path');
++
++function notesDir(home) {
++  return path.join(home || os.homedir(), 'AI Projects', 'Improve AI Infra', 'notes');
++}
++
++function stripBom(s) {
++  return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
++}
++
++// Rows of the change log in file order; a malformed line is skipped, a missing file gives [].
++function readLog(file) {
++  let text;
++  try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return []; }
++  const rows = [];
++  for (const line of stripBom(text).split(/\r?\n/)) {
++    if (!line.trim()) continue;
++    try {
++      const row = JSON.parse(line);
++      if (row && typeof row === 'object' && !Array.isArray(row)) rows.push(row);
++    } catch (e) { /* skip a malformed line */ }
++  }
++  return rows;
++}
++
++// The `new` value of the last applied row for this limit and field, or undefined.
++function loggedValue(rows, id, field) {
++  const notApplied = new Set();
++  for (const r of rows) if (r.status === 'not-applied' && r.changeId) notApplied.add(String(r.changeId));
++  for (let i = rows.length - 1; i >= 0; i--) {
++    const r = rows[i];
++    if (r.status !== 'applied' || r.limit !== id || (r.field || 'value') !== field) continue;
++    if (r.changeId && notApplied.has(String(r.changeId))) continue;
++    return r.new;
++  }
++  return undefined;
++}
++
++// opts: { fallback, min, max, field = 'value', home = os.homedir() }
++// -> { value } | { value, warning: { id, field, value, fallback } } | { value, error }
++function readLimit(id, opts) {
++  const o = opts || {};
++  const field = o.field || 'value';
++  const fallback = o.fallback;
++  try {
++    const dir = notesDir(o.home);
++    let g;
++    try {
++      g = JSON.parse(stripBom(fs.readFileSync(path.join(dir, 'anthropic-guidelines.json'), 'utf8')));
++    } catch (e) {
++      return { value: fallback, error: 'notes/anthropic-guidelines.json could not be read (' + ((e && (e.code || e.message)) || 'unknown error') + ')' };
++    }
++    const entry = g && Array.isArray(g.limits) ? g.limits.find(x => x && x.id === id) : null;
++    const v = entry ? entry[field] : undefined;
++    if (!Number.isInteger(v) || !(v >= o.min) || !(v <= o.max)) return { value: fallback };
++    if (v <= fallback) return { value: v };
++    if (loggedValue(readLog(path.join(dir, 'release-review', 'guidelines-changes.jsonl')), id, field) === v) return { value: v };
++    return { value: fallback, warning: { id, field, value: v, fallback } };
++  } catch (e) {
++    return { value: fallback, error: 'the limits reader failed (' + ((e && e.message) || 'unknown error') + ')' };
++  }
++}
++
++module.exports = { readLimit, readLog, loggedValue, notesDir };
+
+### hooks/inject-notion-refs.js (live: C:/Users/Erez/.claude/hooks/inject-notion-refs.js)
+diff --git a/C:/Users/Erez/.claude/hooks/inject-notion-refs.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-notion-refs.js"
+index 539c707..d47600a 100644
+--- a/C:/Users/Erez/.claude/hooks/inject-notion-refs.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-notion-refs.js"	
+@@ -37,8 +37,16 @@ const NOTION_PATTERNS = [
+   /collection:\/\//i,          // data-source URLs
+ ];
+ 
+-const CAP = 10000;  // Claude Code's per-string limit on injected text
+-const KEEP = 9000;  // over the cap, keep whole lines up to this many characters
++// Claude Code's per-string limit on injected text. Since GEN-892 it follows notes/anthropic-guidelines.json
++// (hook-injected-text) through guidelines-limits.js; FALLBACK_CAP is used when that cannot be read.
++const FALLBACK_CAP = 10000;
++let CAP = FALLBACK_CAP;
++try {
++  const c = require('./guidelines-limits.js').readLimit('hook-injected-text', { fallback: FALLBACK_CAP, min: 2000, max: 100000 }).value;
++  if (Number.isInteger(c)) CAP = c;
++} catch (e) { /* missing or broken reader: keep the fallback */ }
++const KEEP = CAP - 1000;  // over the cap, keep whole lines up to this many characters
++const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+ 
+ // Copied from inject-topic-refs.js (fitToCap) until GEN-697 consolidates the inject hooks.
+ function fitToCap(text, refFile, flagErez, cap = CAP) {
+@@ -50,8 +58,8 @@ function fitToCap(text, refFile, flagErez, cap = CAP) {
+     if (next.length > keep) break;
+     kept = next;
+   }
+-  let note = '\n\n(Notes cut here: this file is ' + text.length + ' characters, over the 10,000-character limit on injected text, so only the lines above are included. The full file is ' + refFile + ' and should be read in full before relying on these notes.)';
+-  if (flagErez) note += '\n(Erez should be told that refs/' + path.basename(refFile) + ' needs splitting: it is over the 10,000-character limit.)';
++  let note = '\n\n(Notes cut here: this file is ' + text.length + ' characters, over the ' + fmtNum(CAP) + '-character limit on injected text, so only the lines above are included. The full file is ' + refFile + ' and should be read in full before relying on these notes.)';
++  if (flagErez) note += '\n(Erez should be told that refs/' + path.basename(refFile) + ' needs splitting: it is over the ' + fmtNum(CAP) + '-character limit.)';
+   return kept + note;
+ }
+ 
+
+### hooks/inject-shell-refs.js (live: C:/Users/Erez/.claude/hooks/inject-shell-refs.js)
+diff --git a/C:/Users/Erez/.claude/hooks/inject-shell-refs.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-shell-refs.js"
+index dde271f..d3de48f 100644
+--- a/C:/Users/Erez/.claude/hooks/inject-shell-refs.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-shell-refs.js"	
+@@ -37,8 +37,16 @@ const fs = require('fs');
+ const os = require('os');
+ const path = require('path');
+ 
+-const CAP = 10000;  // Claude Code's per-string limit on injected text
+-const KEEP = 9000;  // over the cap, keep whole lines up to this many characters
++// Claude Code's per-string limit on injected text. Since GEN-892 it follows notes/anthropic-guidelines.json
++// (hook-injected-text) through guidelines-limits.js; FALLBACK_CAP is used when that cannot be read.
++const FALLBACK_CAP = 10000;
++let CAP = FALLBACK_CAP;
++try {
++  const c = require('./guidelines-limits.js').readLimit('hook-injected-text', { fallback: FALLBACK_CAP, min: 2000, max: 100000 }).value;
++  if (Number.isInteger(c)) CAP = c;
++} catch (e) { /* missing or broken reader: keep the fallback */ }
++const KEEP = CAP - 1000;  // over the cap, keep whole lines up to this many characters
++const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+ 
+ // Copied from inject-topic-refs.js (fitToCap) until GEN-697 consolidates the inject hooks.
+ function fitToCap(text, refFile, flagErez, cap = CAP) {
+@@ -50,8 +58,8 @@ function fitToCap(text, refFile, flagErez, cap = CAP) {
+     if (next.length > keep) break;
+     kept = next;
+   }
+-  let note = '\n\n(Notes cut here: this file is ' + text.length + ' characters, over the 10,000-character limit on injected text, so only the lines above are included. The full file is ' + refFile + ' and should be read in full before relying on these notes.)';
+-  if (flagErez) note += '\n(Erez should be told that refs/' + path.basename(refFile) + ' needs splitting: it is over the 10,000-character limit.)';
++  let note = '\n\n(Notes cut here: this file is ' + text.length + ' characters, over the ' + fmtNum(CAP) + '-character limit on injected text, so only the lines above are included. The full file is ' + refFile + ' and should be read in full before relying on these notes.)';
++  if (flagErez) note += '\n(Erez should be told that refs/' + path.basename(refFile) + ' needs splitting: it is over the ' + fmtNum(CAP) + '-character limit.)';
+   return kept + note;
+ }
+ 
+
+### hooks/inject-topic-refs.js (live: C:/Users/Erez/.claude/hooks/inject-topic-refs.js)
+diff --git a/C:/Users/Erez/.claude/hooks/inject-topic-refs.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-topic-refs.js"
+index da7a5d5..78b39dd 100644
+--- a/C:/Users/Erez/.claude/hooks/inject-topic-refs.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-topic-refs.js"	
+@@ -47,8 +47,16 @@ const fs = require('fs');
+ const os = require('os');
+ const path = require('path');
+ 
+-const CAP = 10000;  // Claude Code's per-string limit on injected text
+-const KEEP = 9000;  // over the cap, keep whole lines up to this many characters
++// Claude Code's per-string limit on injected text. Since GEN-892 it follows notes/anthropic-guidelines.json
++// (hook-injected-text) through guidelines-limits.js; FALLBACK_CAP is used when that cannot be read.
++const FALLBACK_CAP = 10000;
++let CAP = FALLBACK_CAP;
++try {
++  const c = require('./guidelines-limits.js').readLimit('hook-injected-text', { fallback: FALLBACK_CAP, min: 2000, max: 100000 }).value;
++  if (Number.isInteger(c)) CAP = c;
++} catch (e) { /* missing or broken reader: keep the fallback */ }
++const KEEP = CAP - 1000;  // over the cap, keep whole lines up to this many characters
++const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+ const POINTER_ROOM = 500;  // kept free for the line naming notes left for a later call
+ const SEP = '\n\n---\n\n';
+ 
+@@ -143,8 +151,8 @@ function fitToCap(text, refFile, flagErez, cap = CAP) {
+     if (next.length > keep) break;
+     kept = next;
+   }
+-  let note = '\n\n(Notes cut here: this file is ' + text.length + ' characters, over the 10,000-character limit on injected text, so only the lines above are included. The full file is ' + refFile + ' and should be read in full before relying on these notes.)';
+-  if (flagErez) note += '\n(Erez should be told that refs/' + path.basename(refFile) + ' needs splitting: it is over the 10,000-character limit.)';
++  let note = '\n\n(Notes cut here: this file is ' + text.length + ' characters, over the ' + fmtNum(CAP) + '-character limit on injected text, so only the lines above are included. The full file is ' + refFile + ' and should be read in full before relying on these notes.)';
++  if (flagErez) note += '\n(Erez should be told that refs/' + path.basename(refFile) + ' needs splitting: it is over the ' + fmtNum(CAP) + '-character limit.)';
+   return kept + note;
+ }
+ 
+@@ -207,7 +215,7 @@ function injectTopics(topicNames, data) {
+     if (!missing) notesIn++;
+   }
+   if (deferred.length) {
+-    parts.push('(Also relevant to this call, but left out to stay under the 10,000-character limit on injected text: ' +
++    parts.push('(Also relevant to this call, but left out to stay under the ' + fmtNum(CAP) + '-character limit on injected text: ' +
+       deferred.join(', ') + ' in ' + path.join(__dirname, 'refs') + '. Each is included with the next call that matches it; read it now if this call depends on it.)');
+   }
+   return parts.length ? parts.join(SEP) : null;
+
+### hooks/inject-browser-refs.js (live: C:/Users/Erez/.claude/hooks/inject-browser-refs.js)
+diff --git a/C:/Users/Erez/.claude/hooks/inject-browser-refs.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-browser-refs.js"
+index 32ddc3f..a8c3108 100644
+--- a/C:/Users/Erez/.claude/hooks/inject-browser-refs.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\inject-browser-refs.js"	
+@@ -68,7 +68,14 @@ const BAR_OUTAGES = 2;
+ const BAR_DAYS = 7;
+ const EPISODE_GAP_MS = 2 * 3600 * 1000;
+ const MARKER_TTL_MS = 24 * 3600 * 1000;
+-const INJECT_CAP = 9500; // under Claude Code's 10,000-character limit on injected text
++// 500 under Claude Code's per-string limit on injected text, which since GEN-892 follows
++// notes/anthropic-guidelines.json (hook-injected-text) through guidelines-limits.js.
++const FALLBACK_NOTES_CAP = 10000;
++let INJECT_CAP = FALLBACK_NOTES_CAP - 500;
++try {
++  const c = require('./guidelines-limits.js').readLimit('hook-injected-text', { fallback: FALLBACK_NOTES_CAP, min: 2000, max: 100000 }).value;
++  if (Number.isInteger(c)) INJECT_CAP = c - 500;
++} catch (e) { /* missing or broken reader: keep the fallback */ }
+ const SEP = '\n\n---\n\n';
+ 
+ function asText(v) {
+
+### hooks/sessionstart-backup-surfacer.js (live: C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js)
+diff --git a/C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\sessionstart-backup-surfacer.js"
+index fe907cf..49d210a 100644
+--- a/C:/Users/Erez/.claude/hooks/sessionstart-backup-surfacer.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\sessionstart-backup-surfacer.js"	
+@@ -148,7 +148,7 @@ process.stdin.on('end', () => {
+   // GEN-703: projectBackupStaleLine replaces the per-record 'postponed' lines (see buildMessage); the
+   // slow-copy line was removed because the Drive copy now runs in the background (async hook).
+   const staleLines = [];
+-  for (const check of [projectBackupStaleLine, sessionBackupStaleLine, accountSyncStaleLine, rulesFileSizeLine, sizeStopIntactLine]) {
++  for (const check of [projectBackupStaleLine, sessionBackupStaleLine, accountSyncStaleLine, rulesFileSizeLine, sizeStopIntactLine, guidelinesLimitsLine]) {
+     try {
+       const line = check(path.join(os.homedir(), '.claude'), Date.now());
+       if (line) staleLines.push(line);
+@@ -330,7 +330,23 @@ const PROJECTS_DIR = 'C:\\Users\\Erez\\AI Projects';
+ const INSTALL_CUTOFF_MS = Date.parse('2026-10-20T08:20:30Z'); // GEN-703 install day; re-set if installed more than a day later
+ const PROJECT_BACKUP_STALE_MS = 24 * 60 * 60 * 1000;
+ const QUEUE_TAIL_BYTES = 1024 * 1024;
+-const MAX_CONTEXT_CHARS = 9000;
++// Claude Code's per-string limit on hook text, minus 1,000 of room. Since GEN-892 the limit follows
++// notes/anthropic-guidelines.json (hook-injected-text) through guidelines-limits.js; see guidelinesLimitsLine.
++const FALLBACK_NOTES_CAP = 10000;
++const NOTES_CAP_OPTS = { fallback: FALLBACK_NOTES_CAP, min: 2000, max: 100000 };
++let limitsReader = null;
++let limitsReaderError = null;
++try { limitsReader = require('./guidelines-limits.js'); } catch (e) { limitsReaderError = (e && (e.code || e.message)) || 'unknown error'; }
++function readLimitSafe(id, opts) {
++  if (!limitsReader) return { value: opts.fallback, error: 'the shared reader hooks/guidelines-limits.js could not be loaded (' + limitsReaderError + ')' };
++  try {
++    const r = limitsReader.readLimit(id, opts);
++    return r && Number.isInteger(r.value) ? r : { value: opts.fallback, error: 'the shared reader returned no number for ' + id };
++  } catch (e) {
++    return { value: opts.fallback, error: 'the shared reader failed (' + ((e && e.message) || 'unknown error') + ')' };
++  }
++}
++const MAX_CONTEXT_CHARS = readLimitSafe('hook-injected-text', NOTES_CAP_OPTS).value - 1000;
+ const CUT_NOTE = '\n…(list cut to stay under the hook-text limit; the full list is in ~/.claude/backup-sweep-failures.jsonl). Relay this to Erez at the top of your first response.';
+ function repoKeyOf(repoPath) {
+   return require('crypto').createHash('sha1').update(repoPath.toLowerCase(), 'utf8').digest('hex').toUpperCase().slice(0, 16);
+@@ -495,7 +511,7 @@ function accountSyncStaleLine(claudeDir, now) {
+ // The line rule and limit mirror update-config.ps1 (Get-RulesLineCount, Get-RulesLineLimit) and
+ // config-health-scan.ps1 Get-LineCount: keep the three in step. A read failure on the rules file is
+ // reported, not hidden.
+-const RULES_LINE_CAP = 200;
++const FALLBACK_RULES_LINE_CAP = 200;
+ let pendingRulesAck = null;
+ const stripBomText = s => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
+ function rulesFileSizeLine(claudeDir, now) {
+@@ -515,14 +531,9 @@ function rulesFileSizeLine(claudeDir, now) {
+     for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) lines++;
+     if (text.charCodeAt(text.length - 1) !== 10) lines++;
+   }
+-  let limit = RULES_LINE_CAP;
+-  try {
+-    const g = JSON.parse(stripBomText(fs.readFileSync(path.join(home, 'AI Projects', 'Improve AI Infra', 'notes', 'anthropic-guidelines.json'), 'utf8')));
+-    const entry = g && Array.isArray(g.limits) ? g.limits.find(x => x && x.id === 'claude-md-lines') : null;
+-    if (entry && Number.isInteger(entry.value) && entry.value > 0 && entry.value < limit) limit = entry.value;
+-  } catch (e) {
+-    /* unreadable or malformed -> 200 (the file can only lower the limit) */
+-  }
++  // GEN-892: the limits file may lower the limit; it raises it only with a matching logged Anthropic change
++  // (guidelines-limits.js). Problems fall back to 200 and are reported by guidelinesLimitsLine.
++  const limit = readLimitSafe('claude-md-lines', { fallback: FALLBACK_RULES_LINE_CAP, min: 50, max: 800, home }).value;
+   if (lines <= limit) return null;
+   const sha = require('crypto').createHash('sha256').update(buf).digest('hex');
+   const recordFile = path.join(home, '.claude-staging', 'rules-size', 'record.json');
+@@ -552,6 +563,24 @@ function rulesFileSizeLine(claudeDir, now) {
+   );
+ }
+ 
++// GEN-892: one line when the limits the hooks and the rules-file gate read from notes/anthropic-guidelines.json
++// fell back to their built-in numbers: the shared reader or the limits file could not be read, or the file holds
++// a raised value with no matching applied row in the weekly guidelines watch's change log
++// (notes/release-review/guidelines-changes.jsonl). Else null.
++function guidelinesLimitsLine(claudeDir) {
++  const home = path.join(claudeDir, '..');
++  const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
++  const notes = readLimitSafe('hook-injected-text', Object.assign({ home }, NOTES_CAP_OPTS));
++  const rules = readLimitSafe('claude-md-lines', { fallback: FALLBACK_RULES_LINE_CAP, min: 50, max: 800, home });
++  const out = [];
++  const err = notes.error || rules.error;
++  if (err) out.push(`GUIDELINES LIMITS — ${err}, so the hooks are using their built-in limits (${fmtNum(FALLBACK_NOTES_CAP)}-character notes cap, ${FALLBACK_RULES_LINE_CAP}-line rules-file limit) instead of notes/anthropic-guidelines.json.`);
++  if (rules.warning) out.push(`GUIDELINES LIMITS — rules-file limit in the limits file (${rules.warning.value}) does not match a logged Anthropic change; using ${FALLBACK_RULES_LINE_CAP}.`);
++  if (notes.warning) out.push(`GUIDELINES LIMITS — notes cap in the limits file (${notes.warning.value}) does not match a logged Anthropic change; using ${fmtNum(FALLBACK_NOTES_CAP)}.`);
++  if (!out.length) return null;
++  return out.join(' ') + ' Tell Erez in the 📌 For you block of your first reply, in plain words.';
++}
++
+ // GEN-674: one line when the size stop itself looks removed; else null. It checks that update-config.ps1
+ // still measures both of its write paths, that update-global-rule.ps1 still hands its edits to it, and that
+ // ~/.claude/settings.json still has the two ask rules that make Claude Code prompt Erez for an approved
+
+### hooks/sessionstart-skill-restore.js (live: C:/Users/Erez/.claude/hooks/sessionstart-skill-restore.js)
+diff --git a/C:/Users/Erez/.claude/hooks/sessionstart-skill-restore.js "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\sessionstart-skill-restore.js"
+index 7156f05..feca5ea 100644
+--- a/C:/Users/Erez/.claude/hooks/sessionstart-skill-restore.js
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\hooks\\sessionstart-skill-restore.js"	
+@@ -19,6 +19,17 @@ const MAX_SKILLS = 8;
+ const MAX_TRANSCRIPT_BYTES = 200 * 1024 * 1024;
+ const MARKER = 'Base directory for this skill:';
+ const SKILL_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
++// The amount of each skill kept after compaction. Since GEN-892 it follows notes/anthropic-guidelines.json
++// (skill-after-compaction) through guidelines-limits.js; FALLBACK_SKILL_TOKENS is used when that cannot be read.
++const FALLBACK_SKILL_TOKENS = 5000;
++function skillTokens() {
++  try {
++    const v = require('./guidelines-limits.js').readLimit('skill-after-compaction', { fallback: FALLBACK_SKILL_TOKENS, min: 1000, max: 20000 }).value;
++    return Number.isInteger(v) ? v : FALLBACK_SKILL_TOKENS;
++  } catch (e) {
++    return FALLBACK_SKILL_TOKENS;
++  }
++}
+ 
+ const skillsDir = path.join(os.homedir(), '.claude', 'skills');
+ 
+@@ -65,7 +76,7 @@ function mostRecentFirst(lastSeen) {
+ function buildNote(names) {
+   return 'Context was just compacted. Skills used earlier in this session, most recent first: ' +
+     names.join(', ') + '. After compaction Claude Code keeps only the opening part of each skill\'s ' +
+-    'instructions (about 5,000 tokens each, 25,000 in total), and older ones can be dropped entirely, so ' +
++    'instructions (about ' + String(skillTokens()).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' tokens each, 25,000 in total), and older ones can be dropped entirely, so ' +
+     'steps past that opening part are no longer in context. A session part-way through one of these skills ' +
+     're-reads its file (~/.claude/skills/<name>/SKILL.md, in chunks if large) and the reference file for its ' +
+     'current step, then continues from the step it had reached rather than starting over. The compaction ' +
+
+### drive/update-config.ps1 (live: G:/My Drive/AI Projects/_Tooling/Claude/update-config.ps1)
+diff --git a/G:/My Drive/AI Projects/_Tooling/Claude/update-config.ps1 "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\drive\\update-config.ps1"
+index 65ae46f..d25b7ba 100644
+--- a/G:/My Drive/AI Projects/_Tooling/Claude/update-config.ps1	
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\drive\\update-config.ps1"	
+@@ -87,9 +87,10 @@ $JsonEditor   = "G:\My Drive\AI Projects\_Tooling\Claude\config-json-edit.js"
+ # (.\CLAUDE.md, a trailing dot, an 8.3 name, a hard link) and the Drive copy. A guard against mistakes,
+ # not a wall against a determined script (the same stance as auto-approve.js's PC-control pass guard).
+ $RulesFile      = Join-Path $ClaudeBase "CLAUDE.md"
+-$RulesLineCap   = 200
++$FALLBACK_RULES_LINE_CAP = 200
+ $UserHome       = Split-Path $ClaudeBase -Parent
+ $GuidelinesFile = Join-Path $UserHome "AI Projects\Improve AI Infra\notes\anthropic-guidelines.json"
++$GuidelinesLog  = Join-Path $UserHome "AI Projects\Improve AI Infra\notes\release-review\guidelines-changes.jsonl"
+ $SizeRecordDir  = Join-Path (Join-Path $UserHome ".claude-staging") "rules-size"
+ $SizeRecordFile = Join-Path $SizeRecordDir "record.json"
+ $script:RulesWrite = $null
+@@ -119,10 +120,36 @@ function Get-RulesLineCount([string]$Body) {
+     return $lfCount
+ }
+ 
+-# The line limit: 200, or the claude-md-lines value in the size-limits file when that is a smaller
+-# positive whole number. Any read or parse problem leaves 200, so the file can only lower the limit.
++# The new value of the last applied row for this limit and field in the weekly guidelines watch's change log
++# (GEN-892), ignoring rows whose changeId was later marked not-applied; $null when there is none or the log
++# cannot be read. A malformed line is skipped. Same rules as hooks\guidelines-limits.js loggedValue.
++function Get-LoggedLimitValue([string]$LimitId, [string]$FieldName) {
++    $logLines = $null
++    try { $logLines = [System.IO.File]::ReadAllLines($GuidelinesLog, [System.Text.Encoding]::UTF8) } catch { return $null }
++    $logRows = New-Object System.Collections.ArrayList
++    foreach ($logLine in $logLines) {
++        if (-not $logLine -or -not $logLine.Trim()) { continue }
++        try { $logRow = $logLine | ConvertFrom-Json; if ($logRow -is [System.Management.Automation.PSCustomObject]) { [void]$logRows.Add($logRow) } } catch { }
++    }
++    $notAppliedIds = @{}
++    foreach ($logRow in $logRows) { if ($logRow.status -eq 'not-applied' -and $logRow.changeId) { $notAppliedIds[[string]$logRow.changeId] = $true } }
++    for ($rowIndex = $logRows.Count - 1; $rowIndex -ge 0; $rowIndex--) {
++        $logRow = $logRows[$rowIndex]
++        $rowField = if ($logRow.field) { [string]$logRow.field } else { 'value' }
++        if ($logRow.status -ne 'applied' -or $logRow.limit -ne $LimitId -or $rowField -ne $FieldName) { continue }
++        if ($logRow.changeId -and $notAppliedIds.ContainsKey([string]$logRow.changeId)) { continue }
++        return $logRow.new
++    }
++    return $null
++}
++
++# The line limit (GEN-892): the claude-md-lines value in the size-limits file when it is a whole number from 50
++# to 800 and either at or below 200, or above 200 and equal to the last applied claude-md-lines row in the
++# weekly guidelines watch's change log. Anything else, or any read or parse problem, leaves 200, so a hand edit
++# of the limits file can lower the limit but not raise it. Same rules as hooks\guidelines-limits.js: keep the
++# two in step.
+ function Get-RulesLineLimit {
+-    $lineLimit = $RulesLineCap
++    $lineLimit = $FALLBACK_RULES_LINE_CAP
+     try {
+         $limitsJson = [System.IO.File]::ReadAllText($GuidelinesFile, [System.Text.Encoding]::UTF8)
+         if ($limitsJson.Length -gt 0 -and $limitsJson[0] -eq [char]0xFEFF) { $limitsJson = $limitsJson.Substring(1) }
+@@ -133,8 +160,13 @@ function Get-RulesLineLimit {
+                 # session-start check's Number.isInteger.
+                 if ($limitValue -is [int] -or $limitValue -is [long] -or $limitValue -is [decimal] -or $limitValue -is [double]) {
+                     $limitNumber = [double]$limitValue
+-                    if ($limitNumber -eq [Math]::Floor($limitNumber) -and $limitNumber -gt 0 -and $limitNumber -lt $lineLimit) {
+-                        $lineLimit = [int]$limitNumber
++                    if ($limitNumber -eq [Math]::Floor($limitNumber) -and $limitNumber -ge 50 -and $limitNumber -le 800) {
++                        if ($limitNumber -le $FALLBACK_RULES_LINE_CAP) {
++                            $lineLimit = [int]$limitNumber
++                        } else {
++                            $loggedLimit = Get-LoggedLimitValue 'claude-md-lines' 'value'
++                            if ($null -ne $loggedLimit -and [double]$loggedLimit -eq $limitNumber) { $lineLimit = [int]$limitNumber }
++                        }
+                     }
+                 }
+             }
+
+### skills/config-health-scan.ps1 (live: C:/Users/Erez/.claude/skills/config-health/config-health-scan.ps1)
+diff --git a/C:/Users/Erez/.claude/skills/config-health/config-health-scan.ps1 "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\skills\\config-health-scan.ps1"
+index 779d85d..b5ca2ec 100644
+--- a/C:/Users/Erez/.claude/skills/config-health/config-health-scan.ps1
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\skills\\config-health-scan.ps1"	
+@@ -1026,10 +1026,16 @@ function ConvertFrom-SizeYamlScalar([string]$first, $cont) {
+     }
+     if ($first -match '^[|>]') { return (New-SizeScalar 'unsupported' 'block scalar (| or >)' $null) }
+     if ($first -match '^[\[\{&\*!%@`]') { return (New-SizeScalar 'unsupported' 'flow collection, anchor, alias or tag' $null) }
++    # GEN-969: a first-line value that is only a comment is no value; YAML then takes the continuation
++    # lines, if any, as the value.
++    if ($first.StartsWith('#')) { $first = '' }
+     $val = Join-SizeFolded $first $cont
+     $hashAt = $val.IndexOf(' #')
+     if ($hashAt -ge 0) { $val = $val.Substring(0, $hashAt) }
+-    return (New-SizeScalar 'ok' $null $val.Trim())
++    $val = $val.Trim()
++    # GEN-969: YAML's empty forms; a plain ~ or null (any of its three spellings) is an empty value.
++    if ($val -ceq '~' -or $val -ceq 'null' -or $val -ceq 'Null' -or $val -ceq 'NULL') { $val = '' }
++    return (New-SizeScalar 'ok' $null $val)
+ }
+ 
+ # SKILL.md frontmatter -> description, when_to_use, disable-model-invocation.
+
+### notes/release-review/release-review-tool.js (live: C:\Users\Erez\AI Projects\Improve AI Infra\notes\release-review\release-review-tool.js)
+diff --git "a/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\release-review\\release-review-tool.js" "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\notes\\release-review\\release-review-tool.js"
+index 82da11a..bf5c2aa 100644
+--- "a/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\release-review\\release-review-tool.js"	
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\notes\\release-review\\release-review-tool.js"	
+@@ -2,7 +2,9 @@
+ // release-review-tool.js -- mechanical helpers for the /release-review skill (GEN-871).
+ //
+ // Everything here is read-only except `record-run`, which appends one line to runs.jsonl
+-// and rewrites state.json (both in this folder). No network call carries a credential.
++// and rewrites state.json (both in this folder), and `guidelines-check` (GEN-892, below), which
++// writes guidelines-state.json and, with --apply, the limits file, its change log and page copies.
++// No network call carries a credential.
+ //
+ // Commands (one per call; every command prints JSON or one plain line):
+ //   collect --after <ver> [--through <ver>] [--out <file>] [--changelog <file>]
+@@ -20,7 +22,9 @@
+ //       The Claude Code version recorded in the newest session transcript on this PC.
+ //   readout
+ //       The one /wrap line (or nothing when there is nothing to report). Never throws:
+-//       prints "Release review: readout failed (<reason>)" instead.
++//       prints "Release review: readout failed (<reason>)" instead. Also prints the guidelines
++//       watch's stored warnings and a stalled-watch alarm (GEN-892); a limit change it applied
++//       is not shown here (it goes in the weekly digest).
+ //   pending
+ //       Prints the findings.jsonl "pending" rows (written just before a Notion write) that have
+ //       no later final row for the same key+target -- the writes a crashed run may have left
+@@ -30,6 +34,19 @@
+ //       also advances state.json lastReviewedVersion to run.through -- but refuses "ok" (exit 1)
+ //       while any pending row is unresolved. Prints the new state.
+ //
++//   guidelines-check [--apply] [--pages-dir <dir> --root <dir>]
++//       GEN-892. Downloads Anthropic's 7 guideline pages and checks every anchored limit in
++//       notes/anthropic-guidelines.json (an anchor is the exact words around the number on a page).
++//       A plain run writes only release-review/guidelines-state.json (checkUtc, warnings; a found
++//       change becomes the warning "change detected, not applied"). --apply (live runs) also sets
++//       applyUtc, applies a changed number to the limits file (a row in guidelines-changes.jsonl
++//       first, then the file, after the size checker has loaded it), and saves page copies under
++//       release-review/docs/ (git-ignored) with their hashes. --root is the notes folder (default:
++//       the real one); --pages-dir reads <id>.md test pages instead of downloading and is refused
++//       unless --root is outside the project. Prints JSON { ok, apply, pages, unchanged, changes,
++//       applied, candidates, textToUpdate, changedParagraphs, strayCopies, warnings }. Never throws;
++//       exit 0.
++//
+ // Sources: https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md
+ //          https://registry.npmjs.org/@anthropic-ai/claude-code  (field `time`)
+ 'use strict';
+@@ -37,6 +54,8 @@ const fs = require('fs');
+ const path = require('path');
+ const os = require('os');
+ const https = require('https');
++const crypto = require('crypto');
++const childProcess = require('child_process');
+ 
+ const HERE = __dirname;
+ const STATE = path.join(HERE, 'state.json');
+@@ -226,6 +245,7 @@ function cmdReadout() {
+     } else if (unfiled.length) {
+       parts.push('Release review: ' + unfiled.length + ' finding file(s) not filed: ' + unfiled.map(f => path.join(HERE, f)).join(', '));
+     }
++    parts.push(...guidelinesReadoutLines(now, live));
+     if (parts.length) console.log(parts.join('\n'));
+   } catch (e) {
+     console.log('Release review: readout failed (' + (e && e.message ? e.message : e) + ')');
+@@ -278,7 +298,415 @@ function cmdRecordRun() {
+   process.stdout.write(JSON.stringify(state) + '\n');
+ }
+ 
++// ---- guidelines-check (GEN-892) -------------------------------------------------------------------
++// Watches Anthropic's published size limits for the files that steer Claude. Usage in the header.
++// Design and review: notes/gen892/plan.md (approved 2026-10-26) and notes/gen892/build-design.md.
++const GUIDELINES_SINCE_UTC = '2026-10-29T00:00:00Z'; // GEN-892 install day; re-set if installed later
++const GUIDELINE_PAGES = [
++  { id: 'memory', url: 'https://code.claude.com/docs/en/memory.md' },
++  { id: 'skills', url: 'https://code.claude.com/docs/en/skills.md' },
++  { id: 'hooks', url: 'https://code.claude.com/docs/en/hooks.md' },
++  { id: 'sub-agents', url: 'https://code.claude.com/docs/en/sub-agents.md' },
++  { id: 'large-codebases', url: 'https://code.claude.com/docs/en/large-codebases.md' },
++  { id: 'best-practices', url: 'https://code.claude.com/docs/en/best-practices.md' },
++  { id: 'skill-best-practices', url: 'https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices.md' },
++];
++const CONFIG_HEALTH = path.join(os.homedir(), '.claude', 'skills', 'config-health', 'config-health-scan.ps1');
++const UPDATE_CONFIG = 'G:\\My Drive\\AI Projects\\_Tooling\\Claude\\update-config.ps1';
++// A changed paragraph is shown only when it mentions a limit word or one of our file kinds.
++const LIMIT_WORD_RE = /\b(lines?|characters?|tokens?|KB|limits?|caps?|capped|truncat\w*)\b|CLAUDE\.md|SKILL\.md|MEMORY\.md|\bskills?\b|\bcommands?\b|\bhooks?\b/i;
++const NUM_RE = '(\\d{1,3}(?:,\\d{3})+|\\d+)';
++
++// Like get(), but resolves (never rejects) with { status, type, body } or { error }.
++function getPage(url, redirects) {
++  redirects = redirects || 0;
++  return new Promise(resolve => {
++    let req;
++    try {
++      req = https.get(url, { headers: { 'User-Agent': 'release-review-tool', Accept: 'text/markdown, text/plain;q=0.9, */*;q=0.1' }, timeout: 60000 }, res => {
++        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects < 3) {
++          res.resume();
++          return resolve(getPage(new URL(res.headers.location, url).toString(), redirects + 1));
++        }
++        let b = '';
++        res.setEncoding('utf8');
++        res.on('data', c => { b += c; });
++        res.on('end', () => resolve({ status: res.statusCode, type: String(res.headers['content-type'] || ''), body: b }));
++        res.on('error', e => resolve({ error: e.message }));
++      });
++    } catch (e) {
++      return resolve({ error: e.message });
++    }
++    req.on('timeout', () => req.destroy(new Error('timeout fetching ' + url)));
++    req.on('error', e => resolve({ error: e.message }));
++  });
++}
++
++function normText(s) { return String(s).replace(/[`*]/g, '').replace(/\s+/g, ' '); }
++function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
++function sha256(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('hex'); }
++function readJsonOr(f, dflt) { try { return JSON.parse(fs.readFileSync(f, 'utf8').replace(/^\uFEFF/, '')); } catch (_) { return dflt; } }
++function writeJsonAtomic(f, obj) {
++  fs.mkdirSync(path.dirname(f), { recursive: true });
++  const tmp = f + '.tmp-' + process.pid;
++  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', 'utf8');
++  fs.renameSync(tmp, f);
++}
++function isInside(child, parent) {
++  const rel = path.relative(path.resolve(parent).toLowerCase(), path.resolve(child).toLowerCase());
++  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
++}
++
++// Why a downloaded page cannot be judged, or null.
++function pageProblem(r, prev) {
++  if (!r || r.error) return 'download failed (' + ((r && r.error) || 'no response') + ')';
++  if (r.status !== 200) return 'HTTP ' + r.status;
++  if (!/^\s*text\/(markdown|plain)\b/i.test(r.type)) return 'not markdown (content type "' + r.type + '")';
++  if (/^\s*<(?:!doctype|html)\b/i.test(r.body)) return 'an HTML page, not markdown';
++  if (prev && prev.size > 0 && r.body.length < prev.size * 0.5) return 'only ' + r.body.length + ' characters, under half of the ' + prev.size + ' stored';
++  return null;
++}
++
++// The distinct numbers (scaled) found as: before, optional whitespace, one number, optional whitespace, after.
++function anchorMatches(normPage, a) {
++  const re = new RegExp('(?<![A-Za-z0-9])' + escapeRe(normText(a.before).trim()) + '\\s*' + NUM_RE + '\\s*' +
++    escapeRe(normText(a.after).trim()) + '(?![A-Za-z0-9])', 'gi');
++  const nums = [];
++  let firstAt = -1;
++  let m;
++  while ((m = re.exec(normPage))) {
++    const n = Number(m[1].replace(/,/g, '')) * (a.scale || 1);
++    if (!nums.includes(n)) nums.push(n);
++    if (firstAt < 0) firstAt = m.index;
++  }
++  return { nums, firstAt };
++}
++
++function judgeAnchor(nums, current) {
++  if (!nums.length) return { status: 'candidate', reason: 'not-found' };
++  if (nums.length === 1 && nums[0] === current) return { status: 'unchanged' };
++  if (nums.length > 1) return { status: 'candidate', reason: nums.includes(current) ? 'old-and-new' : 'several-numbers' };
++  const ratio = nums[0] / current;
++  if (ratio >= 0.25 && ratio <= 4) return { status: 'change', value: nums[0] };
++  return { status: 'candidate', reason: 'out-of-range' };
++}
++
++// The sentence around a match in normalized page text, at most 300 characters.
++function sentenceAt(normPage, at) {
++  if (at < 0) return '';
++  let s = normPage.lastIndexOf('. ', at);
++  s = s < 0 ? 0 : s + 2;
++  let e = normPage.indexOf('. ', at);
++  e = e < 0 ? normPage.length : e + 1;
++  return normPage.slice(Math.max(s, at - 200), Math.min(e, at + 280)).trim().slice(0, 300);
++}
++
++// [start, end) of the JSON object holding "id": "<id>" inside the limits file text.
++function limitSpan(text, id) {
++  const idRe = new RegExp('"id"\\s*:\\s*"' + escapeRe(id) + '"', 'g');
++  const hits = text.match(idRe) || [];
++  if (hits.length !== 1) throw new Error('limit "' + id + '" appears ' + hits.length + ' times in the limits file');
++  const at = text.search(new RegExp('"id"\\s*:\\s*"' + escapeRe(id) + '"'));
++  const start = text.lastIndexOf('{', at);
++  let depth = 0;
++  let inStr = false;
++  for (let i = start; i < text.length; i++) {
++    const ch = text[i];
++    if (inStr) {
++      if (ch === '\\') i++;
++      else if (ch === '"') inStr = false;
++      continue;
++    }
++    if (ch === '"') inStr = true;
++    else if (ch === '{') depth++;
++    else if (ch === '}' && --depth === 0) return [start, i + 1];
++  }
++  throw new Error('limit "' + id + '": its object never closes');
++}
++
++// Replace one field's value inside one limit's object; the field must occur exactly once there.
++function setInLimit(text, id, field, newValue) {
++  const [s, e] = limitSpan(text, id);
++  const obj = text.slice(s, e);
++  const valueRe = typeof newValue === 'number' ? '-?\\d+(?:\\.\\d+)?' : '"(?:[^"\\\\]|\\\\.)*"';
++  const re = new RegExp('("' + escapeRe(field) + '"\\s*:\\s*)' + valueRe, 'g');
++  const n = (obj.match(re) || []).length;
++  if (n !== 1) throw new Error('limit "' + id + '": field "' + field + '" found ' + n + ' times');
++  return text.slice(0, s) + obj.replace(re, (m0, key) => key + JSON.stringify(newValue)) + text.slice(e);
++}
++
++function runSizeSweep(guidelinesFile) {
++  const r = childProcess.spawnSync('powershell.exe',
++    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CONFIG_HEALTH, '-Action', 'size-sweep', '-GuidelinesFile', guidelinesFile],
++    { encoding: 'utf8', timeout: 300000, windowsHide: true });
++  if (r.error) throw new Error('the size checker could not run (' + r.error.message + ')');
++  let j = null;
++  try { j = JSON.parse(String(r.stdout || '').replace(/^\uFEFF/, '')); } catch (_) { /* below */ }
++  if (!j) throw new Error('the size checker printed no JSON');
++  if (j.ok !== true) throw new Error('the size checker did not load the new limits file (' + (j.error || 'ok is not true') + ')');
++  return j;
++}
++
++// Whole-number occurrences of n (with or without thousands commas) in one string.
++function hasNumber(s, n) {
++  const plain = String(n);
++  const comma = plain.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
++  const alts = plain === comma ? escapeRe(plain) : escapeRe(plain) + '|' + escapeRe(comma);
++  return new RegExp('(?<![\\d,.])(?:' + alts + ')(?![\\d,]|\\.\\d)').test(s);
++}
++
++// Prose in the limits file that still states the old number of a changed limit.
++function textToUpdate(limits, change) {
++  const out = [];
++  const objs = (limits.limits || []).filter(l => l.id === change.limit);
++  if (change.limit === 'skill-after-compaction') objs.push(...(limits.houseRules || []).filter(h => h.id === 'gate-skill-runbook'));
++  for (const o of objs) {
++    for (const [k, v] of Object.entries(o)) {
++      if (typeof v !== 'string' || k === 'id' || k === 'verified' || (o.id === 'memory-md-load' && k === 'value')) continue;
++      if (hasNumber(v, change.old)) out.push({ limit: o.id, field: k, old: change.old, text: v.slice(0, 300) });
++    }
++  }
++  return out;
++}
++
++// Identifiers that hold a literal copy of a limit instead of reading the limits file (FALLBACK_* names are fine).
++function strayCopies() {
++  const home = os.homedir();
++  const files = [];
++  const listDir = (dir, ext) => { try { for (const f of fs.readdirSync(dir)) if (f.toLowerCase().endsWith(ext)) files.push(path.join(dir, f)); } catch (_) { /* missing */ } };
++  const walk = (dir, ext) => {
++    let ents = [];
++    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
++    for (const d of ents) {
++      const p = path.join(dir, d.name);
++      if (d.isDirectory()) { if (d.name !== 'node_modules') walk(p, ext); } else if (d.name.toLowerCase().endsWith(ext)) files.push(p);
++    }
++  };
++  listDir(path.join(home, '.claude', 'hooks'), '.js');
++  listDir(path.join(home, '.claude', 'scripts'), '.ps1');
++  walk(path.join(home, '.claude', 'skills'), '.ps1');
++  if (fs.existsSync(UPDATE_CONFIG)) files.push(UPDATE_CONFIG);
++  const re = /(?:\b(?:const|let|var)\s+|\$)([A-Za-z_][\w]*)\s*=\s*(\d+)\s*(?:[;,)]|\/\/|#|$)/;
++  const hits = [];
++  for (const f of files) {
++    let lines = [];
++    try { lines = fs.readFileSync(f, 'utf8').split(/\r?\n/); } catch (_) { continue; }
++    lines.forEach((line, i) => {
++      const m = re.exec(line);
++      if (!m || /^FALLBACK_/i.test(m[1])) return;
++      const v = Number(m[2]);
++      if ((/CAP|KEEP|LIMIT|MAX_CONTEXT/i.test(m[1]) && [10000, 9500, 9000].includes(v)) || (/RULES_?LINE/i.test(m[1]) && v === 200)) {
++        hits.push({ file: f, line: i + 1, name: m[1], value: v });
++      }
++    });
++  }
++  return hits;
++}
++
++async function cmdGuidelinesCheck() {
++  const checkUtc = new Date().toISOString();
++  const out = { ok: true, apply: process.argv.includes('--apply'), checkUtc, pages: {}, unchanged: 0, changes: [], applied: [],
++    candidates: [], textToUpdate: [], changedParagraphs: [], strayCopies: [], warnings: [] };
++  const warn = w => out.warnings.push(w);
++  const pagesDir = arg('--pages-dir');
++  const root = path.resolve(arg('--root') || path.dirname(HERE));
++  const project = path.dirname(path.dirname(HERE));
++  if (pagesDir && isInside(root, project)) {
++    out.ok = false;
++    warn('refused: --pages-dir needs --root outside ' + project + ', so test pages never touch the real files');
++    process.stdout.write(JSON.stringify(out, null, 1) + '\n');
++    return;
++  }
++  const limitsFile = path.join(root, 'anthropic-guidelines.json');
++  const rr = path.join(root, 'release-review');
++  const logFile = path.join(rr, 'guidelines-changes.jsonl');
++  const stateFile = path.join(rr, 'guidelines-state.json');
++  const docsDir = path.join(rr, 'docs');
++  const prevState = readJsonOr(stateFile, null);
++  const state = prevState && typeof prevState === 'object' ? JSON.parse(JSON.stringify(prevState)) : { sinceUtc: checkUtc };
++  if (!state.sinceUtc) state.sinceUtc = checkUtc;
++  if (!state.pages || typeof state.pages !== 'object') state.pages = {};
++  state.checkUtc = checkUtc;
++  if (out.apply) state.applyUtc = checkUtc;
++  const addCandidate = (limit, field, page, reason, found, current, detail) => out.candidates.push({
++    key: 'guidelines:' + limit + ':' + reason, limit, field, page, reason, found, current, detail: detail || null });
++  try {
++    const limitsText = fs.readFileSync(limitsFile, 'utf8');
++    const limits = JSON.parse(limitsText.replace(/^\uFEFF/, ''));
++    const watched = (limits.limits || []).filter(l => l && Array.isArray(l.anchors) && l.anchors.length);
++
++    // 1. Pages.
++    const pageRaw = {};
++    const pageNorm = {};
++    for (const p of GUIDELINE_PAGES) {
++      let r;
++      if (pagesDir) {
++        const f = path.join(pagesDir, p.id + '.md');
++        r = fs.existsSync(f) ? { status: 200, type: 'text/markdown; charset=utf-8', body: fs.readFileSync(f, 'utf8') } : { error: 'no test page ' + f };
++        const meta = readJsonOr(path.join(pagesDir, p.id + '.meta.json'), null);
++        if (meta && !r.error) Object.assign(r, meta);
++      } else {
++        r = await getPage(p.url);
++      }
++      const problem = pageProblem(r, state.pages[p.id]);
++      if (problem) {
++        out.pages[p.id] = { ok: false, problem };
++        warn('page ' + p.id + ': ' + problem + '; its anchors were not checked');
++        continue;
++      }
++      pageRaw[p.id] = r.body;
++      pageNorm[p.id] = normText(r.body);
++      out.pages[p.id] = { ok: true, size: r.body.length };
++    }
++
++    // 2. Anchors, grouped by limit and field.
++    const groups = new Map();
++    for (const l of watched) {
++      for (const a of l.anchors) {
++        const field = a.field || 'value';
++        const k = l.id + '|' + field;
++        if (!groups.has(k)) groups.set(k, { limit: l, field, current: l[field], items: [] });
++        const item = { anchor: a, page: a.page };
++        if (!GUIDELINE_PAGES.some(p => p.id === a.page)) { item.skipped = true; warn('limit ' + l.id + ': anchor on unknown page "' + a.page + '"'); }
++        else if (pageNorm[a.page] === undefined) item.skipped = true;
++        else Object.assign(item, anchorMatches(pageNorm[a.page], a));
++        groups.get(k).items.push(item);
++      }
++    }
++    const missingByPage = {};
++    for (const g of groups.values()) for (const it of g.items) if (!it.skipped && !it.nums.length) missingByPage[it.page] = (missingByPage[it.page] || 0) + 1;
++    for (const [pg, n] of Object.entries(missingByPage)) {
++      if (n < 2) continue;
++      out.pages[pg] = { ok: false, problem: n + ' anchors not found' };
++      warn('page ' + pg + ': ' + n + ' anchors not found, so the page looks rewritten or broken; its anchors were not judged');
++      for (const g of groups.values()) for (const it of g.items) if (it.page === pg) it.skipped = true;
++    }
++    for (const g of groups.values()) {
++      const { limit, field, current } = g;
++      if (!Number.isInteger(current)) { addCandidate(limit.id, field, null, 'current-not-a-number', [], current); continue; }
++      const judged = g.items.filter(it => !it.skipped).map(it => Object.assign(it, judgeAnchor(it.nums, current)));
++      const cands = judged.filter(it => it.status === 'candidate');
++      for (const it of cands) addCandidate(limit.id, field, it.page, it.reason, it.nums, current);
++      if (cands.length) continue;
++      const changed = judged.filter(it => it.status === 'change');
++      if (!changed.length) { out.unchanged += judged.length; continue; }
++      const values = [...new Set(changed.map(it => it.value))];
++      if (values.length > 1 || changed.length < judged.length) {
++        addCandidate(limit.id, field, changed[0].page, 'anchors-disagree', judged.map(it => it.value || current), current);
++        continue;
++      }
++      const skippedPages = g.items.filter(it => it.skipped).map(it => it.page);
++      if (skippedPages.length) {
++        warn('change for ' + limit.id + (field !== 'value' ? '.' + field : '') + ' (' + current + ' -> ' + values[0] + ') waits: page ' + skippedPages.join(', ') + ' could not be checked');
++        continue;
++      }
++      out.changes.push({ limit: limit.id, field, old: current, new: values[0], page: changed[0].page,
++        sentence: sentenceAt(pageNorm[changed[0].page], changed[0].firstAt) });
++    }
++
++    // 3. Apply (live runs) or report (plain runs).
++    if (out.changes.length && !out.apply) {
++      for (const c of out.changes) warn('change detected, not applied: ' + c.limit + (c.field !== 'value' ? '.' + c.field : '') + ' ' + c.old + ' -> ' + c.new + ' (' + c.page + ' page; the next live run applies it)');
++    }
++    if (out.changes.length && out.apply) {
++      const today = checkUtc.slice(0, 10);
++      const tmp = limitsFile + '.tmp-' + process.pid;
++      try {
++        let text = limitsText;
++        const expected = JSON.parse(JSON.stringify(limits));
++        for (const c of out.changes) {
++          const e = expected.limits.find(x => x.id === c.limit);
++          text = setInLimit(text, c.limit, c.field, c.new);
++          e[c.field] = c.new;
++          text = setInLimit(text, c.limit, 'verified', today);
++          e.verified = today;
++          if (c.limit === 'memory-md-load') {
++            const disp = e.valueLines + ' lines or ' + (e.valueBytes % 1000 === 0 ? e.valueBytes / 1000 + 'KB' : e.valueBytes + ' bytes');
++            text = setInLimit(text, c.limit, 'value', disp);
++            e.value = disp;
++          }
++        }
++        if (JSON.stringify(JSON.parse(text.replace(/^\uFEFF/, ''))) !== JSON.stringify(expected)) throw new Error('the edited limits file did not parse to the expected values');
++        fs.writeFileSync(tmp, text, 'utf8');
++        const sweep = runSizeSweep(tmp);
++        for (const c of out.changes) {
++          c.overLimit = (sweep.findings || []).filter(f => f && f.limitId === c.limit && f.severity === 'breach').map(f => f.file);
++          out.textToUpdate.push(...textToUpdate(expected, c));
++        }
++        const rows = out.changes.map(c => ({ changeId: crypto.randomBytes(6).toString('hex'), limit: c.limit, field: c.field, old: c.old, new: c.new,
++          page: c.page, sentence: c.sentence, date: today, ts: checkUtc, status: 'applied', overLimit: c.overLimit }));
++        fs.mkdirSync(path.dirname(logFile), { recursive: true });
++        fs.appendFileSync(logFile, rows.map(r => JSON.stringify(r)).join('\n') + '\n', 'utf8');
++        try {
++          fs.renameSync(tmp, limitsFile);
++        } catch (e) {
++          fs.appendFileSync(logFile, rows.map(r => JSON.stringify({ changeId: r.changeId, status: 'not-applied', ts: checkUtc, reason: e.message })).join('\n') + '\n', 'utf8');
++          throw new Error('the new limits file could not replace the old one (' + e.message + ')');
++        }
++        out.applied = rows;
++      } catch (e) {
++        try { fs.unlinkSync(tmp); } catch (_) { /* gone */ }
++        for (const c of out.changes) addCandidate(c.limit, c.field, c.page, 'apply-failed', [c.new], c.old, e.message);
++        warn('apply failed, nothing changed: ' + e.message);
++      }
++    }
++
++    // 4. Page copies: changed paragraphs against the saved copy; live runs save the new copy and its hash.
++    const paras = s => s.split(/\r?\n\s*\r?\n/).map(x => normText(x).trim()).filter(Boolean);
++    for (const [id, body] of Object.entries(pageRaw)) {
++      const copy = path.join(docsDir, id + '.md');
++      let old = null;
++      try { old = fs.readFileSync(copy, 'utf8'); } catch (_) { /* first run: baseline */ }
++      if (old !== null && normText(old) !== normText(body)) {
++        const oldSet = new Set(paras(old));
++        const added = paras(body).filter(x => !oldSet.has(x));
++        const relevant = added.filter(x => LIMIT_WORD_RE.test(x));
++        out.changedParagraphs.push({ page: id, shown: relevant.slice(0, 10).map(x => x.slice(0, 600)), notShown: added.length - Math.min(relevant.length, 10) });
++      }
++      if (out.apply) {
++        const h = sha256(body);
++        if (old === null || sha256(old) !== h) {
++          fs.mkdirSync(docsDir, { recursive: true });
++          fs.writeFileSync(copy, body, 'utf8');
++        }
++        state.pages[id] = { sha256: h, size: body.length };
++      }
++    }
++
++    // 5. Stray copies of a limit in our hooks and scripts.
++    out.strayCopies = strayCopies();
++    for (const s of out.strayCopies) warn('stray copy of a limit: ' + s.file + ':' + s.line + ' ' + s.name + ' = ' + s.value + ' (read the limits file, or name it FALLBACK_*)');
++  } catch (e) {
++    out.ok = false;
++    warn('guidelines check failed: ' + ((e && e.message) || e));
++  }
++  state.warnings = out.warnings.slice();
++  try { writeJsonAtomic(stateFile, state); } catch (e) { out.ok = false; out.warnings.push('could not write ' + stateFile + ' (' + e.message + ')'); }
++  process.stdout.write(JSON.stringify(out, null, 1) + '\n');
++}
++
++// Failure-only lines about the guidelines watch for the /wrap readout (GEN-892).
++function guidelinesReadoutLines(now, live) {
++  const lines = [];
++  const gs = readJsonOr(path.join(HERE, 'guidelines-state.json'), null);
++  if (gs && Array.isArray(gs.warnings)) for (const w of gs.warnings) lines.push('⚠ Guidelines watch: ' + w);
++  const last = live.length ? live[live.length - 1] : null;
++  const lastOk = last && last.outcome === 'ok' && (now - Date.parse(last.ts)) <= ALERT_DAYS * 86400000;
++  if (!lastOk) return lines; // a stalled or failed release review has its own alarm above
++  const since = Date.parse(GUIDELINES_SINCE_UTC);
++  let baseMs = NaN;
++  if (gs && gs.applyUtc) baseMs = Date.parse(gs.applyUtc);
++  else if (gs && gs.sinceUtc) baseMs = Date.parse(gs.sinceUtc);
++  else if (live.some(r => Date.parse(r.ts) > since)) baseMs = since;
++  if (!isNaN(baseMs) && now - baseMs > ALERT_DAYS * 86400000) {
++    lines.push('⚠ Guidelines watch: no live check of Anthropic\'s size limits in ' + Math.floor((now - baseMs) / 86400000) + ' days' +
++      (gs && gs.applyUtc ? ' (last ' + gs.applyUtc.slice(0, 10) + ')' : ' (never)') +
++      ' while release reviews are running: check that the weekly run still runs guidelines-check --apply (release-review guidelines-watch.md).');
++  }
++  return lines;
++}
++
+ const cmd = process.argv[2];
+-const table = { collect: cmdCollect, verify: cmdVerify, installed: cmdInstalled, readout: cmdReadout, pending: cmdPending, 'record-run': cmdRecordRun };
+-if (!table[cmd]) die('usage: release-review-tool.js collect|verify|installed|readout|pending|record-run ...');
++const table = { collect: cmdCollect, verify: cmdVerify, installed: cmdInstalled, readout: cmdReadout, pending: cmdPending, 'record-run': cmdRecordRun, 'guidelines-check': cmdGuidelinesCheck };
++if (!table[cmd]) die('usage: release-review-tool.js collect|verify|installed|readout|pending|record-run|guidelines-check ...');
+ Promise.resolve().then(table[cmd]).catch(e => die(cmd + ' failed: ' + (e && e.message ? e.message : e), 1));
+
+### notes/anthropic-guidelines.json (live: C:\Users\Erez\AI Projects\Improve AI Infra\notes\anthropic-guidelines.json)
+diff --git "a/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\anthropic-guidelines.json" "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\notes\\anthropic-guidelines.json"
+index c91d7d4..1b4c915 100644
+--- "a/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\anthropic-guidelines.json"	
++++ "b/C:\\Users\\Erez\\AI Projects\\Improve AI Infra\\notes\\gen892\\wc\\notes\\anthropic-guidelines.json"	
+@@ -1,5 +1,5 @@
+ {
+-  "_about": "Size limits for the files that steer Claude, from Anthropic's published docs plus our own house rules. Read by /suggest check 4b (and so by /vet-rule's approval card) when a proposal creates or grows a file listed under appliesTo, and by the GEN-886 size check (config-health-scan.ps1 -Action size-sweep / size-check, and the scan action's sizeFindings). Every number the scan uses comes from this file. Change it only in an attended session (Erez present), and re-verify each value against its source when you do.",
++  "_about": "Size limits for the files that steer Claude, from Anthropic's published docs plus our own house rules. Read by /suggest check 4b (and so by /vet-rule's approval card) when a proposal creates or grows a file listed under appliesTo, and by the GEN-886 size check (config-health-scan.ps1 -Action size-sweep / size-check, and the scan action's sizeFindings). Every number the scan uses comes from this file, and the hooks and the rules-file gate read the hook-injected-text, skill-after-compaction and claude-md-lines values (GEN-892). A limit with anchors (the exact words around its number on Anthropic's page) is updated automatically by the weekly guidelines watch (release-review-tool.js guidelines-check --apply), which logs each change in release-review/guidelines-changes.jsonl; the hooks and the gate accept a value above their built-in one only when that log carries it. Change anything else only in an attended session (Erez present), and re-verify each value against its source when you do. To stop or undo an automatic change, edit that limit's anchors: a hand edit of an anchored number is redone by the next weekly run.",
+   "counting": {
+     "lines": "wc -l",
+     "characters": "Unicode code points, as Node's [...text].length counts them (the size check counts the same way). By hand in this PC's Git Bash, LC_ALL=C.UTF-8 wc -m is close but counts each emoji as 2 (UTF-16 units: 49,445 vs 49,439 code points on the global CLAUDE.md, 2026-10-20); plain wc -m counts bytes (12,659 vs 12,575 on one skill file, 2026-10-19).",
+@@ -21,7 +21,11 @@
+       "kind": "hard",
+       "overIt": "Claude sees only a file path and a preview of the first 2,000 characters, and is not asked to read the file. No setting raises it.",
+       "source": "https://code.claude.com/docs/en/hooks",
+-      "verified": "2026-10-19"
++      "verified": "2026-10-19",
++      "anchors": [
++        { "page": "hooks", "before": "plain stdout, are capped at", "after": "characters" },
++        { "page": "hooks", "before": "If a value exceeds", "after": "characters" }
++      ]
+     },
+     {
+       "id": "skill-after-compaction",
+@@ -31,7 +35,10 @@
+       "kind": "hard",
+       "overIt": "After auto-compaction only the first 5,000 tokens are re-attached (enforced as 20,000 characters, see counting.charsPerTokenSource); the rest of the runbook is lost. All re-attached skills share 25,000 tokens, most recent first.",
+       "source": "https://code.claude.com/docs/en/skills",
+-      "verified": "2026-10-20"
++      "verified": "2026-10-20",
++      "anchors": [
++        { "page": "skills", "before": "keeping the first", "after": "tokens of each" }
++      ]
+     },
+     {
+       "id": "skill-md-lines",
+@@ -41,7 +48,11 @@
+       "kind": "recommended",
+       "overIt": "Move detailed reference material to separate files.",
+       "source": "https://code.claude.com/docs/en/skills ; https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+-      "verified": "2026-10-19"
++      "verified": "2026-10-19",
++      "anchors": [
++        { "page": "skills", "before": "Keep `SKILL.md` under", "after": "lines" },
++        { "page": "skill-best-practices", "before": "body under", "after": "lines" }
++      ]
+     },
+     {
+       "id": "skill-description-listing",
+@@ -51,7 +62,10 @@
+       "kind": "hard",
+       "overIt": "Truncated in the skill listing, so the trigger wording past the cap never reaches Claude.",
+       "source": "https://code.claude.com/docs/en/skills",
+-      "verified": "2026-10-19"
++      "verified": "2026-10-19",
++      "anchors": [
++        { "page": "skills", "before": "is truncated at", "after": "characters in the skill listing" }
++      ]
+     },
+     {
+       "id": "skill-description-portable",
+@@ -62,7 +76,10 @@
+       "reportAs": "note",
+       "overIt": "Over the Agent Skills format maximum; fine in Claude Code, but report it as a note.",
+       "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+-      "verified": "2026-10-19"
++      "verified": "2026-10-19",
++      "anchors": [
++        { "page": "skill-best-practices", "before": "`description`: Maximum", "after": "characters" }
++      ]
+     },
+     {
+       "id": "claude-md-lines",
+@@ -72,7 +89,11 @@
+       "kind": "recommended",
+       "overIt": "Consumes more context in every session and reduces adherence. Report characters too: long lines make the line count understate the cost.",
+       "source": "https://code.claude.com/docs/en/memory",
+-      "verified": "2026-10-19"
++      "verified": "2026-10-19",
++      "anchors": [
++        { "page": "memory", "before": "Files over", "after": "lines consume more context" },
++        { "page": "memory", "before": "target under", "after": "lines per CLAUDE.md file" }
++      ]
+     },
+     {
+       "id": "memory-md-load",
+@@ -84,7 +105,11 @@
+       "kind": "hard",
+       "overIt": "Content past the threshold is not loaded at session start. valueBytes reads the doc's '25KB' as 25,000 bytes, the stricter of the two readings.",
+       "source": "https://code.claude.com/docs/en/memory",
+-      "verified": "2026-10-20"
++      "verified": "2026-10-20",
++      "anchors": [
++        { "page": "memory", "before": "The first", "after": "lines of `MEMORY.md`", "field": "valueLines" },
++        { "page": "memory", "before": "or the first", "after": "KB", "field": "valueBytes", "scale": 1000 }
++      ]
+     },
+     {
+       "id": "reference-file-toc",
+@@ -95,7 +120,10 @@
+       "kind": "recommended",
+       "overIt": "Over 100 lines, start the file with a table of contents so a partial read still shows its scope. The scan counts a heading or bold line containing the word 'contents' within the first tocWindowLines lines as one.",
+       "source": "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices",
+-      "verified": "2026-10-19"
++      "verified": "2026-10-19",
++      "anchors": [
++        { "page": "skill-best-practices", "before": "reference files longer than", "after": "lines" }
++      ]
+     }
+   ],
+   "houseRules": [
+
