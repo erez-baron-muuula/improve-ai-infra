@@ -1,0 +1,47 @@
+warning: in the working copy of 'live-before/hooks/browser-site-gate.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/browser-site-gate.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-browser-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-browser-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-deployment-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-deployment-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-edit-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-edit-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-jira-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-jira-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-notion-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-notion-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-perk-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-perk-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-shell-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-shell-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-topic-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-topic-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/inject-windows-mcp-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/inject-windows-mcp-refs.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/sessionstart-backup-surfacer.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/sessionstart-backup-surfacer.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/sessionstart-configunlock-reaper.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/sessionstart-configunlock-reaper.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/windows-mcp-approval.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/windows-mcp-approval.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/windows-mcp-approval.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'wc/hooks/windows-mcp-approval.test.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/refs/browser.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'live-before/hooks/refs/windows-mcp.md', LF will be replaced by CRLF the next time Git touches it
+ {live-before => wc}/hooks/browser-site-gate.js     |  4 +-
+ {live-before => wc}/hooks/inject-browser-refs.js   | 52 ++++++++-----
+ .../hooks/inject-deployment-refs.js                |  4 +-
+ {live-before => wc}/hooks/inject-edit-refs.js      | 21 ++++--
+ {live-before => wc}/hooks/inject-jira-refs.js      |  4 +-
+ {live-before => wc}/hooks/inject-notion-refs.js    |  4 +-
+ {live-before => wc}/hooks/inject-perk-refs.js      |  6 +-
+ {live-before => wc}/hooks/inject-shell-refs.js     |  4 +-
+ {live-before => wc}/hooks/inject-topic-refs.js     |  4 +-
+ .../hooks/inject-windows-mcp-refs.js               | 86 +++++++++++++++-------
+ live-before/hooks/refs/browser.md => /dev/null     | 51 -------------
+ live-before/hooks/refs/windows-mcp.md => /dev/null | 18 -----
+ .../hooks/sessionstart-backup-surfacer.js          | 30 ++++----
+ .../hooks/sessionstart-configunlock-reaper.js      | 17 +++--
+ {live-before => wc}/hooks/windows-mcp-approval.js  |  2 +-
+ .../hooks/windows-mcp-approval.test.js             | 11 ++-
+ 16 files changed, 156 insertions(+), 162 deletions(-)

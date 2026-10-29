@@ -9,6 +9,9 @@ pre-install copies in rollback/ (made by install-prep.js). First live `guideline
 12 unchanged, 7 hashes, no warnings; readout silent. GEN-892 -> Review; scheduled task
 `gen892-weekly-run-check` (2026-11-05 15:00) checks the first unattended weekly run and sets Done.
 Note: test.js check "GEN-969 baseline: the live checker measures ~ as text" now fails by design (live = new).
+Superseded rollback copies (2026-10-29, GEN-889/GEN-990): `rollback/hooks/inject-browser-refs.js` predates the browser
+notes split. Restoring it after that install would read only the shorter `refs/browser.md` and never deliver
+`refs/browser-sites.md`. Roll the browser injector back from `notes/gen889/live-before/` together with the notes instead.
 
 The rest of this file is the pre-install state, kept for the record.
 
