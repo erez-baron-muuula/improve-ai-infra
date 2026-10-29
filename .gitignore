@@ -1,2 +1,7 @@
 # Node dependencies (e.g. notion-subitem-backfill/)
 node_modules/
+
+# GEN-892: copies of Anthropic's guideline pages saved by the weekly guidelines watch, and the
+# GEN-892 build's test copies of the same pages
+notes/release-review/docs/
+notes/gen892/test-pages/
