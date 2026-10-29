@@ -35,7 +35,7 @@ GEN-553 shipped — config-unlock reaper hook backed up to Drive + git-history v
 GEN-562: fail-closed guard shipped end-to-end; bypass-mode block verified live; GEN-571 and GEN-574 filed <!-- toc-session:f002f31b-a36a-40e7-be4e-3bc296f1c90e -->
 2026-07-30 — Opus 5 adopted everywhere we defaulted to Opus 4.8; 4.8/4.7 refs removed from the effort reference, the effort-nudge hook (via /vet-code), and settings.json default (`model: opus`); GEN-576 filed. <!-- toc-session:746fbb18-f75f-4d23-8c7f-2ae07eedce0b -->
 - 2026-10-29 (4) — GEN-892 live: shared limit reader, clean first check, GEN-892 in Review, GEN-991 filed, GEN-969/971 Done <!-- toc-session:9c5047c8-dec0-4519-b934-734fc0b837b5 -->
-- 2026-10-29 — GEN-882 freeze answered; GEN-892 re-checked, built and tested, handed to a new session for the shared reader; GEN-986 filed <!-- toc-session:eb070cde-bf96-4a1a-9bc7-0c11c87c340e -->
+- 2026-10-29: GEN-892 re-checked and built here, then live via a follow-on session (Review till 5 Nov check); GEN-986 filed <!-- toc-session:eb070cde-bf96-4a1a-9bc7-0c11c87c340e -->
 - 2026-10-29 (3) — GEN-980: Snowflake look-only login live, notes lines added, 8 Nov check on the script, PUBLIC AI and sandbox rights revoked; GEN-989/990 filed <!-- toc-session:46494249-6e0b-4144-a1fb-82c17b5cdcec -->
 - 2026-10-28 (3): GEN-953 step 3 browser task approval built, measured at -14%, parked by Erez; GEN-980 opened for bigger pop-up sources <!-- toc-session:440acfd3-8dd6-42c8-b4fe-a4f241eaad19 -->
 - 2026-10-29 — GEN-980: browser start/end notice live; Snowflake look-only login built, not yet live (hand-over in notes/approval-popups/gen980/snowflake) <!-- toc-session:88d16f1c-a32f-4372-b5d7-a53fa190260a -->
@@ -308,10 +308,10 @@ Signal-surface: 3 false-detect retirements in the last 90 days (detector-retune 
 
 ---
 
-## 2026-10-29 — GEN-882 freeze question; GEN-892 re-checked, built and tested (not installed), handed to a new session; GEN-986 filed
+## 2026-10-29 — GEN-882 freeze question; GEN-892 re-checked, built and tested here, installed by a follow-on session; GEN-986 filed
 <!-- session:eb070cde-bf96-4a1a-9bc7-0c11c87c340e -->
 
-**Asked:** whether the Nov 1 freeze means avoiding GEN-882 and what to combine; whether plan mode / xhigh are needed; to check whether work since GEN-892's approval changes its design; "silent." (on the /wrap notice) plus "file a ticket so that the next time we start working on an approved plan, we'll first make sure it still holds"; "build here"; then "one shared reader, but in a new session. /wrap".
+**Asked:** whether the Nov 1 freeze means avoiding GEN-882 and what to combine; whether plan mode / xhigh are needed; to check whether work since GEN-892's approval changes its design; "silent." (on the /wrap notice) plus "file a ticket so that the next time we start working on an approved plan, we'll first make sure it still holds"; "build here"; then "one shared reader, but in a new session. /wrap"; later a second /wrap.
 
 **Done:**
 - Freeze answer: the Nov 1 hold covers only the global CLAUDE.md, settings.json and the two For-you hooks (pretooluse-effort-tag-gate.js, stop-foryou-nudge.js) that the GEN-941/619 week check measures; GEN-882 is not blocked. Recommendation (/check converged round 1): GEN-892 now with riders GEN-971 and GEN-969; after Nov 1 GEN-894 + GEN-887 (settings.json) then GEN-674 waves.
@@ -321,11 +321,14 @@ Signal-surface: 3 false-detect retirements in the last 90 days (detector-retune 
 - Built in `notes/gen892/wc/` (scripts make-wc.js, make-limits.js, make-tool.js, make-skill.js): shared reader hooks/guidelines-limits.js; 6 hooks read the limits file with FALLBACK_* numbers; update-config.ps1 rules-line limit follows the file only with a logged change; release-review-tool.js `guidelines-check` (+ readout failure lines); anchors in anthropic-guidelines.json; GEN-969 YAML fix in config-health-scan.ps1; release-review skill text (SKILL.md 4,786 -> 4,477 tokens for GEN-971, new guidelines-watch.md and writes-and-digest.md; skill-text /check converged round 3). .gitignore gains notes/release-review/docs/ and notes/gen892/test-pages/.
 - Tests: test.js 109/109; live-verify.js 10/10 (hooks identical to live on real inputs); size-checker suites 51/51 and 44/44. Code reviews: Pass A twice; Pass B (opus) PASS, PASS, then two delta REVISEs on JS/PowerShell reader disagreement on hand-malformed files. Four patch rounds to the PowerShell reader: GEN-58 class E recurrence logged (Vol. 11).
 - GEN-871's 14:03 weekly check ran and passed (the morning's unattended release review).
-- Erez, to "Should the rules-file gate use the same limit reader as the hooks?": "one shared reader, but in a new session." Handoff `notes/gen892/HANDOFF.md`; session "GEN-892: shared limit reader, review, install" (local_b851d1da-f441-41eb-a706-f03024676881) started. Nothing installed this session.
+- Erez, to "Should the rules-file gate use the same limit reader as the hooks?": "one shared reader, but in a new session." Handoff `notes/gen892/HANDOFF.md`; session "GEN-892: shared limit reader, review, install" (local_b851d1da-f441-41eb-a706-f03024676881) started.
+- After the first wrap, that session (its own report) installed and verified GEN-892, set it to Review with a one-time check on Thu 5 Nov 15:00, filed the open gaps as GEN-991, set GEN-969 and GEN-971 Done, and committed bafa145; this second wrap pushed bafa145 with this entry.
 
 Unresolved items filed: none new; four review suggestions not built were appended to GEN-892 as "Also surfaced" (reviewer PASS, 1 round).
 Reversals judged non-learning: told the Pass B reviewer the working copies would not change, then changed them during its review (process slip, caught by the reviewer, verdict covered the final versions).
-Grounding flag: 2 count-nudges this session, 47 lifetime, newest 0 days ago.
+Grounding flag: 2 count-nudges this session, 49 lifetime, newest 0 days ago.
+Search-first reminder: 1 this session (0 before the summary, 1 after it), 33 lifetime. After-summary reminders: a search followed 23 of 25 times, named an existing ticket 21 times, repeated the summary 0 times. Before-summary reminders: a search followed 2 of 8 times.
+Signal-surface: 3 false-detect retirements in the last 90 days (detector-retune FYI, GEN-510's job).
 
 ---
 
